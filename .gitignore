@@ -1,0 +1,11 @@
+*.log
+*.tlog
+*.lastbuildstate
+*.cache
+*.user
+Subset_of_CorLib/bin
+Subset_of_CorLib/obj
+Tests/bin
+Tests/obj
+AssemblyImporter/bin
+AssemblyImporter/obj

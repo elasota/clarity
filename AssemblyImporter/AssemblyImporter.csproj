@@ -1,0 +1,217 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{E1276B18-4C8F-49D4-ABF1-1C7C7C71F369}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>AssemblyImporter</RootNamespace>
+    <AssemblyName>AssemblyImporter</AssemblyName>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release_Tools|AnyCPU'">
+    <OutputPath>bin\Release_Tools\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug_Tools|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Debug_Tools\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CLR\CIL\HLInstruction.cs" />
+    <Compile Include="CLR\CIL\HLArguments.cs" />
+    <Compile Include="CLR\CIL\InstructionParser.cs" />
+    <Compile Include="CLR\CIL\MethodDataSection.cs" />
+    <Compile Include="CLR\CIL\MethodEHClause.cs" />
+    <Compile Include="CLR\CIL\MethodEHSection.cs" />
+    <Compile Include="CLR\CIL\HLOpcode.cs" />
+    <Compile Include="CLR\CLRAssembly.cs" />
+    <Compile Include="CLR\CLRAssemblyCollection.cs" />
+    <Compile Include="CLR\CLRAssemblyOSRow.cs" />
+    <Compile Include="CLR\CLRAssemblyProcessorRow.cs" />
+    <Compile Include="CLR\CLRAssemblyRefOSRow.cs" />
+    <Compile Include="CLR\CLRAssemblyRefProcessorRow.cs" />
+    <Compile Include="CLR\CLRAssemblyRefRow.cs" />
+    <Compile Include="CLR\CLRAssemblyRow.cs" />
+    <Compile Include="CLR\CLRClassLayoutRow.cs" />
+    <Compile Include="CLR\CLRConstantRow.cs" />
+    <Compile Include="CLR\CLRCustomAttributeRow.cs" />
+    <Compile Include="CLR\CLRDeclSecurityRow.cs" />
+    <Compile Include="CLR\CLREventMapRow.cs" />
+    <Compile Include="CLR\CLREventRow.cs" />
+    <Compile Include="CLR\CLRMethodSignatureInstance.cs" />
+    <Compile Include="CLR\CLRMethodSignatureInstanceParam.cs" />
+    <Compile Include="CLR\CLRSigMethodSpec.cs" />
+    <Compile Include="CLR\CLRTypeSpecClass.cs" />
+    <Compile Include="CLR\CLRExportedTypeRow.cs" />
+    <Compile Include="CLR\CLRFieldLayoutRow.cs" />
+    <Compile Include="CLR\CLRFieldMarshalRow.cs" />
+    <Compile Include="CLR\CLRFieldRow.cs" />
+    <Compile Include="CLR\CLRFieldRVARow.cs" />
+    <Compile Include="CLR\CLRFileRow.cs" />
+    <Compile Include="CLR\CLRGenericInstanceClass.cs" />
+    <Compile Include="CLR\CLRGenericParamConstraintRow.cs" />
+    <Compile Include="CLR\CLRGenericParamRow.cs" />
+    <Compile Include="CLR\CLRHeader.cs" />
+    <Compile Include="CLR\CLRImplMapRow.cs" />
+    <Compile Include="CLR\CLRInterfaceImplRow.cs" />
+    <Compile Include="CLR\CLRTypeSpec.cs" />
+    <Compile Include="CLR\CLRManifestResourceRow.cs" />
+    <Compile Include="CLR\CLRMemberRefRow.cs" />
+    <Compile Include="CLR\CLRMetaData.cs" />
+    <Compile Include="CLR\CLRMetaDataParser.cs" />
+    <Compile Include="CLR\CLRMetaDataTables.cs" />
+    <Compile Include="CLR\CLRMetaStreamBinaryData.cs" />
+    <Compile Include="CLR\CLRMethodDefRow.cs" />
+    <Compile Include="CLR\CLRSigConstraint.cs" />
+    <Compile Include="CLR\CLRSigCustomAttribute.cs" />
+    <Compile Include="CLR\CLRSigCustomAttributeElem.cs" />
+    <Compile Include="CLR\CLRSigCustomAttributeFixedArg.cs" />
+    <Compile Include="CLR\CLRSigCustomAttributeNamedArg.cs" />
+    <Compile Include="CLR\CLRSigCustomMod.cs" />
+    <Compile Include="CLR\CLRSigFieldSig.cs" />
+    <Compile Include="CLR\CLRSigLocalVar.cs" />
+    <Compile Include="CLR\CLRSigLocalVarSig.cs" />
+    <Compile Include="CLR\CLRSigMethodDefOrRefSig.cs" />
+    <Compile Include="CLR\CLRMethodImplRow.cs" />
+    <Compile Include="CLR\CLRMethodSemanticsRow.cs" />
+    <Compile Include="CLR\CLRMethodSpecRow.cs" />
+    <Compile Include="CLR\CLRModuleRefRow.cs" />
+    <Compile Include="CLR\CLRModuleRow.cs" />
+    <Compile Include="CLR\CLRNestedClassRow.cs" />
+    <Compile Include="CLR\CLRParamRow.cs" />
+    <Compile Include="CLR\CLRSigParamOrRetType.cs" />
+    <Compile Include="CLR\CLRSigParamType.cs" />
+    <Compile Include="CLR\CLRPropertyMapRow.cs" />
+    <Compile Include="CLR\CLRPropertyRow.cs" />
+    <Compile Include="CLR\CLRSigPropertySig.cs" />
+    <Compile Include="CLR\CLRSigRetType.cs" />
+    <Compile Include="CLR\CLRSignatureParser.cs" />
+    <Compile Include="CLR\CLRSigType.cs" />
+    <Compile Include="CLR\CLRSigTypeSpec.cs" />
+    <Compile Include="CLR\CLRSpanResolver.cs" />
+    <Compile Include="CLR\CLRStandAloneSigRow.cs" />
+    <Compile Include="CLR\CLRStreamHeader.cs" />
+    <Compile Include="CLR\CLRTable.cs" />
+    <Compile Include="CLR\CLRTableRow.cs" />
+    <Compile Include="CLR\CLRTypeDefRow.cs" />
+    <Compile Include="CLR\CLRTypeRefRow.cs" />
+    <Compile Include="CLR\CLRTypeSpecGenericInstantiation.cs" />
+    <Compile Include="CLR\CLRTypeSpecRow.cs" />
+    <Compile Include="CLR\CLRTypeSpecSimple.cs" />
+    <Compile Include="CLR\CLRTypeSpecSZArray.cs" />
+    <Compile Include="CLR\CLRTypeSpecVarOrMVar.cs" />
+    <Compile Include="CLR\ICLROwnedBy.cs" />
+    <Compile Include="CLR\ICLRResolvable.cs" />
+    <Compile Include="CLR\ICLRTable.cs" />
+    <Compile Include="CLR\CIL\Method.cs" />
+    <Compile Include="CppExport\CppBuilder.cs" />
+    <Compile Include="CppExport\CppClass.cs" />
+    <Compile Include="CppExport\CppDependencySet.cs" />
+    <Compile Include="CppExport\CppField.cs" />
+    <Compile Include="CppExport\CppInterfaceImpl.cs" />
+    <Compile Include="CppExport\CppMangleBuilder.cs" />
+    <Compile Include="CppExport\CppMethod.cs" />
+    <Compile Include="CppExport\CppMethodInterfaceImpl.cs" />
+    <Compile Include="CppExport\CppVtableSlot.cs" />
+    <Compile Include="CRC32.cs" />
+    <Compile Include="ParseFailedException.cs" />
+    <Compile Include="PE\DOSHeader.cs" />
+    <Compile Include="PE\PEAssembly.cs" />
+    <Compile Include="PE\PEHeader.cs" />
+    <Compile Include="PE\PEOptionalHeader.cs" />
+    <Compile Include="PE\PESectionHeader.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RvaAndSize.cs" />
+    <Compile Include="StreamParser.cs" />
+    <Compile Include="TCLR\BinaryBlob.cs" />
+    <Compile Include="TCLR\BinaryBlobRepository.cs" />
+    <Compile Include="TCLR\TCLRAssemblyBuilderPassCache.cs" />
+    <Compile Include="TCLR\TCLRBytecodeBuilder.cs" />
+    <Compile Include="TCLR\TCLRCallingConvention.cs" />
+    <Compile Include="TCLR\TCLRDataType.cs" />
+    <Compile Include="TCLR\TCLRMetaItem.cs" />
+    <Compile Include="TCLR\BigEndianBinaryWriter.cs" />
+    <Compile Include="TCLR\TCLRAssembly.cs" />
+    <Compile Include="TCLR\TCLRAssemblyBuilder.cs" />
+    <Compile Include="TCLR\TCLRAssemblyRef.cs" />
+    <Compile Include="TCLR\TCLRAttribute.cs" />
+    <Compile Include="TCLR\TCLREH.cs" />
+    <Compile Include="TCLR\TCLRFieldDef.cs" />
+    <Compile Include="TCLR\TCLRFieldRef.cs" />
+    <Compile Include="TCLR\TCLRIndex.cs" />
+    <Compile Include="TCLR\TCLRMethodDef.cs" />
+    <Compile Include="TCLR\TCLRMethodRef.cs" />
+    <Compile Include="TCLR\TCLROffset.cs" />
+    <Compile Include="TCLR\TCLROffsetLong.cs" />
+    <Compile Include="TCLR\TCLROpcode.cs" />
+    <Compile Include="TCLR\TCLRResource.cs" />
+    <Compile Include="TCLR\TCLRResourceFile.cs" />
+    <Compile Include="TCLR\TCLRSig.cs" />
+    <Compile Include="TCLR\TCLRSignatureBuilder.cs" />
+    <Compile Include="TCLR\TCLRString.cs" />
+    <Compile Include="TCLR\TCLRTablesEnum.cs" />
+    <Compile Include="TCLR\TCLRTypeDef.cs" />
+    <Compile Include="TCLR\TCLRTypeRef.cs" />
+    <Compile Include="TCLR\TCLRTypeSpec.cs" />
+    <Compile Include="TCLR\TCLRVersion.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CLR\CLRGuid.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>
