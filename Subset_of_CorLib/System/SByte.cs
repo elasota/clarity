@@ -15,8 +15,6 @@ namespace System
     [Serializable, CLSCompliant(false)]
     public struct SByte
     {
-        private sbyte m_value;
-
         /**
          * The maximum value that a <code>Byte</code> may represent: 127.
          */
@@ -29,12 +27,12 @@ namespace System
 
         public override String ToString()
         {
-            return Number.Format(m_value, true, "G", NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, "G", NumberFormatInfo.CurrentInfo);
         }
 
         public String ToString(String format)
         {
-            return Number.Format(m_value, true, format, NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, format, NumberFormatInfo.CurrentInfo);
         }
 
         [CLSCompliant(false)]

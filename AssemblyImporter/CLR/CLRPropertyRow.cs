@@ -3,13 +3,14 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.34
-    public class CLRPropertyRow : CLRTableRow, ICLROwnedBy<CLRPropertyMapRow>
+    public class CLRPropertyRow : CLRTableRow, ICLROwnedBy<CLRPropertyMapRow>, ICLRHasConstant
     {
         public string Name { get; private set; }
         public CLRSigPropertySig Signature { get; private set; }
         public bool SpecialName { get; private set; }
         public bool RTSpecialName { get; private set; }
         public bool HasDefault { get; private set; }
+        public CLRConstantRow[] AttachedConstants { get; set; }
 
         public CLRPropertyMapRow Owner { get; set; }
 

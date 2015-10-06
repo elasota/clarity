@@ -7,16 +7,20 @@ namespace AssemblyImporter.CppExport
 {
     public class CppBuilder
     {
+        public CLRAssemblyCollection Assemblies { get { return m_assemblies; } }
+
         private CLRAssemblyCollection m_assemblies;
         private string m_exportPath;
         private Dictionary<CLRTypeDefRow, CppClass> m_typeDefClasses;
+        private Dictionary<CLRTypeSpec, CppClass> m_typeSpecClasses;
         private Dictionary<string, CppClass> m_fullNameClasses;
 
-        public CppBuilder(CLRAssemblyCollection assemblies)
+        public CppBuilder(string exportDir, CLRAssemblyCollection assemblies)
         {
             m_assemblies = assemblies;
-            m_exportPath = "D:\\clarityexport\\";
+            m_exportPath = exportDir;
             m_typeDefClasses = new Dictionary<CLRTypeDefRow, CppClass>();
+            m_typeSpecClasses = new Dictionary<CLRTypeSpec, CppClass>();
             m_fullNameClasses = new Dictionary<string, CppClass>();
 
             // Generate type def cache
@@ -44,6 +48,16 @@ namespace AssemblyImporter.CppExport
                     ExportTypeDef(typeDef);
                 }
             }
+        }
+
+        public CppClass GetCachedClass(CLRTypeSpec typeSpec)
+        {
+            CppClass cls;
+            if (m_typeSpecClasses.TryGetValue(typeSpec, out cls))
+                return cls;
+            cls = CreateClassFromType(typeSpec);
+            m_typeSpecClasses.Add(typeSpec, cls);
+            return cls;
         }
 
         public CppClass CreateClassFromType(CLRTypeSpec typeSpec)
@@ -197,7 +211,7 @@ namespace AssemblyImporter.CppExport
             return result;
         }
 
-        private string SpecToValueType(CLRTypeSpec ts)
+        public string SpecToValueType(CLRTypeSpec ts)
         {
             if (ts is CLRTypeSpecClass)
             {
@@ -225,35 +239,15 @@ namespace AssemblyImporter.CppExport
                     return MakeRefName(name, ts.UsesAnyGenericParams);
                 return name;
             }
-            else if (ts is CLRTypeSpecSimple)
+            else if (ts is CLRTypeSpecVoid)
             {
-                CLRTypeSpecSimple simple = (CLRTypeSpecSimple)ts;
-                switch (simple.BasicType)
-                {
-                    case CLRSigType.ElementType.BOOLEAN:
-                    case CLRSigType.ElementType.CHAR:
-                    case CLRSigType.ElementType.R4:
-                    case CLRSigType.ElementType.R8:
-                    case CLRSigType.ElementType.I1:
-                    case CLRSigType.ElementType.U1:
-                    case CLRSigType.ElementType.I2:
-                    case CLRSigType.ElementType.U2:
-                    case CLRSigType.ElementType.I4:
-                    case CLRSigType.ElementType.U4:
-                    case CLRSigType.ElementType.I8:
-                    case CLRSigType.ElementType.U8:
-                    case CLRSigType.ElementType.I:
-                    case CLRSigType.ElementType.U:
-                        return SpecToClassName(ts);
-                    case CLRSigType.ElementType.STRING:
-                    case CLRSigType.ElementType.OBJECT:
-                        return MakeRefName(SpecToClassName(ts), false);
-                    case CLRSigType.ElementType.VOID:
-                        return "void";
-                }
-                throw new ArgumentException();
+                return "void";
             }
             else if (ts is CLRTypeSpecSZArray)
+            {
+                return MakeRefName(SpecToClassName(ts), ts.UsesAnyGenericParams);
+            }
+            else if (ts is CLRTypeSpecComplexArray)
             {
                 return MakeRefName(SpecToClassName(ts), ts.UsesAnyGenericParams);
             }
@@ -292,11 +286,8 @@ namespace AssemblyImporter.CppExport
                     if (field.OriginallyGenericParam)
                         AddTypeSpecDependencies(field.Type, depSet, true, false);
             }
-            else if (ts is CLRTypeSpecSimple)
+            else if (ts is CLRTypeSpecVoid)
             {
-                string fullName = SimpleTypeFullName(((CLRTypeSpecSimple)ts).BasicType);
-                CppClass cppClass = m_fullNameClasses[fullName];
-                depSet.AddDependency(cppClass.FullName, defAlways || (defIfValue && cppClass.IsValueType));
             }
             else if (ts is CLRTypeSpecSZArray)
             {
@@ -350,7 +341,12 @@ namespace AssemblyImporter.CppExport
             throw new ArgumentException();
         }
 
-        private string SpecToClassName(CLRTypeSpec ts)
+        public CppClass GetCachedClass(CLRTypeDefRow typeDef)
+        {
+            return m_typeDefClasses[typeDef];
+        }
+
+        public string SpecToClassName(CLRTypeSpec ts)
         {
             if (ts is CLRTypeSpecClass)
             {
@@ -371,17 +367,34 @@ namespace AssemblyImporter.CppExport
                 name += " >";
                 return name;
             }
-            else if (ts is CLRTypeSpecSimple)
+            else if (ts is CLRTypeSpecVoid)
             {
-                CLRTypeSpecSimple simple = (CLRTypeSpecSimple)ts;
-                return CppClass.GenerateCppClassNameFromFullName(SimpleTypeFullName(simple.BasicType));
-
-                throw new ArgumentException();
+                return "void";
             }
             else if (ts is CLRTypeSpecSZArray)
             {
                 CLRTypeSpecSZArray szArray = (CLRTypeSpecSZArray)ts;
                 return "::CLRCore::SZArray< " + SpecToClassName(szArray.SubType) + " >";
+            }
+            else if (ts is CLRTypeSpecComplexArray)
+            {
+                CLRTypeSpecComplexArray cplxArray = (CLRTypeSpecComplexArray)ts;
+
+                string p = SpecToClassName(cplxArray.SubType);
+                p += ", ";
+                for (uint r = 0; r < cplxArray.Rank; r++)
+                {
+                    if (r == cplxArray.Rank - 1)
+                        p += "::CLRCore::LastLB<";
+                    else
+                        p += "::CLRCore::LB<";
+                    p += cplxArray.LowBounds[r];
+                    if (r != cplxArray.Rank - 1)
+                        p += ", ";
+                }
+                for (uint r = 0; r < cplxArray.Rank; r++)
+                    p += " >";
+                return "::CLRCore::ComplexArray< " + p + " >";
             }
             else if (ts is CLRTypeSpecVarOrMVar)
             {
@@ -397,13 +410,13 @@ namespace AssemblyImporter.CppExport
                 throw new ArgumentException();
         }
 
-        private enum MethodParameterMapping
+        public enum MethodParameterMapping
         {
             ClassImpl,
             DelegateDef,
         }
 
-        private void WriteMethodParameters(StreamWriter writer, CLRTypeSpec disambig, CLRMethodSignatureInstance sig, MethodParameterMapping mappingType)
+        public void WriteMethodParameters(StreamWriter writer, CLRTypeSpec disambig, CLRMethodSignatureInstance sig, MethodParameterMapping mappingType)
         {
             writer.Write("(const ::CLRExec::Frame &frame");
 
@@ -416,14 +429,14 @@ namespace AssemblyImporter.CppExport
 
             if (mappingType == MethodParameterMapping.DelegateDef)
                 writer.Write(", ::CLRUtil::DGTarget dgtarget");
-            
+
             for (int i = 0; i < sig.ParamTypes.Length; i++)
             {
                 writer.Write(", ");
                 CLRMethodSignatureInstanceParam param = sig.ParamTypes[i];
                 if (param.TypeOfType == CLRSigParamOrRetType.TypeOfTypeEnum.ByRef)
                 {
-                    writer.Write("typename ::CLRUtil::RefParameter< ");
+                    writer.Write("::CLRUtil::RefParameter< ");
                     writer.Write(SpecToValueType(param.Type));
                     writer.Write(" >::Type param" + i.ToString());
                 }
@@ -454,7 +467,7 @@ namespace AssemblyImporter.CppExport
             for (uint i = 0; i < numMethodGenericParams; i++)
                 writer.Write(", class M" + i.ToString());
 
-                writer.WriteLine(">");
+            writer.WriteLine(">");
             writer.Write("\t\tinline static ");
             if (haveRP)
                 writer.Write("typename ::CLRUtil::DGBoundReturn<PR>::Type");
@@ -470,7 +483,7 @@ namespace AssemblyImporter.CppExport
 
             writer.Write(" dgbind_" + funcName + "_p" + paramMangle + "(");
             writer.Write("const ::CLRExec::Frame &frame, ::CLRUtil::DGTarget dgtarget");
-            for (int i=0;i<sig.ParamTypes.Length;i++)
+            for (int i = 0; i < sig.ParamTypes.Length; i++)
             {
                 writer.Write(", ");
                 CLRMethodSignatureInstanceParam param = sig.ParamTypes[i];
@@ -504,7 +517,7 @@ namespace AssemblyImporter.CppExport
                 writer.WriteLine(" dgreturnValue;");
             }
 
-            for (int i=0;i<sig.ParamTypes.Length;i++)
+            for (int i = 0; i < sig.ParamTypes.Length; i++)
             {
                 CLRMethodSignatureInstanceParam param = sig.ParamTypes[i];
 
@@ -549,7 +562,7 @@ namespace AssemblyImporter.CppExport
 
                 writer.Write(" >(dgtarget))->");
             }
-            
+
             writer.Write(funcName);
 
             if (numMethodGenericParams > 0)
@@ -563,7 +576,7 @@ namespace AssemblyImporter.CppExport
                 }
                 writer.Write(">");
             }
-            
+
             writer.Write("(frame");
             for (int i = 0; i < sig.ParamTypes.Length; i++)
                 writer.Write(", dgparam" + i.ToString());
@@ -588,6 +601,11 @@ namespace AssemblyImporter.CppExport
                 InterfaceSlot = interfaceSlot;
                 ClassSlot = classSlot;
             }
+        }
+
+        public CLRTypeSpec ResolveTypeDefOrRefOrSpec(CLRTableRow tableRow)
+        {
+            return m_assemblies.InternTypeDefOrRefOrSpec(tableRow);
         }
 
         private CppVtableSlot ResolveMethodImplReference(CLRTableRow methodDecl)
@@ -1006,6 +1024,8 @@ namespace AssemblyImporter.CppExport
             if (TypeSpecIsVoid(slot.Signature.RetType))
                 returnsAnything = false;
 
+            depSet.AddTypeSpecDependencies(slot.Signature.RetType, !proto);
+
             if (!proto)
             {
                 if (!method.Abstract)
@@ -1073,8 +1093,6 @@ namespace AssemblyImporter.CppExport
                 {
                     if (method.ReplacesStandardSlot != null)
                         WriteVtableThunk(cls, method, methodName, method.ReplacesStandardSlot, writer, mappingType, depSet, proto);
-                    foreach (CppVtableSlot slot in method.ReplacesExplicitSlots)
-                        WriteVtableThunk(cls, method, methodName, slot, writer, mappingType, depSet, proto);
                 }
             }
         }
@@ -1092,14 +1110,48 @@ namespace AssemblyImporter.CppExport
             }
             if (conditionalBrackets && numParameters > 0)
                 writer.Write(">");
-            
+
         }
 
-        private static bool TypeSpecIsVoid(CLRTypeSpec ts)
+        public static bool TypeSpecIsVoid(CLRTypeSpec ts)
         {
-            if ((ts is CLRTypeSpecSimple) && ((CLRTypeSpecSimple)ts).BasicType == CLRSigType.ElementType.VOID)
-                return true;
-            return false;
+            return (ts is CLRTypeSpecVoid);
+        }
+
+        public static CLRTypeSpec CreateInstanceTypeDef(CLRAssemblyCollection assemblies, CLRTypeDefRow typeDefRow)
+        {
+            int numClassGenericParams = 0;
+            if (typeDefRow.GenericParameters != null)
+                numClassGenericParams = typeDefRow.GenericParameters.Length;
+
+            if (numClassGenericParams == 0)
+                return new CLRTypeSpecClass(typeDefRow);
+            else
+            {
+                List<CLRTypeSpec> genericParams = new List<CLRTypeSpec>();
+                for (int i = 0; i < numClassGenericParams; i++)
+                    genericParams.Add(new CLRTypeSpecVarOrMVar(CLRSigType.ElementType.VAR, (uint)i));
+
+                // Sigh...
+                // This would be easier if we just resolved from the class down, but we currently allow
+                // free-floating methods to be resolved.
+                CLRSigTypeGenericInstantiation.InstType instType = CLRSigTypeGenericInstantiation.InstType.Class;
+                {
+                    CLRTableRow extendsRow = typeDefRow.Extends;
+                    if (extendsRow != null)
+                    {
+                        CLRTypeSpec parentTypeSpec = assemblies.InternTypeDefOrRefOrSpec(typeDefRow.Extends);
+                        if (parentTypeSpec is CLRTypeSpecClass)
+                        {
+                            CLRTypeDefRow parentClassDef = ((CLRTypeSpecClass)parentTypeSpec).TypeDef;
+                            if (parentClassDef.ContainerClass == null && parentClassDef.TypeNamespace == "System" && (parentClassDef.TypeName == "ValueType" || parentClassDef.TypeName == "Enum"))
+                                instType = CLRSigTypeGenericInstantiation.InstType.ValueType;
+                        }
+                    }
+                }
+
+                return new CLRTypeSpecGenericInstantiation(instType, new CLRTypeSpecClass(typeDefRow), genericParams.ToArray());
+            }
         }
 
         private void ExportClassCode(CppClass cls, bool exportInline, Stream outStream)
@@ -1159,6 +1211,48 @@ namespace AssemblyImporter.CppExport
                         }
                     }
 
+                    if (exportInline)
+                    {
+                        writer.WriteLine("// call to code init thunks");
+                        foreach (CppMethod method in cls.Methods)
+                        {
+                            if (!method.Abstract)
+                            {
+                                string methodName = method.GenerateBaseName();
+
+                                depSet.AddMethodSigDependencies(method.MethodSignature, true);
+
+                                writer.Write("\tCLARITY_FORCEINLINE ");
+                                writer.Write(SpecToValueType(method.MethodSignature.RetType));
+                                writer.Write(" (");
+                                writer.Write(cls.GenerateCppClassName());
+                                writer.Write("::mcall_");
+                                writer.Write(methodName);
+                                writer.Write(")");
+                                WriteMethodParameters(writer, null, method.MethodSignature, MethodParameterMapping.ClassImpl);
+                                writer.WriteLine();
+                                writer.WriteLine("\t{");
+
+                                bool returnsAnything = true;
+                                if (TypeSpecIsVoid(method.MethodSignature.RetType))
+                                    returnsAnything = false;
+
+                                writer.Write("\t\t");
+                                if (returnsAnything)
+                                    writer.Write("return ");
+                                if (!method.Static)
+                                    writer.Write("this->");
+                                writer.Write("mcode_");
+                                writer.Write(methodName);
+                                writer.Write("(frame");
+                                for (int i = 0; i < method.MethodSignature.ParamTypes.Length; i++)
+                                    writer.Write(", param" + i.ToString());
+                                writer.WriteLine(");");
+
+                                writer.WriteLine("\t}");
+                            }
+                        }
+                    }
                     if (!cls.IsValueType)
                     {
                         writer.WriteLine("// vtable thunks");
@@ -1166,6 +1260,16 @@ namespace AssemblyImporter.CppExport
                         writer.WriteLine("// interface bindings");
                         WriteInterfaceImplementations(cls, writer, InterfaceConstraintMappingType.ClassImpl, false);
                     }
+
+                    // Export converted IL
+                    foreach (CppMethod method in cls.Methods)
+                    {
+                        if (!method.Abstract && method.MethodDef.Method != null)
+                        {
+                            CppCilExporter.WriteMethodCode(this, cls, method, writer, depSet, exportInline);
+                        }
+                    }
+                    
                 }
                 bodyContents = bodyMS.ToArray();
             }
@@ -1313,11 +1417,22 @@ namespace AssemblyImporter.CppExport
                         writer.WriteLine("\t\t// fields");
                         foreach (CppField field in cls.Fields)
                         {
-                            writer.Write("\t\t");
-                            writer.Write(SpecToValueType(field.Type));
-                            writer.Write(" f");
-                            writer.Write(LegalizeName(field.Name, true));
-                            writer.WriteLine(";");
+                            CLRFieldRow fieldDef = field.Field;
+                            if (fieldDef.Literal)
+                            {
+                                CLRConstantRow constant = fieldDef.AttachedConstants[0];
+                            }
+                            else if (fieldDef.Static)
+                            {
+                            }
+                            else
+                            {
+                                writer.Write("\t\t");
+                                writer.Write(SpecToValueType(field.Type));
+                                writer.Write(" f");
+                                writer.Write(LegalizeName(field.Name, true));
+                                writer.WriteLine(";");
+                            }
                         }
 
                         if (!cls.IsValueType)
@@ -1434,10 +1549,23 @@ namespace AssemblyImporter.CppExport
                     fs.Write(bodyContents, 0, bodyContents.Length);
 
                     writer.WriteLine("// inline code");
+                    writer.Flush();
                     ExportClassCode(cls, true, fs);
 
                     writer.WriteLine("");
                     writer.WriteLine("#endif");
+                }
+            }
+
+            using (FileStream fs = new FileStream(m_exportPath + cls.GenerateInstanceCodePath(), FileMode.Create))
+            {
+                using (StreamWriter writer = new StreamWriter(fs, System.Text.Encoding.ASCII))
+                {
+                    writer.WriteLine("#include \"ClarityCore.h\"");
+                    writer.WriteLine();
+                    writer.Flush();
+
+                    ExportClassCode(cls, false, fs);
                 }
             }
         }

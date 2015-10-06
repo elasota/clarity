@@ -136,7 +136,7 @@ namespace AssemblyImporter.CppExport
 
         public void AddField(CLRAssemblyCollection assemblies, CLRFieldRow field)
         {
-            if (field.Static)
+            if (field.Static && !field.Literal)
                 HaveStaticFields = true;
             m_fields.Add(new CppField(assemblies, field));
         }
@@ -286,9 +286,11 @@ namespace AssemblyImporter.CppExport
                 m_inheritedPassiveIfcConversions.AddRange(parentClass.m_passiveIfcConversions);
                 m_inheritedPassiveIfcConversions.AddRange(parentClass.m_inheritedPassiveIfcConversions);
 
-                IsValueType = (parentClass.FullName == "System.ValueType");
+                IsValueType = (parentClass.FullName == "System.ValueType" && this.FullName != "System.Enum") || parentClass.FullName == "System.Enum";
+
                 IsMulticastDelegate = (parentClass.FullName == "System.MulticastDelegate");
                 IsDelegate = IsMulticastDelegate || (parentClass.FullName == "System.Delegate" && this.FullName != "System.MulticastDelegate");
+                HaveStaticFields = (HaveStaticFields || parentClass.HaveStaticFields);
 
                 if (IsDelegate)
                 {
@@ -323,6 +325,16 @@ namespace AssemblyImporter.CppExport
             return path;
         }
 
+        public static string GenerateInstanceCodePathForFullName(string fullName)
+        {
+            return GeneratePathForFullName(fullName, ".Code.cpp");
+        }
+
+        public string GenerateInstanceCodePath()
+        {
+            return GenerateInstanceCodePathForFullName(FullName);
+        }
+
         public static string GenerateDefinitionPathForFullName(string fullName)
         {
             return GeneratePathForFullName(fullName, ".Def.h");
@@ -330,7 +342,7 @@ namespace AssemblyImporter.CppExport
 
         public string GenerateDefinitionPath()
         {
-            return GeneratePathForFullName(FullName, ".Def.h");
+            return GenerateDefinitionPathForFullName(FullName);
         }
 
         public static string GeneratePrototypePathForFullName(string fullName)

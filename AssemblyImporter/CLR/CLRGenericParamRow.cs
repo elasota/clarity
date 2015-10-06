@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace AssemblyImporter.CLR
 {
@@ -22,6 +23,8 @@ namespace AssemblyImporter.CLR
         public bool NotNullableValueTypeConstraint { get; private set; }
         public bool DefaultConstructorConstraint { get; private set; }
 
+        public IList<CLRGenericParamConstraintRow> Constraints { get; private set; }
+
         public override void Parse(CLRMetaDataParser parser)
         {
             Number = parser.ReadU16();
@@ -29,10 +32,15 @@ namespace AssemblyImporter.CLR
             Owner = parser.ReadTypeOrMethodDef();
             Name = parser.ReadString();
 
+            Constraints = new List<CLRGenericParamConstraintRow>();
+
             Variance = (VarianceEnum)(flags & 0x3);
 
+            if ((Variance & (VarianceEnum.Covariant | VarianceEnum.Contravariant)) != 0)
+                throw new NotSupportedException("Covariant and contravariant generic parameters are not supported.");
+
             ReferenceTypeConstraint = ((flags & 0x4) != 0);
-            NotNullableValueTypeConstraint = ((flags & 0x4) != 0);
+            NotNullableValueTypeConstraint = ((flags & 0x8) != 0);
             DefaultConstructorConstraint = ((flags & 0x10) != 0);
         }
     }

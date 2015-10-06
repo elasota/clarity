@@ -78,6 +78,8 @@ namespace AssemblyImporter.CLR
 
         public void ResolveAll()
         {
+            MapBasicTypesToTypeDefs();
+
             while (true)
             {
                 bool resolvedAll = true;
@@ -95,6 +97,7 @@ namespace AssemblyImporter.CLR
             {
                 assm.ResolveNestedClasses();
                 assm.ResolveGenericParameters();
+                assm.ResolveGenericConstraints();
                 assm.ParseCustomAttributes(this);
                 assm.ResolveInterfaceImplementations();
                 assm.ResolveMethodImplementations();
@@ -102,10 +105,19 @@ namespace AssemblyImporter.CLR
         }
 
         private InternedSet<CLRTypeSpecSZArray> m_internedSZArray = new InternedSet<CLRTypeSpecSZArray>();
-        private InternedSet<CLRTypeSpecSimple> m_internedSimple = new InternedSet<CLRTypeSpecSimple>();
+        private InternedSet<CLRTypeSpecComplexArray> m_internedComplexArray = new InternedSet<CLRTypeSpecComplexArray>();
         private InternedSet<CLRTypeSpecClass> m_internedClass = new InternedSet<CLRTypeSpecClass>();
         private InternedSet<CLRTypeSpecGenericInstantiation> m_internedGenericInst = new InternedSet<CLRTypeSpecGenericInstantiation>();
         private InternedSet<CLRTypeSpecVarOrMVar> m_internedVarOrMVar = new InternedSet<CLRTypeSpecVarOrMVar>();
+        private Dictionary<CLRSigType.ElementType, CLRTypeDefRow> m_simpleToConcrete = new Dictionary<CLRSigType.ElementType, CLRTypeDefRow>();
+        private CLRTypeSpecVoid m_internedVoid = new CLRTypeSpecVoid();
+        private CLRTypeDefRow m_runtimeTypeHandle;
+        private CLRTypeDefRow m_runtimeFieldHandle;
+        private CLRTypeDefRow m_runtimeMethodHandle;
+
+        public CLRTypeDefRow RuntimeTypeHandleDef { get { return m_runtimeTypeHandle; } }
+        public CLRTypeDefRow RuntimeFieldHandleDef { get { return m_runtimeFieldHandle; } }
+        public CLRTypeDefRow RuntimeMethodHandleDef { get { return m_runtimeMethodHandle; } }
 
         public CLRTypeSpec InternTypeDefOrRefOrSpec(CLRTableRow tableRow)
         {
@@ -141,7 +153,13 @@ namespace AssemblyImporter.CLR
             }
             else if (sigType is CLRSigTypeArray)
             {
-                throw new NotImplementedException();
+                CLRSigTypeArray cplxArray = (CLRSigTypeArray)sigType;
+                CLRTypeSpec contentsType = InternVagueType(cplxArray.ContainedType);
+                if (cplxArray.LowBounds == null || cplxArray.LowBounds.Length != cplxArray.Rank)
+                    throw new NotSupportedException("Multidimensional arrays with unspecified lower bounds are not supported");
+                if (cplxArray.Sizes.Length > 0)
+                    throw new NotSupportedException("Fixed-size arrays are not supported");
+                return m_internedComplexArray.Lookup(new CLRTypeSpecComplexArray(contentsType, cplxArray.Rank, cplxArray.LowBounds));
             }
             else if (sigType is CLRSigTypeFunctionPointer)
             {
@@ -177,7 +195,9 @@ namespace AssemblyImporter.CLR
             else if (sigType is CLRSigTypeSimple)
             {
                 CLRSigTypeSimple sigSimple = (CLRSigTypeSimple)sigType;
-                return m_internedSimple.Lookup(new CLRTypeSpecSimple(sigSimple.BasicType));
+                if (sigSimple.BasicType == CLRSigType.ElementType.VOID)
+                    return m_internedVoid;
+                return InternTypeDefOrRefOrSpec(m_simpleToConcrete[sigSimple.BasicType]);
             }
             else if (sigType is CLRSigTypeStructured)
             {
@@ -191,7 +211,72 @@ namespace AssemblyImporter.CLR
         public CLRTypeSpec InternTypeSpec(CLRSigTypeSpec sigType)
         {
             return InternVagueType(sigType.Type);
+        }
 
+        public void MapBasicTypesToTypeDefs()
+        {
+            foreach (CLRAssembly assm in m_assemblies)
+            {
+                CLRAssemblyRow assmRow = (CLRAssemblyRow)assm.MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.Assembly).GetRow(0);
+
+                if (assmRow.Name != "mscorlib")
+                    continue;
+
+                ICLRTable table = assm.MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.TypeDef);
+                for (uint rowNum = 0; rowNum < table.NumRows; rowNum++)
+                {
+                    CLRTypeDefRow typeDef = (CLRTypeDefRow)table.GetRow(rowNum);
+                    if (typeDef.TypeNamespace == "System")
+                    {
+                        if (typeDef.TypeName == "String")
+                            m_simpleToConcrete[CLRSigType.ElementType.STRING] = typeDef;
+                        else if (typeDef.TypeName == "Boolean")
+                            m_simpleToConcrete[CLRSigType.ElementType.BOOLEAN] = typeDef;
+                        else if (typeDef.TypeName == "Char")
+                            m_simpleToConcrete[CLRSigType.ElementType.CHAR] = typeDef;
+                        else if (typeDef.TypeName == "Single")
+                            m_simpleToConcrete[CLRSigType.ElementType.R4] = typeDef;
+                        else if (typeDef.TypeName == "Double")
+                            m_simpleToConcrete[CLRSigType.ElementType.R8] = typeDef;
+                        else if (typeDef.TypeName == "SByte")
+                            m_simpleToConcrete[CLRSigType.ElementType.I1] = typeDef;
+                        else if (typeDef.TypeName == "Int16")
+                            m_simpleToConcrete[CLRSigType.ElementType.I2] = typeDef;
+                        else if (typeDef.TypeName == "Int32")
+                            m_simpleToConcrete[CLRSigType.ElementType.I4] = typeDef;
+                        else if (typeDef.TypeName == "Int64")
+                            m_simpleToConcrete[CLRSigType.ElementType.I8] = typeDef;
+                        else if (typeDef.TypeName == "Byte")
+                            m_simpleToConcrete[CLRSigType.ElementType.U1] = typeDef;
+                        else if (typeDef.TypeName == "UInt16")
+                            m_simpleToConcrete[CLRSigType.ElementType.U2] = typeDef;
+                        else if (typeDef.TypeName == "UInt32")
+                            m_simpleToConcrete[CLRSigType.ElementType.U4] = typeDef;
+                        else if (typeDef.TypeName == "UInt64")
+                            m_simpleToConcrete[CLRSigType.ElementType.U8] = typeDef;
+                        else if (typeDef.TypeName == "Object")
+                            m_simpleToConcrete[CLRSigType.ElementType.OBJECT] = typeDef;
+                        else if (typeDef.TypeName == "String")
+                            m_simpleToConcrete[CLRSigType.ElementType.STRING] = typeDef;
+                        else if (typeDef.TypeName == "IntPtr")
+                            m_simpleToConcrete[CLRSigType.ElementType.I] = typeDef;
+                        else if (typeDef.TypeName == "UIntPtr")
+                            m_simpleToConcrete[CLRSigType.ElementType.U] = typeDef;
+                        else if (typeDef.TypeName == "Array")
+                            m_simpleToConcrete[CLRSigType.ElementType.ARRAY] = typeDef;
+                        else if (typeDef.TypeName == "ValueType")
+                            m_simpleToConcrete[CLRSigType.ElementType.VALUETYPE] = typeDef;
+                        else if (typeDef.TypeName == "RuntimeTypeHandle")
+                            m_runtimeTypeHandle = typeDef;
+                        else if (typeDef.TypeName == "RuntimeFieldHandle")
+                            m_runtimeFieldHandle = typeDef;
+                        else if (typeDef.TypeName == "RuntimeMethodHandle")
+                            m_runtimeMethodHandle = typeDef;
+                    }
+                }
+
+                break;
+            }
         }
     }
 }

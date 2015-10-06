@@ -97,10 +97,10 @@ namespace AssemblyImporter.CLR
 
         public void ResolveGenericParameters()
         {
-            ICLRTable table = MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.GenericParam);
-            for (uint i = 0; i < table.NumRows; i++)
+            ICLRTable gpTable = MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.GenericParam);
+            for (uint i = 0; i < gpTable.NumRows; i++)
             {
-                CLRGenericParamRow gp = (CLRGenericParamRow)table.GetRow(i);
+                CLRGenericParamRow gp = (CLRGenericParamRow)gpTable.GetRow(i);
                 CLRTableRow owner = gp.Owner;
                 if (owner is CLRTypeDefRow)
                     ((CLRTypeDefRow)owner).AddGenericParameter(gp);
@@ -108,6 +108,16 @@ namespace AssemblyImporter.CLR
                     ((CLRMethodDefRow)owner).AddGenericParameter(gp);
                 else
                     throw new ParseFailedException("Strange generic param owner");
+            }
+        }
+
+        public void ResolveGenericConstraints()
+        {
+            ICLRTable gpcTable = MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.GenericParamConstraint);
+            for (uint i = 0; i < gpcTable.NumRows; i++)
+            {
+                CLRGenericParamConstraintRow gpc = (CLRGenericParamConstraintRow)gpcTable.GetRow(i);
+                gpc.Owner.Constraints.Add(gpc);
             }
         }
 

@@ -102,15 +102,23 @@ namespace AssemblyImporter.CppExport
                 foreach (CLRTypeSpec argType in gi.ArgTypes)
                     builder.Add(argType);
             }
-            else if (typeSpec is CLRTypeSpecSimple)
+            else if (typeSpec is CLRTypeSpecVoid)
             {
-                builder.Add("simple");
-                builder.Add((int)((CLRTypeSpecSimple)typeSpec).BasicType);
+                builder.Add("void");
             }
             else if (typeSpec is CLRTypeSpecSZArray)
             {
                 builder.Add("szarray");
                 builder.Add(((CLRTypeSpecSZArray)typeSpec).SubType);
+            }
+            else if (typeSpec is CLRTypeSpecComplexArray)
+            {
+                builder.Add("complexarray");
+                CLRTypeSpecComplexArray cplxArray = (CLRTypeSpecComplexArray)typeSpec;
+                builder.Add(cplxArray.SubType);
+                builder.Add((int)cplxArray.Rank);
+                for (uint i = 0; i < cplxArray.Rank; i++)
+                    builder.Add(cplxArray.LowBounds[i]);
             }
             else if (typeSpec is CLRTypeSpecVarOrMVar)
             {

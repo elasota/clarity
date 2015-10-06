@@ -17,11 +17,9 @@ namespace System
         public static readonly string FalseString = "False";
         public static readonly string TrueString = "True";
 
-        private bool m_value;
-
         public override String ToString()
         {
-            return (m_value) ? TrueString : FalseString;
+            return (this) ? TrueString : FalseString;
         }
 
     }

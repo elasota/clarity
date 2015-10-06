@@ -13,19 +13,17 @@ namespace System
     [Serializable, CLSCompliant(false)]
     public struct UInt64
     {
-        private ulong m_value;
-
         public const ulong MaxValue = (ulong)0xffffffffffffffffL;
         public const ulong MinValue = 0x0;
 
         public override String ToString()
         {
-            return Number.Format(m_value, true, "G", NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, "G", NumberFormatInfo.CurrentInfo);
         }
 
         public String ToString(String format)
         {
-            return Number.Format(m_value, true, format, NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, format, NumberFormatInfo.CurrentInfo);
         }
 
         [CLSCompliant(false)]

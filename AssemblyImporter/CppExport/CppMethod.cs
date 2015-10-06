@@ -6,9 +6,11 @@ namespace AssemblyImporter.CppExport
 {
     public class CppMethod
     {
+        public CLRMethodSignatureInstance DeclaredMethodSignature { get; private set; }
         public CLRMethodSignatureInstance MethodSignature { get; private set; }
 
         public CLRTypeDefRow DeclaredInClass { get; private set; }
+        public CLRTypeSpec DeclaredInClassSpec { get; private set; }
         public string GenericMethodParamMangle { get; private set; }
         public string GenericTypeParamMangle { get; private set; }
         public string VtableSlotMangle { get; private set; }
@@ -19,24 +21,24 @@ namespace AssemblyImporter.CppExport
         public bool Overrides { get; private set; }
         public bool Final { get; private set; }
         public CppVtableSlot ReplacesStandardSlot { get; set; }
-        public IList<CppVtableSlot> ReplacesExplicitSlots { get { return m_replacesExplicitSlots; } }
         public CppVtableSlot CreatesSlot { get; private set; }
         public uint NumGenericParameters { get; private set; }
-
-        private List<CppVtableSlot> m_replacesExplicitSlots;
+        public CLRMethodDefRow MethodDef { get; private set; }
 
         public CppMethod(CLRAssemblyCollection assemblies, CLRTypeDefRow declaredInClass, CLRMethodDefRow methodDef)
         {
-            m_replacesExplicitSlots = new List<CppVtableSlot>();
-
+            // Hack: Solve whether value type?
+            DeclaredInClassSpec = CppBuilder.CreateInstanceTypeDef(assemblies, declaredInClass);
             DeclaredInClass = declaredInClass;
             MethodSignature = new CLRMethodSignatureInstance(assemblies, methodDef.Signature);
+            DeclaredMethodSignature = MethodSignature;
             Name = methodDef.Name;
             Virtual = methodDef.Virtual;
             Abstract = methodDef.Abstract;
             Static = methodDef.Static;
             Final = methodDef.Final;
             Overrides = (methodDef.VtableLayout == CLRMethodDefRow.MethodVtableLayout.ReuseSlot);
+            MethodDef = methodDef;
 
             if (MethodSignature.UsesGenericTypeParams)
             {
@@ -63,34 +65,18 @@ namespace AssemblyImporter.CppExport
                 if (GenericMethodParamMangle != null)
                     VtableSlotMangle = GenericMethodParamMangle + VtableSlotMangle;
 
-                // Hack: Don't know if this is a value type yet, but doesn't matter
-                CLRTypeSpec disambigTypeSpec;
-                int numClassGenericParams = 0;
-                if (declaredInClass.GenericParameters != null)
-                    numClassGenericParams = declaredInClass.GenericParameters.Length;
-
-                if (numClassGenericParams == 0)
-                    disambigTypeSpec = new CLRTypeSpecClass(declaredInClass);
-                else
-                {
-                    CLRTypeSpecClass genericClass = new CLRTypeSpecClass(declaredInClass);
-                    List<CLRTypeSpec> genericParams = new List<CLRTypeSpec>();
-                    for (int i = 0; i < numClassGenericParams; i++)
-                        genericParams.Add(new CLRTypeSpecVarOrMVar(CLRSigType.ElementType.VAR, (uint)i));
-
-                    disambigTypeSpec = new CLRTypeSpecGenericInstantiation(CLRSigTypeGenericInstantiation.InstType.Class, genericClass, genericParams.ToArray());
-                }
-
                 bool isGenericInterface = ((methodDef.Owner.Semantics == CLRTypeDefRow.TypeSemantics.Interface) && methodDef.Owner.GenericParameters != null && methodDef.Owner.GenericParameters.Length > 0);
 
-                CreatesSlot = new CppVtableSlot(MethodSignature, disambigTypeSpec, CppBuilder.LegalizeName(Name, true), Name, VtableSlotMangle, isGenericInterface);
+                CreatesSlot = new CppVtableSlot(MethodSignature, DeclaredInClassSpec, CppBuilder.LegalizeName(Name, true), Name, VtableSlotMangle, isGenericInterface);
             }
         }
 
         private CppMethod(CppMethod baseInstance, CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)
         {
+            DeclaredMethodSignature = baseInstance.DeclaredMethodSignature;
             MethodSignature = baseInstance.MethodSignature.Instantiate(typeParams, methodParams);
             DeclaredInClass = baseInstance.DeclaredInClass;
+            DeclaredInClassSpec = baseInstance.DeclaredInClassSpec.Instantiate(typeParams, methodParams);
             GenericTypeParamMangle = baseInstance.GenericTypeParamMangle;
             GenericMethodParamMangle = baseInstance.GenericMethodParamMangle;
             VtableSlotMangle = baseInstance.VtableSlotMangle;
@@ -102,9 +88,6 @@ namespace AssemblyImporter.CppExport
                 CreatesSlot = baseInstance.CreatesSlot.Instantiate(typeParams, methodParams);
             Final = baseInstance.Final;
             NumGenericParameters = baseInstance.NumGenericParameters;
-
-            m_replacesExplicitSlots = new List<CppVtableSlot>();
-            m_replacesExplicitSlots.AddRange(baseInstance.m_replacesExplicitSlots);
         }
 
         public CppMethod Instantiate(CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)

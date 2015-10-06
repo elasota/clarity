@@ -1,6 +1,8 @@
 #ifndef __CLARITY_UTIL_H__
 #define __CLARITY_UTIL_H__
 
+#include "ClarityCompilerDefs.h"
+
 namespace CLRCore
 {
     struct RefTarget;
@@ -12,6 +14,11 @@ namespace CLRUtil
     struct Ref
     {
         typedef T* Type;
+
+        CLARITY_FORCEINLINE static typename ::CLRUtil::Ref<T>::Type Null()
+        {
+            return CLARITY_NULLPTR;
+        }
 
     private:
         Ref();
@@ -64,6 +71,14 @@ namespace CLRUtil
     {
     private:
         ConstrainedVtableGlue();
+    };
+
+    template<class T>
+    struct RefParameter
+    {
+        typedef T& Type;
+    private:
+        RefParameter();
     };
 }
 

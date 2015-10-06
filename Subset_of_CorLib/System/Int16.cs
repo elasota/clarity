@@ -11,19 +11,17 @@ namespace System
     [Serializable]
     public struct Int16
     {
-        internal short m_value;
-
         public const short MaxValue = (short)0x7FFF;
         public const short MinValue = unchecked((short)0x8000);
 
         public override String ToString()
         {
-            return Number.Format(m_value, true, "G", NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, "G", NumberFormatInfo.CurrentInfo);
         }
 
         public String ToString(String format)
         {
-            return Number.Format(m_value, true, format, NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, format, NumberFormatInfo.CurrentInfo);
         }
 
         public static short Parse(String s)

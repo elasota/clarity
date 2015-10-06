@@ -8,5 +8,6 @@
 
 #define CLARITY_PURE = 0
 #define CLARITY_FORCEINLINE __forceinline
+#define CLARITY_NULLPTR nullptr
 
 #endif

@@ -1,0 +1,6 @@
+Clarity is intended for development and is not currently intended to accept untrusted assemblies OR assemblies compiled from untrusted source code.
+
+Known issues that would need to be resolved to make it work with untrusted code:
+- Manglings are compacted to 64-bit hashes, which are easy to intentionally collide.
+- Assembly validation is currently extremely minimal.
+- Some constructs that are valid in .NET and export valid C++ will still fail to compile (i.e. lazy-instantiated generics).

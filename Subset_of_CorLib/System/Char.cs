@@ -11,11 +11,6 @@ namespace System
     public struct Char
     {
         //
-        // Member Variables
-        //
-        internal char m_value;
-
-        //
         // Public Constants
         //
         /**
@@ -29,27 +24,27 @@ namespace System
 
         public override String ToString()
         {
-            return new String(m_value, 1);
+            return new String(this, 1);
         }
 
         public char ToLower()
         {
-            if('A' <= m_value && m_value <= 'Z')
+            if ('A' <= this && this <= 'Z')
             {
-                return (char)(m_value - ('A' - 'a'));
+                return (char)(this - ('A' - 'a'));
             }
 
-            return m_value;
+            return this;
         }
 
         public char ToUpper()
         {
-            if('a' <= m_value && m_value <= 'z')
+            if ('a' <= this && this <= 'z')
             {
-                return (char)(m_value + ('A' - 'a'));
+                return (char)(this + ('A' - 'a'));
             }
 
-            return m_value;
+            return this;
         }
     }
 }

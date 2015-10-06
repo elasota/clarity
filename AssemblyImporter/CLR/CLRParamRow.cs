@@ -3,13 +3,14 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.33
-    public class CLRParamRow : CLRTableRow, ICLROwnedBy<CLRMethodDefRow>
+    public class CLRParamRow : CLRTableRow, ICLROwnedBy<CLRMethodDefRow>, ICLRHasConstant
     {
         public bool In { get; private set; }
         public bool Out { get; private set; }
         public bool Optional { get; private set; }
         public bool HasDefault { get; private set; }
         public bool HasFieldMarshal { get; private set; }
+        public CLRConstantRow[] AttachedConstants { get; set; }
 
         public ushort Sequence { get; private set; }
         public string Name { get; private set; }

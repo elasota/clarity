@@ -15,7 +15,7 @@ namespace AssemblyImporter.CLR
     {
         public uint Rank { get; private set; }
         public uint[] Sizes { get; private set; }
-        public uint[] LowBounds { get; private set; }
+        public int[] LowBounds { get; private set; }
         public CLRSigType ContainedType { get; private set; }
         
 
@@ -24,7 +24,7 @@ namespace AssemblyImporter.CLR
             BasicType = type;
             Rank = 1;
             Sizes = new uint[0];
-            LowBounds = new uint[0];
+            LowBounds = new int[0];
             ContainedType = containedType;
         }
 
@@ -48,9 +48,9 @@ namespace AssemblyImporter.CLR
             if (numLowBounds > Rank)
                 throw new ParseFailedException("Invalid array");
 
-            LowBounds = new uint[numLowBounds];
+            LowBounds = new int[numLowBounds];
             for (uint i = 0; i < numLowBounds; i++)
-                LowBounds[i] = parser.ReadCompressedUInt();
+                LowBounds[i] = parser.ReadCompressedInt();
         }
     }
 

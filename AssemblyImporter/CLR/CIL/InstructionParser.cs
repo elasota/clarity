@@ -244,9 +244,9 @@ namespace AssemblyImporter.CLR.CIL
 
                 // br
                 case 0x38:
-                    return new HLInstruction(HLOpcode.bne).Fl(HLOpFlags.Br | HLOpFlags.Un).Args(DecodeArgs(ArgEncoding.I32));
+                    return new HLInstruction(HLOpcode.br).Fl(HLOpFlags.Br | HLOpFlags.Un).Args(DecodeArgs(ArgEncoding.I32));
                 case 0x2b:
-                    return new HLInstruction(HLOpcode.bne).Fl(HLOpFlags.Br | HLOpFlags.Un).Args(DecodeArgs(ArgEncoding.I8));
+                    return new HLInstruction(HLOpcode.br).Fl(HLOpFlags.Br | HLOpFlags.Un).Args(DecodeArgs(ArgEncoding.I8));
 
                 // break
                 case 0x01:

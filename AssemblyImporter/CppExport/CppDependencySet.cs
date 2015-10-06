@@ -65,18 +65,18 @@ namespace AssemblyImporter.CppExport
                 foreach (CLRTypeSpec param in gi.ArgTypes)
                     AddTypeSpecDependencies(param, needDef);
             }
-            else if (ts is CLRTypeSpecSimple)
-            {
-                CLRTypeSpecSimple simple = (CLRTypeSpecSimple)ts;
-                if (simple.BasicType == CLRSigType.ElementType.VOID)
-                    return;
-                AddDependency(CppBuilder.SimpleTypeFullName(simple.BasicType), needDef);
-            }
             else if (ts is CLRTypeSpecSZArray)
             {
                 AddTypeSpecDependencies(((CLRTypeSpecSZArray)ts).SubType, needDef);
             }
+            else if (ts is CLRTypeSpecComplexArray)
+            {
+                AddTypeSpecDependencies(((CLRTypeSpecComplexArray)ts).SubType, needDef);
+            }
             else if (ts is CLRTypeSpecVarOrMVar)
+            {
+            }
+            else if (ts is CLRTypeSpecVoid)
             {
             }
             else

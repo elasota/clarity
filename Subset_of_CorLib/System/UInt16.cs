@@ -13,19 +13,17 @@ namespace System
     [Serializable, CLSCompliant(false)]
     public struct UInt16
     {
-        private ushort m_value;
-
         public const ushort MaxValue = (ushort)0xFFFF;
         public const ushort MinValue = 0;
 
         public override String ToString()
         {
-            return Number.Format(m_value, true, "G", NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, "G", NumberFormatInfo.CurrentInfo);
         }
 
         public String ToString(String format)
         {
-            return Number.Format(m_value, true, format, NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, format, NumberFormatInfo.CurrentInfo);
         }
 
         [CLSCompliant(false)]

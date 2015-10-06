@@ -1,0 +1,4 @@
+List of places where .NET diverges from the specification:
+
+- TypeSpec signatures can legally contain VAR and MVAR tokens in .NET, but the standard forbids them.
+- I.8.6.1.5 specifies that the "this" pointer of a virtual method in a value type is the boxed type, but it's really a managed pointer.

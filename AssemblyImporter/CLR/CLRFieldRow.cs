@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.15
-    public class CLRFieldRow : CLRTableRow, ICLROwnedBy<CLRTypeDefRow>
+    public class CLRFieldRow : CLRTableRow, ICLROwnedBy<CLRTypeDefRow>, ICLRHasConstant
     {
         public enum TypeFieldAccess
         {
@@ -29,6 +29,7 @@ namespace AssemblyImporter.CLR
         public bool HasFieldRVA { get; private set; }
         public string Name { get; private set; }
         public CLRSigFieldSig Signature { get; private set; }
+        public CLRConstantRow[] AttachedConstants { get; set; }
 
         public CLRTypeDefRow Owner { get; set; }
 

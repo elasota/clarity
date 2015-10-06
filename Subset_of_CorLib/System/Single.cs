@@ -11,8 +11,6 @@ namespace System
     [Serializable()]
     public struct Single
     {
-        internal float m_value;
-
         //
         // Public constants
         //
@@ -22,12 +20,12 @@ namespace System
 
         public override String ToString()
         {
-            return Number.Format(m_value, false, "G", NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, false, "G", NumberFormatInfo.CurrentInfo);
         }
 
         public String ToString(String format)
         {
-            return Number.Format(m_value, false, format, NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, false, format, NumberFormatInfo.CurrentInfo);
         }
 
     }

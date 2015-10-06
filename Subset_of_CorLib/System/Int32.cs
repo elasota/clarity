@@ -11,19 +11,17 @@ namespace System
     [Serializable]
     public struct Int32
     {
-        internal int m_value;
-
         public const int MaxValue = 0x7fffffff;
         public const int MinValue = unchecked((int)0x80000000);
 
         public override String ToString()
         {
-            return Number.Format(m_value, true, "G", NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, "G", NumberFormatInfo.CurrentInfo);
         }
 
         public String ToString(String format)
         {
-            return Number.Format(m_value, true, format, NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, true, format, NumberFormatInfo.CurrentInfo);
         }
 
         public static int Parse(String s)

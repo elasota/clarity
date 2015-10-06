@@ -17,6 +17,20 @@ namespace AssemblyImporter.CLR
 
             Parent = parser.ReadHasConstant();
             Value = parser.ReadBlob();
+
+            ICLRHasConstant hcParent = (ICLRHasConstant)Parent;
+            CLRConstantRow[] newConstants;
+            if (hcParent.AttachedConstants != null)
+            {
+                CLRConstantRow[] oldConstants = hcParent.AttachedConstants;
+                newConstants = new CLRConstantRow[oldConstants.Length + 1];
+                for (int i = 0; i < oldConstants.Length; i++)
+                    newConstants[i] = oldConstants[i];
+            }
+            else
+                newConstants = new CLRConstantRow[1];
+            newConstants[newConstants.Length - 1] = this;
+            hcParent.AttachedConstants = newConstants;
         }
 
         public override bool AllowEmptyTable()

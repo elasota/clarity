@@ -11,8 +11,6 @@ namespace System
     [Serializable]
     public struct Double
     {
-        internal double m_value;
-
         // Public Constants
 
         // Summary:
@@ -183,7 +181,7 @@ namespace System
                 return "NaN";
             }
 
-            return Number.Format(m_value, false, "G", NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, false, "G", NumberFormatInfo.CurrentInfo);
         }
         //
         // Summary:
@@ -215,7 +213,7 @@ namespace System
                 return "NaN";
             }
 
-            return Number.Format(m_value, false, format, NumberFormatInfo.CurrentInfo);
+            return Number.Format(this, false, format, NumberFormatInfo.CurrentInfo);
         }
         //
         // Summary:
