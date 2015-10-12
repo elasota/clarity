@@ -19,10 +19,36 @@ namespace AssemblyImporter.CppExport
         public CfgBuilder CfgBuilder { get { return m_builder; } }
         public int StartInstr { get { return m_startInstr; } }
         public VType[] EntryTypes { get { return m_entryTypes; } }
+        public MidInstruction[] MidInstructions { get { return m_midInstructions; } }
+        public IList<CfgOutboundEdge> Successors { get { return m_successors; } }
+        public IList<CfgNode> Predecessors { get { return m_predecessors; } }
+        public CfgOutboundEdge FallThroughEdge { get { return m_fallThroughEdge; } }
+
+        public bool CanBeContinuous
+        {
+            get
+            {
+                if (FallThroughEdge == null)
+                    return false;
+                if (FallThroughEdge.SuccessorNode.Predecessors.Count != 1)
+                    return false;
+                VType[] exitTypes = FallThroughEdge.OutputValueTypes;
+                VType[] entryTypes = FallThroughEdge.SuccessorNode.EntryTypes;
+                for (int vti = 0; vti < exitTypes.Length; vti++)
+                {
+                    if (!exitTypes[vti].Equals(entryTypes[vti]))
+                        return false;
+                }
+                return true;
+            }
+        }
 
         private VType[] m_entryTypes;
         private CfgBuilder m_builder;
         private int m_startInstr;
+        private MidInstruction[] m_midInstructions;
+        private List<CfgOutboundEdge> m_successors = new List<CfgOutboundEdge>();
+        private List<CfgNode> m_predecessors = new List<CfgNode>();
 
         public CfgNode(CfgBuilder builder, int startInstr, VType[] entryTypes)
         {
@@ -30,7 +56,6 @@ namespace AssemblyImporter.CppExport
             m_startInstr = startInstr;
             m_entryTypes = entryTypes;
         }
-
 
         public void UpdateEntryTypes(CfgNodeCompiler nodeCompiler, VType[] newEntryTypes, out bool outNeedsReparse)
         {
@@ -57,6 +82,7 @@ namespace AssemblyImporter.CppExport
                 VType[] newTypes = new VType[m_entryTypes.Length];
                 for (int i = 0; i < numVTypes; i++)
                     newTypes[i] = ConvergeVTypes(nodeCompiler, m_entryTypes[i], newEntryTypes[i]);
+                m_entryTypes = newTypes;
             }
         }
 
@@ -97,7 +123,18 @@ namespace AssemblyImporter.CppExport
             return convergences.ToArray();
         }
 
+        public void AddPredecessor(CfgNode outboundEdge)
+        {
+            m_predecessors.Add(outboundEdge);
+        }
+
+        public void AddSuccessor(CfgOutboundEdge outboundEdge)
+        {
+            m_successors.Add(outboundEdge);
+        }
+
         private static ValTypeConvergence[] ms_convergences = InitConvergences();
+        private CfgOutboundEdge m_fallThroughEdge;
 
         private VType ConvergeVTypes(CfgNodeCompiler nodeCompiler, VType vType1, VType vType2)
         {
@@ -180,6 +217,9 @@ namespace AssemblyImporter.CppExport
         {
             CfgNodeCompiler compiler = new CfgNodeCompiler(this);
             compiler.Compile();
+
+            m_midInstructions = compiler.OutputInstructions;
+            m_fallThroughEdge = compiler.OutputFallThroughEdge;
         }
     }
 }

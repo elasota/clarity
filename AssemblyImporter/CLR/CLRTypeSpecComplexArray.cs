@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AssemblyImporter.CLR
 {
@@ -49,6 +46,18 @@ namespace AssemblyImporter.CLR
         public override bool UsesGenericParamOfType(CLRSigType.ElementType elementType)
         {
             return SubType.UsesGenericParamOfType(elementType);
+        }
+
+        public override string ToString()
+        {
+            string fullName = SubType.ToString() + "[";
+            for (int i = 0; i < Rank; i++)
+            {
+                if (i != 0)
+                    fullName += ",";
+                fullName += LowBounds[i] + "...";
+            }
+            return fullName + "]";
         }
     }
 }

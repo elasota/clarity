@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace AssemblyImporter.CLR
 {
@@ -69,6 +67,18 @@ namespace AssemblyImporter.CLR
                 if (argType.UsesGenericParamOfType(elementType))
                     return true;
             return false;
+        }
+
+        public override string ToString()
+        {
+            string fullName = GenericType.ToString() + "<";
+            for (int argNum = 0; argNum < ArgTypes.Length; argNum++)
+            {
+                if (argNum != 0)
+                    fullName += ",";
+                fullName += ArgTypes[argNum].ToString();
+            }
+            return fullName + ">";
         }
     }
 }

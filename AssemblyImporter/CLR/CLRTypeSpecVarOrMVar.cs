@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AssemblyImporter.CLR
 {
@@ -55,6 +51,16 @@ namespace AssemblyImporter.CLR
         public override bool UsesGenericParamOfType(CLRSigType.ElementType elementType)
         {
             return this.ElementType == elementType;
+        }
+
+        public override string ToString()
+        {
+            if (this.ElementType == CLRSigType.ElementType.VAR)
+                return "T" + Value.ToString();
+            else if (this.ElementType == CLRSigType.ElementType.MVAR)
+                return "M" + Value.ToString();
+            else
+                throw new ArgumentException();
         }
     }
 }

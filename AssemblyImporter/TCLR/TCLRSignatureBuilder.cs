@@ -34,7 +34,7 @@ namespace AssemblyImporter.TCLR
                 m_stream.Dispose();
             m_stream = null;
             if (m_writer != null)
-                m_writer.Dispose();
+                ((IDisposable)m_writer).Dispose();
             m_writer = null;
         }
 

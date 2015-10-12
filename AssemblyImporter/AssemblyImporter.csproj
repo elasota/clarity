@@ -9,8 +9,9 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>AssemblyImporter</RootNamespace>
     <AssemblyName>AssemblyImporter</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -92,7 +93,6 @@
     <Compile Include="CLR\CLRFieldRow.cs" />
     <Compile Include="CLR\CLRFieldRVARow.cs" />
     <Compile Include="CLR\CLRFileRow.cs" />
-    <Compile Include="CLR\CLRGenericInstanceClass.cs" />
     <Compile Include="CLR\CLRGenericParamConstraintRow.cs" />
     <Compile Include="CLR\CLRGenericParamRow.cs" />
     <Compile Include="CLR\CLRHeader.cs" />
@@ -154,6 +154,14 @@
     <Compile Include="CppExport\CfgBuilder.cs" />
     <Compile Include="CppExport\CfgNode.cs" />
     <Compile Include="CppExport\CfgNodeCompiler.cs" />
+    <Compile Include="CppExport\CfgOutboundEdge.cs" />
+    <Compile Include="CppExport\CfgOutboundEdgePrototype.cs" />
+    <Compile Include="CppExport\CppMidCompiler.cs" />
+    <Compile Include="CppExport\CppRegionEmitter.cs" />
+    <Compile Include="CppExport\CppRegisterAllocator.cs" />
+    <Compile Include="CppExport\CppScopeStack.cs" />
+    <Compile Include="CppExport\ExceptionHandlingCluster.cs" />
+    <Compile Include="CppExport\ExceptionHandlingRegion.cs" />
     <Compile Include="CppExport\CppAssignabilityResolver.cs" />
     <Compile Include="CppExport\CppBuilder.cs" />
     <Compile Include="CppExport\CppCilExporter.cs" />

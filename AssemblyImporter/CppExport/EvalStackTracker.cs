@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 
 namespace AssemblyImporter.CppExport
 {
@@ -20,7 +16,7 @@ namespace AssemblyImporter.CppExport
         public void SpillStack()
         {
             foreach (SsaRegister reg in m_regs)
-                reg.Spill();
+                reg.TrySpill();
         }
 
         public void Push(SsaRegister instanceReg)
@@ -53,13 +49,17 @@ namespace AssemblyImporter.CppExport
             return m_regs[m_regs.Count - 1 - offset];
         }
 
-        public VType[] GenerateCfgEdge()
+        public CfgOutboundEdgePrototype GenerateCfgEdge()
         {
             VType[] types = new VType[m_regs.Count];
+            SsaRegister[] ssaRegs = new SsaRegister[m_regs.Count];
 
             for (int i = 0; i < types.Length; i++)
+            {
                 types[i] = m_regs[i].VType;
-            return types;
+                ssaRegs[i] = m_regs[i];
+            }
+            return new CfgOutboundEdgePrototype(types, ssaRegs);
         }
     }
 }

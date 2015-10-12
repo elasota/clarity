@@ -25,11 +25,15 @@ namespace AssemblyImporter.CppExport
 
         public void Liven()
         {
+            if (m_isAlive)
+                throw new Exception("Livened a vreg that's already alive");
             m_isAlive = true;
         }
 
-        public void Deaden()
+        public void Kill()
         {
+            if (!m_isAlive)
+                throw new Exception("Killed a vreg that's already dead");
             m_isAlive = false;
         }
     }

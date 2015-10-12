@@ -38,5 +38,10 @@ namespace AssemblyImporter.CLR
         {
             return TypeOfType.GetHashCode() + Type.GetHashCode();
         }
+
+        public override string ToString()
+        {
+            return TypeOfType.ToString() + " " + Type;
+        }
     }
 }

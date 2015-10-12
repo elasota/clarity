@@ -46,6 +46,7 @@
     <Compile Include="TestApi.cs" />
     <Compile Include="TestCallSite.cs" />
     <Compile Include="TestCfgConvergence.cs" />
+    <Compile Include="TestExceptionHandling.cs" />
     <Compile Include="TestExceptions.cs" />
     <Compile Include="TestInheritedReimpl.cs" />
     <Compile Include="TestMulticastDelegate.cs" />

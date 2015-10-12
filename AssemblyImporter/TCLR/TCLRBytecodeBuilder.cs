@@ -278,7 +278,7 @@ namespace AssemblyImporter.TCLR
         private void EmitBytecode(bool onlyOffsets)
         {
             if (m_writer != null)
-                m_writer.Dispose();
+                ((IDisposable)m_writer).Dispose();
             if (m_memoryStream != null)
                 m_memoryStream.Dispose();
             m_memoryStream = new MemoryStream();
@@ -514,15 +514,15 @@ namespace AssemblyImporter.TCLR
                     case HLOpcode.rem:
                     case HLOpcode.shr:
                         {
-                            bool isUn = instr.Flags.HasFlag(HLOpFlags.Un);
-                            bool isOvf = instr.Flags.HasFlag(HLOpFlags.Ovf);
+                            bool isUn = ((instr.Flags & HLOpFlags.Un) != 0);
+                            bool isOvf = ((instr.Flags & HLOpFlags.Ovf) != 0);
                             WriteOpcode(m_arithConversions[new ArithTag(instr.Opcode, isUn, isOvf)]);
                         }
                         break;
                     case HLOpcode.conv:
                         {
-                            bool isUn = instr.Flags.HasFlag(HLOpFlags.Un);
-                            bool isOvf = instr.Flags.HasFlag(HLOpFlags.Ovf);
+                            bool isUn = ((instr.Flags & HLOpFlags.Un) != 0);
+                            bool isOvf = ((instr.Flags & HLOpFlags.Ovf) != 0);
                             HLOpType type = instr.TypeToken;
                             WriteOpcode(m_convConversions[new ConvTag(isOvf, type, isUn)]);
                         }
@@ -694,13 +694,13 @@ namespace AssemblyImporter.TCLR
                         }
                         break;
                     case HLOpcode.cgt:
-                        if (instr.Flags.HasFlag(HLOpFlags.Un))
+                        if ((instr.Flags & HLOpFlags.Un) != 0)
                             WriteOpcode(TCLROpcode.CEE_CGT_UN);
                         else
                             WriteOpcode(TCLROpcode.CEE_CGT);
                         break;
                     case HLOpcode.clt:
-                        if (instr.Flags.HasFlag(HLOpFlags.Un))
+                        if ((instr.Flags &HLOpFlags.Un) != 0)
                             WriteOpcode(TCLROpcode.CEE_CLT_UN);
                         else
                             WriteOpcode(TCLROpcode.CEE_CLT);
@@ -750,7 +750,7 @@ namespace AssemblyImporter.TCLR
                     case HLOpcode.blt:
                     case HLOpcode.leave:
                         {
-                            bool isUn = instr.Flags.HasFlag(HLOpFlags.Un);
+                            bool isUn = ((instr.Flags & HLOpFlags.Un) != 0);
                             bool isShort = m_longFormJumps.Contains(instrNum);
 
                             int pc = (int)m_memoryStream.Position;

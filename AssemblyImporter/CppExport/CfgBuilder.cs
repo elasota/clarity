@@ -25,6 +25,9 @@ namespace AssemblyImporter.CppExport
         public HLInstruction[] CilInstructions { get { return m_instrs; } }
         public CLRTypeDefRow InClass { get { return m_inClass; } }
         public CLRMethodDefRow InMethod { get { return m_inMethod; } }
+        public IDictionary<uint, ExceptionHandlingCluster> EhClusters { get { return m_ehClusters; } }
+        public ExceptionHandlingRegion Region { get { return m_region; } }
+        public CfgNode RootNode { get { return m_rootNode; } }
 
         private CppBuilder m_builder;
         private CppClass m_cls;
@@ -32,17 +35,24 @@ namespace AssemblyImporter.CppExport
         private VReg[] m_args;
         private VReg[] m_locals;
         private HLInstruction[] m_instrs;
+        private ExceptionHandlingRegion m_region;
+        private IDictionary<uint, ExceptionHandlingCluster> m_ehClusters;
 
         private Dictionary<int, CfgNode> m_cfgNodes;
 
         private bool[] m_instrIsBranchTarget;
-
+        
         private HashSet<int> m_pendingNodesSet;
         private Queue<int> m_pendingNodesQueue;
         private CLRTypeDefRow m_inClass;
         private CLRMethodDefRow m_inMethod;
 
-        public CfgBuilder(CppBuilder builder, CppClass cls, CppMethod method, VReg[] args, VReg[] locals)
+        private int m_startInstr;
+        private int m_endInstr;
+
+        private CfgNode m_rootNode;
+
+        public CfgBuilder(ExceptionHandlingRegion region, CppBuilder builder, CppClass cls, CppMethod method, VReg[] args, VReg[] locals)
         {
             m_builder = builder;
             m_cls = cls;
@@ -52,9 +62,39 @@ namespace AssemblyImporter.CppExport
             m_instrs = method.MethodDef.Method.Instructions;
             m_inClass = cls.TypeDef;
             m_inMethod = method.MethodDef;
+            m_region = region;
+
+            m_startInstr = (int)region.StartInstr;
+            m_endInstr = (int)region.EndInstr;
+            m_ehClusters = region.Clusters;
 
             LocateBranchTargets();
             ConstructCfg();
+            CreateSuccessionGraph();
+        }
+
+        private static void LinkSuccessor(CfgNode node, CfgOutboundEdge outboundEdge)
+        {
+            if (outboundEdge == null)
+                return;
+            node.AddSuccessor(outboundEdge);
+            outboundEdge.SuccessorNode.AddPredecessor(node);
+        }
+
+        private void CreateSuccessionGraph()
+        {
+            foreach (CfgNode node in m_cfgNodes.Values)
+            {
+                foreach (MidInstruction minstr in node.MidInstructions)
+                {
+                    LinkSuccessor(node, minstr.CfgEdgeArg);
+                    LinkSuccessor(node, minstr.CfgEdgeArg2);
+                    if (minstr.CfgEdgesArg != null)
+                        foreach (CfgOutboundEdge edgeArg in minstr.CfgEdgesArg)
+                            LinkSuccessor(node, edgeArg);
+                }
+                LinkSuccessor(node, node.FallThroughEdge);
+            }
         }
 
         public void LocateBranchTargets()
@@ -62,8 +102,8 @@ namespace AssemblyImporter.CppExport
             bool[] knownStarts = new bool[m_instrs.Length];
             Queue<int> unprocessedStarts = new Queue<int>();
 
-            knownStarts[0] = true;
-            unprocessedStarts.Enqueue(0);
+            knownStarts[m_startInstr] = true;
+            unprocessedStarts.Enqueue(m_startInstr);
 
             while (unprocessedStarts.Count > 0)
             {
@@ -90,6 +130,20 @@ namespace AssemblyImporter.CppExport
 
             while (true)
             {
+                {
+                    ExceptionHandlingCluster cluster;
+                    if (m_ehClusters.TryGetValue((uint)nextInstr, out cluster))
+                    {
+                        cluster.Parse(m_region, this);
+                        foreach (uint escapePath in cluster.EscapePaths)
+                        {
+                            if (escapePath >= m_region.StartInstr && escapePath <= m_region.EndInstr)
+                                AddBranchTarget((int)escapePath, knownStarts, unprocessedStarts);
+                        }
+                        break;
+                    }
+                }
+
                 HLInstruction instr = m_instrs[nextInstr];
                 nextInstr++;
 
@@ -111,11 +165,11 @@ namespace AssemblyImporter.CppExport
                         break;
 
                     case HLOpcode.br:
-                    case HLOpcode.leave:
                         AddBranchTarget((int)instr.Arguments.U32Value, knownStarts, unprocessedStarts);
                         isTerminal = true;
                         break;
 
+                    case HLOpcode.leave:
                     case HLOpcode.ret:
                     case HLOpcode.endfinally:
                     case HLOpcode.rethrow:
@@ -173,7 +227,11 @@ namespace AssemblyImporter.CppExport
 
             m_cfgNodes = new Dictionary<int, CfgNode>();
 
-            AddCfgTarget(null, 0, new VType[] { });
+            List<VType> entryTypes = new List<VType>();
+
+            if (m_region.ExceptionType != null)
+                entryTypes.Add(new VType(VType.ValTypeEnum.NotNullReferenceValue, m_region.ExceptionType));
+            AddCfgTarget(null, m_startInstr, entryTypes.ToArray());
 
             while (m_pendingNodesQueue.Count > 0)
             {
@@ -183,6 +241,8 @@ namespace AssemblyImporter.CppExport
                 CfgNode cfgNode = m_cfgNodes[startLoc];
                 cfgNode.Parse();
             }
+
+            m_rootNode = m_cfgNodes[m_startInstr];
         }
 
         public bool InstrIsJumpTarget(int instrNum)

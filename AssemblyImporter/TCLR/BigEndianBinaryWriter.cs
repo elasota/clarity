@@ -40,16 +40,11 @@ namespace AssemblyImporter.TCLR
         {
         }
 
-        public BigEndianBinaryWriter(Stream output, Encoding encoding, bool leaveOpen)
-            : base(output, encoding, leaveOpen)
-        {
-        }
-
         protected override void Dispose(bool b)
         {
             base.Dispose(b);
             if (m_binWriter != null)
-                m_binWriter.Dispose();
+                ((IDisposable)m_binWriter).Dispose();
             if (m_swapMemStream != null)
                 m_swapMemStream.Dispose();
         }

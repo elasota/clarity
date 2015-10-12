@@ -78,12 +78,6 @@ namespace AssemblyImporter.CppExport
             writer.WriteLine("{");
             writer.Flush();
 
-            MemoryStream localVarsStream = new MemoryStream();
-            MemoryStream instructionsStream = new MemoryStream();
-
-            StreamWriter localVarsWriter = new StreamWriter(localVarsStream);
-            StreamWriter instructionsWriter = new StreamWriter(instructionsStream);
-
             List<VReg> args = new List<VReg>();
             if (!method.Static)
             {
@@ -142,20 +136,20 @@ namespace AssemblyImporter.CppExport
                 }
             }
 
-            Console.WriteLine("Method " + method.Name);
+            Console.WriteLine("Method " + cls.FullName + "::" + method.Name);
 
-            CfgBuilder cfgBuilder = new CfgBuilder(builder, cls, method, args.ToArray(), locals.ToArray());
-            //CfgNode entryPointNode = cfgBuilder.BuildFromInstr(0);
+            ExceptionHandlingRegion mainRegion = new ExceptionHandlingRegion(null, builder, method, 0, (uint)method.MethodDef.Method.Instructions.Length - 1, null);
+            {
+                CfgBuilder cfgBuilder = new CfgBuilder(mainRegion, builder, cls, method, args.ToArray(), locals.ToArray());
+                mainRegion.RootCfgNode = cfgBuilder.RootNode;
+            }
 
-            //MidCompile(builder, cls, method, args.ToArray(), locals.ToArray());
+            writer.Flush();
 
-            localVarsWriter.Flush();
-            instructionsWriter.Flush();
-
-            byte[] localVarsBytes = localVarsStream.ToArray();
-            byte[] instructionsBytes = instructionsStream.ToArray();
-            writer.BaseStream.Write(localVarsBytes, 0, localVarsBytes.Length);
-            writer.BaseStream.Write(instructionsBytes, 0, instructionsBytes.Length);
+            CppMidCompiler midCompiler = new CppMidCompiler(builder, cls, method, mainRegion, args.ToArray(), locals.ToArray());
+            midCompiler.EmitAll(writer.BaseStream);
+            writer.BaseStream.Flush();
+            //MidCompile(builder, cls, method, mainRegion, args.ToArray(), locals.ToArray(), writer.BaseStream);
 
             writer.WriteLine("}");
         }

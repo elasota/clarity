@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AssemblyImporter.CLR
 {
@@ -38,6 +35,23 @@ namespace AssemblyImporter.CLR
         public override bool UsesGenericParamOfType(CLRSigType.ElementType elementType)
         {
             return false;
+        }
+
+        public override string ToString()
+        {
+            string fullName = "";
+            CLRTypeDefRow currentClass = TypeDef;
+            while (currentClass != null)
+            {
+                if (fullName != "")
+                    fullName = "." + fullName;
+                if (currentClass.TypeName != "")
+                    fullName = currentClass.TypeName + fullName;
+                if (currentClass.TypeNamespace != "")
+                    fullName = currentClass.TypeNamespace + "." + fullName;
+                currentClass = currentClass.ContainerClass;
+            }
+            return fullName;
         }
     }
 }

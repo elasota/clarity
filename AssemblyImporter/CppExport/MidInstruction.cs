@@ -24,7 +24,6 @@ namespace AssemblyImporter.CppExport
 
         public enum OpcodeEnum
         {
-            ChangeLiveness,
             AllocObject,
             CallConstructor,
             CallMethod,
@@ -44,10 +43,7 @@ namespace AssemblyImporter.CppExport
             clt,
             cgt,
             ceq,
-            LoadReg_ThisPtr,
-            LoadReg_ThisValue,
             LoadArgA_Value,
-            Goto,
             CallVirtualMethod,
             brtrue,
             brfalse,
@@ -88,13 +84,14 @@ namespace AssemblyImporter.CppExport
             ConvertObj,
             StoreArrayElem,
             Switch,
-            StoreReg_ManagedPtr,
             StoreReg_Value,
             StoreIndirect,
             LoadFieldInfoHandle,
             UnboxPtr,
             UnboxValue,
             ZeroFillPtr,
+            EnterProtectedBlock,
+            ExitFinally,
         }
 
         public OpcodeEnum Opcode { get; private set; }
@@ -106,12 +103,14 @@ namespace AssemblyImporter.CppExport
         public bool FlagArg { get; private set; }
         public uint UIntArg { get; private set; }
         public VReg VRegArg { get; private set; }
-        public CfgNode CfgNodeArg { get; private set; }
-        public CfgNode CfgNodeArg2 { get; private set; }
-        public CfgNode[] CfgNodesArg { get; private set; }
+        // If you add more CFG edges here, update CfgBuilder.CreateSuccessionGraph
+        public CfgOutboundEdge CfgEdgeArg { get; private set; }
+        public CfgOutboundEdge CfgEdgeArg2 { get; private set; }
+        public CfgOutboundEdge[] CfgEdgesArg { get; private set; }
         public string StrArg { get; private set; }
         public ArithEnum ArithArg { get; private set; }
         public CppMethodSpec MethodSpecArg { get; private set; }
+        public ExceptionHandlingCluster EhClusterArg { get; private set; }
 
         public MidInstruction(OpcodeEnum opcode)
         {
@@ -124,18 +123,36 @@ namespace AssemblyImporter.CppExport
             FlagArg = flagArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, CfgNode cfgNodeArg)
+        public MidInstruction(OpcodeEnum opcode, uint uintArg)
         {
             Opcode = opcode;
-            CfgNodeArg = cfgNodeArg;
+            UIntArg = uintArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgNode cfgNodeArg, CfgNode[] cfgNodesArg)
+        public MidInstruction(OpcodeEnum opcode, ExceptionHandlingCluster ehClusterArg)
+        {
+            Opcode = opcode;
+            EhClusterArg = ehClusterArg;
+        }
+
+        public MidInstruction(OpcodeEnum opcode, CfgOutboundEdge cfgEdgeArg)
+        {
+            Opcode = opcode;
+            CfgEdgeArg = cfgEdgeArg;
+        }
+
+        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgOutboundEdge cfgEdgeArg)
         {
             Opcode = opcode;
             RegArg = regArg;
-            CfgNodeArg = cfgNodeArg;
-            CfgNodesArg = cfgNodesArg;
+            CfgEdgeArg = cfgEdgeArg;
+        }
+
+        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgOutboundEdge[] cfgEdgesArg)
+        {
+            Opcode = opcode;
+            RegArg = regArg;
+            CfgEdgesArg = cfgEdgesArg;
         }
 
         public MidInstruction(OpcodeEnum opcode, SsaRegister regArg)
@@ -203,6 +220,14 @@ namespace AssemblyImporter.CppExport
             RegArgs = regArgs;
         }
 
+        public MidInstruction(OpcodeEnum opcode, CppMethodSpec methodSpecArg, SsaRegister regArg, SsaRegister[] regArgs)
+        {
+            Opcode = opcode;
+            MethodSpecArg = methodSpecArg;
+            RegArg = regArg;
+            RegArgs = regArgs;
+        }
+
         public MidInstruction(OpcodeEnum opcode, CppMethodSpec methodSpecArg, SsaRegister regArg, SsaRegister regArg2, SsaRegister[] regArgs)
         {
             Opcode = opcode;
@@ -212,13 +237,12 @@ namespace AssemblyImporter.CppExport
             RegArgs = regArgs;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, CfgNode cfgNodeArg, CfgNode cfgNodeArg2, bool flagArg)
+        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, CfgOutboundEdge cfgEdgeArg, bool flagArg)
         {
             Opcode = opcode;
             RegArg = regArg;
             RegArg2 = regArg2;
-            CfgNodeArg = cfgNodeArg;
-            CfgNodeArg2 = cfgNodeArg2;
+            CfgEdgeArg = cfgEdgeArg;
             FlagArg = FlagArg;
         }
 
@@ -256,12 +280,12 @@ namespace AssemblyImporter.CppExport
             RegArg3 = regArg3;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgNode cfgNodeArg, CfgNode cfgNodeArg2)
+        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgOutboundEdge cfgEdgeArg, CfgOutboundEdge cfgEdgeArg2)
         {
             Opcode = opcode;
             RegArg = regArg;
-            CfgNodeArg = cfgNodeArg;
-            CfgNodeArg2 = cfgNodeArg2;
+            CfgEdgeArg = cfgEdgeArg;
+            CfgEdgeArg2 = cfgEdgeArg2;
         }
     }
 }

@@ -33,6 +33,16 @@ namespace Tests
         {
         }
 
+        private void PassClassAsInterface(MyInterface[] arr)
+        {
+            arr[0].Test();
+        }
+
+        private void PassArrayOfArray(MyInterface[][] arr)
+        {
+            arr[0][0].Test();
+        }
+
         public void Run()
         {
             MyClass c = new MyClass();
@@ -50,6 +60,15 @@ namespace Tests
 
             object[] arr5 = new MyInterface[1];
             arr5[0] = c;
+
+            MyClass[] arr6 = new MyClass[1];
+            arr6[0] = c;
+            PassClassAsInterface(arr6);
+
+            MyClass[][] arr7 = new MyClass[1][];
+            arr7[0] = new MyClass[1];
+            arr7[0][0] = c;
+            PassArrayOfArray(arr7);
         }
     }
 }

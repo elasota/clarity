@@ -208,7 +208,7 @@ namespace AssemblyImporter.CLR
             if (m_memoryStream != null)
                 m_memoryStream.Dispose();
             if (m_reader != null)
-                m_reader.Dispose();
+                ((IDisposable)m_reader).Dispose();
         }
     }
 }

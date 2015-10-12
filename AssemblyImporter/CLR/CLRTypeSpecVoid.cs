@@ -33,5 +33,10 @@ namespace AssemblyImporter.CLR
         {
             return false;
         }
+
+        public override string ToString()
+        {
+            return "void";
+        }
     }
 }
