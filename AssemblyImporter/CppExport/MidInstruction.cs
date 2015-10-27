@@ -33,20 +33,27 @@ namespace AssemblyImporter.CppExport
             ReturnValue,
             LoadReg_ManagedPtr,
             LoadReg_Value,
-            Store,
-            beq,
-            bne,
+            StoreReg_ManagedPtr,
+            StoreReg_Value,
+            beq_ref,
+            beq_val,
+            bne_ref,
+            bne_val,
             bge,
             bgt,
             ble,
             blt,
             clt,
             cgt,
-            ceq,
+            cne_ref,
+            ceq_val,
+            ceq_ref,
             LoadArgA_Value,
             CallVirtualMethod,
-            brtrue,
-            brfalse,
+            brzero,
+            brnotzero,
+            brnull,
+            brnotnull,
             LeakReg,
             EntryReg,
             Throw,
@@ -55,6 +62,7 @@ namespace AssemblyImporter.CppExport
             LoadFieldA_ManagedPtr,
             LoadField_Object,
             LoadFieldA_Object,
+            LoadField_Value,
             LoadRegA,
             LoadArrayElem,
             LoadArrayElemAddr,
@@ -84,7 +92,6 @@ namespace AssemblyImporter.CppExport
             ConvertObj,
             StoreArrayElem,
             Switch,
-            StoreReg_Value,
             StoreIndirect,
             LoadFieldInfoHandle,
             UnboxPtr,
@@ -92,6 +99,8 @@ namespace AssemblyImporter.CppExport
             ZeroFillPtr,
             EnterProtectedBlock,
             ExitFinally,
+            ConstrainedCallVirtualMethod,
+            ConstrainedCallMethod,
         }
 
         public OpcodeEnum Opcode { get; private set; }
@@ -228,8 +237,9 @@ namespace AssemblyImporter.CppExport
             RegArgs = regArgs;
         }
 
-        public MidInstruction(OpcodeEnum opcode, CppMethodSpec methodSpecArg, SsaRegister regArg, SsaRegister regArg2, SsaRegister[] regArgs)
+        public MidInstruction(OpcodeEnum opcode, CppMethodSpec methodSpecArg, CLRTypeSpec typeSpecArg, SsaRegister regArg, SsaRegister regArg2, SsaRegister[] regArgs)
         {
+            TypeSpecArg = typeSpecArg;
             Opcode = opcode;
             MethodSpecArg = methodSpecArg;
             RegArg = regArg;

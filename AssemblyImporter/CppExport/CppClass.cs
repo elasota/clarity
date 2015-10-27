@@ -9,6 +9,7 @@ namespace AssemblyImporter.CppExport
         public string Name { get; private set; }
         public string FullName { get; private set; }
         public bool IsValueType { get; private set; }
+        public bool IsEnum { get; private set; }
         public bool IsMulticastDelegate { get; private set; }
         public bool IsDelegate { get; private set; }
 
@@ -17,6 +18,7 @@ namespace AssemblyImporter.CppExport
         public IEnumerable<CppField> InheritedFields { get { return m_inheritedFields; } }
         public CLRTypeSpec ParentTypeSpec { get; private set; }
         public int NumGenericParameters { get; private set; }
+        public bool HaveAnyNewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces.Count > 0; } }
         public IEnumerable<CLRTypeSpec> NewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces; } }
         public IEnumerable<CLRTypeSpec> ReimplementedInterfaces { get { return m_reimplementedInterfaces; } }
         public IEnumerable<CLRTypeSpec> InheritedImplementedInterfaces { get { return m_inheritedImplementedInterfaces; } }
@@ -24,6 +26,7 @@ namespace AssemblyImporter.CppExport
 
         public IEnumerable<CppVtableSlot> AllVtableSlots { get { return m_allVtableSlots; } }
         public IEnumerable<CppVtableSlot> VisibleVtableSlots { get { return m_visibleVtableSlots; } }
+        public IEnumerable<CppVtableSlotOverrideImpl> OverrideImpls { get { return m_overrideImpls; } }
 
         public CLRTypeDefRow TypeDef { get { return m_typeDef; } }
         public IEnumerable<CLRTypeSpec> GenericParameters { get { return m_genericParameters; } }
@@ -34,6 +37,7 @@ namespace AssemblyImporter.CppExport
         private List<CppMethod> m_methods;
         private List<CppVtableSlot> m_allVtableSlots;       // All slots
         private List<CppVtableSlot> m_visibleVtableSlots;   // Slots that haven't been overlapped by a NewSlot
+        private List<CppVtableSlotOverrideImpl> m_overrideImpls;
         private List<CppField> m_fields;
         private List<CppField> m_inheritedFields;
         private List<CLRTypeSpec> m_newlyImplementedInterfaces;
@@ -124,6 +128,8 @@ namespace AssemblyImporter.CppExport
 
             IsDelegate = baseInstance.IsDelegate;
             IsMulticastDelegate = baseInstance.IsMulticastDelegate;
+            IsEnum = baseInstance.IsEnum;
+            IsValueType = baseInstance.IsValueType;
             if (DelegateSignature != null)
                 DelegateSignature = baseInstance.DelegateSignature.Instantiate(typeParams, methodParams);
             HaveStaticFields = baseInstance.HaveStaticFields;
@@ -181,7 +187,8 @@ namespace AssemblyImporter.CppExport
 
         public void AddExplicitInterface(CppBuilder builder, CLRTypeSpec ifcTypeSpec)
         {
-            CppClass ifcType = builder.CreateClassFromType(ifcTypeSpec);
+            CppClass ifcType = builder.GetCachedClass(ifcTypeSpec);
+
             // CS0695 guarantees that type substitution will never result in multiple interfaces
             // resolving to the same passive conversion, so this strategy should be OK
             foreach (CLRTypeSpec ifc in ifcType.m_newlyImplementedInterfaces)
@@ -219,17 +226,32 @@ namespace AssemblyImporter.CppExport
             return removeIndexes;
         }
 
-        public void ResolveInherit(CppClass parentClass, IEnumerable<CLRTypeSpec> interfaces, CLRTypeSpec parentTypeSpec)
+        public void ResolveInherit(CppBuilder builder, CppClass parentClass, IEnumerable<CLRTypeSpec> interfaces, CLRTypeSpec parentTypeSpec)
         {
             // There are a LOT of tricky slotting cases here.
             // See TestNewSlotImplementation, TestSlotDivergence, and TestImplementNonVirtual for some sample cases.
             //
-            // The short version is that we need to resolve the class's vtable and then implement the class's explicit
-            // interfaces on top of that.  Reimplemented interfaces need to emit a new interface-to-vtable map even if
-            // interface already exists in the class.
+            // Roughly how this works:
+            // 1.) Override vtable slots based on matching:
+            //     - If a method is ReuseSlot, then it overrides a slot no matter what
+            //     - If a method is NewSlot, then it creates a slot
+            // 2.) Implement MethodImpls and interfaces as cross-slot thunks
             //
-            // We might be able to optimize this a bit if we can detect that a method reimplementation is the same as
-            // the one that already exists.
+            // Two notable complications with this:
+            //
+            // In Clarity, we only implement the specified interface once in a given class's heirarchy, but
+            // reimplemented interfaces need to emit new mappings because the reimplementation can change how the
+            // interface is implemented.  For example, if a parent class implements an interface method by match,
+            // and then a derived class hides that method with a newslot and reimplements the interface, then the
+            // interface must link to the newslot method.
+            // 
+            // We might be able to optimize this a bit if we can detect that a method reimplementation is the
+            // same as the one that already exists.
+            //
+            // The other complication is that Roslyn sometimes emits useless but apparently legal .override
+            // directives that "override" a parent class implementation with the same method that already overrides
+            // it from reuseslot matching.
+
             ParentTypeSpec = parentTypeSpec;
 
             if (parentClass != null)
@@ -244,6 +266,7 @@ namespace AssemblyImporter.CppExport
                     {
                         if (method.CreatesSlot != null)
                             RemoveOverrides(parentVisibleSlots, method.CreatesSlot);
+
                         if (method.Overrides)
                         {
                             List<int> overrideIndexes = FindOverrideIndexes(parentVisibleSlots, method.Name, method.MethodSignature);
@@ -287,6 +310,7 @@ namespace AssemblyImporter.CppExport
                 m_inheritedPassiveIfcConversions.AddRange(parentClass.m_inheritedPassiveIfcConversions);
 
                 IsValueType = (parentClass.FullName == "System.ValueType" && this.FullName != "System.Enum") || parentClass.FullName == "System.Enum";
+                IsEnum = parentClass.FullName == "System.Enum";
 
                 IsMulticastDelegate = (parentClass.FullName == "System.MulticastDelegate");
                 IsDelegate = IsMulticastDelegate || (parentClass.FullName == "System.Delegate" && this.FullName != "System.MulticastDelegate");
@@ -335,6 +359,16 @@ namespace AssemblyImporter.CppExport
             return GenerateInstanceCodePathForFullName(FullName);
         }
 
+        public static string GenerateBoxPathForFullName(string fullName)
+        {
+            return GeneratePathForFullName(fullName, ".Box.h");
+        }
+
+        public string GenerateBoxPath()
+        {
+            return GenerateBoxPathForFullName(FullName);
+        }
+
         public static string GenerateDefinitionPathForFullName(string fullName)
         {
             return GeneratePathForFullName(fullName, ".Def.h");
@@ -343,6 +377,16 @@ namespace AssemblyImporter.CppExport
         public string GenerateDefinitionPath()
         {
             return GenerateDefinitionPathForFullName(FullName);
+        }
+
+        public static string GenerateMainHeaderForFullName(string fullName)
+        {
+            return GeneratePathForFullName(fullName, ".h");
+        }
+
+        public string GenerateMainHeaderPath()
+        {
+            return GenerateMainHeaderForFullName(FullName);
         }
 
         public static string GeneratePrototypePathForFullName(string fullName)

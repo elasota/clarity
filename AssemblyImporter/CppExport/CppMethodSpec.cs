@@ -15,7 +15,7 @@ namespace AssemblyImporter.CppExport
 
         public CppMethodSpec(CppMethod method, CLRTypeSpec[] genericParameters)
         {
-            CppMethod = method;
+            CppMethod = method.Instantiate(null, genericParameters);
             GenericParameters = genericParameters;
         }
 

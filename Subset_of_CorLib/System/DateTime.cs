@@ -242,41 +242,29 @@ namespace System
             }
         }
 
-        public int Day
+        public extern int Day
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
-        public DayOfWeek DayOfWeek
+        public extern DayOfWeek DayOfWeek
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return DayOfWeek.Monday;
-            }
+            get;
         }
 
-        public int DayOfYear
+        public extern int DayOfYear
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
         /// Reduce size by calling a single method?
-        public int Hour
+        public extern int Hour
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
         public DateTimeKind Kind
@@ -306,58 +294,40 @@ namespace System
             return retVal;
         }
 
-        public int Millisecond
+        public extern int Millisecond
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
-        public int Minute
+        public extern int Minute
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
-        public int Month
+        public extern int Month
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
-        public static DateTime Now
+        public extern static DateTime Now
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return new DateTime();
-            }
+            get;
         }
 
-        public static DateTime UtcNow
+        public extern static DateTime UtcNow
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return new DateTime();
-            }
+            get;
         }
 
-        public int Second
+        public extern int Second
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
         /// Our origin is at 1601/01/01:00:00:00.000
@@ -383,22 +353,16 @@ namespace System
             }
         }
 
-        public static DateTime Today
+        public extern static DateTime Today
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return new DateTime();
-            }
+            get;
         }
 
-        public int Year
+        public extern int Year
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
-            get
-            {
-                return 0;
-            }
+            get;
         }
 
         public TimeSpan Subtract(DateTime val)

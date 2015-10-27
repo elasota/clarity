@@ -12,8 +12,7 @@ namespace AssemblyImporter.CppExport
         {
             if (typeSpec is CLRTypeSpecClass)
             {
-                CLRTypeSpecClass classSpec = (CLRTypeSpecClass)typeSpec;
-                CppClass cls = cppBuilder.GetCachedClass(classSpec.TypeDef);
+                CppClass cls = cppBuilder.GetCachedClass(typeSpec);
                 if (cls.IsValueType)
                     return VType.ValTypeEnum.ValueValue;
                 return VType.ValTypeEnum.NullableReferenceValue;
@@ -21,7 +20,7 @@ namespace AssemblyImporter.CppExport
             else if (typeSpec is CLRTypeSpecGenericInstantiation)
             {
                 CLRTypeSpecGenericInstantiation giSpec = (CLRTypeSpecGenericInstantiation)typeSpec;
-                CppClass cls = cppBuilder.GetCachedClass(giSpec.GenericType.TypeDef);
+                CppClass cls = cppBuilder.GetCachedClass(new CLRTypeSpecClass(giSpec.GenericType.TypeDef));
                 if (cls.IsValueType)
                     return VType.ValTypeEnum.ValueValue;
                 return VType.ValTypeEnum.NullableReferenceValue;
@@ -48,11 +47,11 @@ namespace AssemblyImporter.CppExport
             switch (vt.ValType)
             {
                 case VType.ValTypeEnum.ValueValue:
-                    return "::CLRVM::ValValue< " + builder.SpecToClassName(vt.TypeSpec) + " >";
+                    return "::CLRVM::TValValue< " + builder.SpecToClassName(vt.TypeSpec) + " >";
                 case VType.ValTypeEnum.NullableReferenceValue:
                 case VType.ValTypeEnum.NotNullReferenceValue:
                 case VType.ValTypeEnum.Null:
-                    return "::CLRVM::RefValue< " + builder.SpecToClassName(vt.TypeSpec) + " >";
+                    return "::CLRVM::TRefValue< " + builder.SpecToClassName(vt.TypeSpec) + " >";
                 default:
                     throw new ArgumentException();
             }
@@ -60,20 +59,40 @@ namespace AssemblyImporter.CppExport
 
         public static void WriteMethodCode(CppBuilder builder, CppClass cls, CppMethod method, System.IO.StreamWriter writer, CppDependencySet depSet, bool exportInline)
         {
-            bool isMethodInline = false;
-            //RegisterSet regSet = new RegisterSet("bVReg");
+            int nClassParameters = cls.NumGenericParameters;
+            int nMethodParameters = method.NumGenericParameters;
+
+            bool isMethodInline = (nClassParameters != 0 || nMethodParameters != 0);
 
             if (isMethodInline != exportInline)
                 return;
 
+            if (nClassParameters != 0 || nMethodParameters != 0)
+            {
+                writer.Write("template< ");
+                CppBuilder.WriteTemplateParamCluster(false, nClassParameters, "T", writer);
+                if (nMethodParameters != 0)
+                {
+                    if (nClassParameters != 0)
+                        writer.Write(", ");
+                    CppBuilder.WriteTemplateParamCluster(false, nMethodParameters, "M", writer);
+                }
+                writer.WriteLine(" >");
+            }
+
             writer.Write(builder.SpecToValueType(method.MethodSignature.RetType));
             writer.Write(" (");
             writer.Write(cls.GenerateCppClassName());
-            writer.Write("::mcode_");
-            writer.Write(method.GenerateBaseName());
+            CppBuilder.WriteTemplateParamCluster(true, nClassParameters, "T", writer);
+            writer.Write("::");
+            writer.Write(method.GenerateCodeName());
+            CppBuilder.WriteTemplateParamCluster(true, nMethodParameters, "M", writer);
             writer.Write(")");
-            builder.WriteMethodParameters(writer, null, method.MethodSignature, CppBuilder.MethodParameterMapping.ClassImpl);
-            depSet.AddMethodSigDependencies(method.MethodSignature, true);
+
+            CLRTypeSpec inlineThisType = method.Static ? null : CppBuilder.CreateInstanceTypeSpec(builder.Assemblies, cls.TypeDef);
+
+            builder.WriteMethodParameters(writer, null, inlineThisType, method.MethodSignature, CppBuilder.MethodParameterMapping.ClassImpl);
+            depSet.AddMethodSigDependencies(method.MethodSignature, CppDependencySet.LevelEnum.Def);
             writer.WriteLine();
             writer.WriteLine("{");
             writer.Flush();
@@ -83,8 +102,8 @@ namespace AssemblyImporter.CppExport
             {
                 CppClass thisClass = builder.GetCachedClass(method.DeclaredInClassSpec);
                 CLRTypeSpec thisTypeSpec = method.DeclaredInClassSpec;
-                VType vt = new VType(thisClass.IsValueType ? VType.ValTypeEnum.ManagedPtr : VType.ValTypeEnum.NotNullReferenceValue, thisTypeSpec);
-                args.Add(new VReg("bThis", vt, args.Count));
+                VType vt = new VType(thisClass.IsValueType ? VType.ValTypeEnum.MaybeAnchoredManagedPtr : VType.ValTypeEnum.NotNullReferenceValue, thisTypeSpec);
+                args.Add(new VReg(builder, "bThis", vt, args.Count, VReg.UsageEnum.Argument));
             }
 
             foreach (CLRMethodSignatureInstanceParam param in method.MethodSignature.ParamTypes)
@@ -94,7 +113,7 @@ namespace AssemblyImporter.CppExport
                 switch (param.TypeOfType)
                 {
                     case CLRSigParamOrRetType.TypeOfTypeEnum.ByRef:
-                        vt = new VType(VType.ValTypeEnum.ManagedPtr, spec);
+                        vt = new VType(VType.ValTypeEnum.AnchoredManagedPtr, spec);
                         break;
                     case CLRSigParamOrRetType.TypeOfTypeEnum.Value:
                         vt = new VType(ValTypeForTypeSpec(builder, spec), spec);
@@ -102,7 +121,7 @@ namespace AssemblyImporter.CppExport
                     default:
                         throw new ArgumentException();
                 }
-                args.Add(new VReg("param", vt, args.Count));
+                args.Add(new VReg(builder, "param", vt, args.Count, VReg.UsageEnum.Argument));
             }
 
             List<VReg> locals = new List<VReg>();
@@ -123,10 +142,10 @@ namespace AssemblyImporter.CppExport
                     switch (localVar.VarKind)
                     {
                         case CLRSigLocalVar.LocalVarKind.ByRef:
-                            vreg = new VReg("local", new VType(VType.ValTypeEnum.ManagedPtr, localTypeSpec), locals.Count);
+                            vreg = new VReg(builder, "bLocal", new VType(VType.ValTypeEnum.AnchoredManagedPtr, localTypeSpec), locals.Count, VReg.UsageEnum.Local);
                             break;
                         case CLRSigLocalVar.LocalVarKind.Default:
-                            vreg = new VReg("local", new VType(CppCilExporter.ValTypeForTypeSpec(builder, localTypeSpec), localTypeSpec), locals.Count);
+                            vreg = new VReg(builder, "bLocal", new VType(CppCilExporter.ValTypeForTypeSpec(builder, localTypeSpec), localTypeSpec), locals.Count, VReg.UsageEnum.Local);
                             break;
                         default:
                             throw new NotImplementedException();
@@ -138,6 +157,19 @@ namespace AssemblyImporter.CppExport
 
             Console.WriteLine("Method " + cls.FullName + "::" + method.Name);
 
+            foreach (VReg vReg in locals)
+            {
+                vReg.Liven();
+                depSet.AddTypeSpecDependencies(vReg.VType.TypeSpec, CppDependencySet.LevelEnum.Def);
+            }
+            foreach (VReg vReg in args)
+            {
+                vReg.Liven();
+                depSet.AddTypeSpecDependencies(vReg.VType.TypeSpec, CppDependencySet.LevelEnum.Def);
+            }
+
+            depSet.AddTypeSpecDependencies(new CLRTypeSpecClass(cls.TypeDef), CppDependencySet.LevelEnum.Def);
+
             ExceptionHandlingRegion mainRegion = new ExceptionHandlingRegion(null, builder, method, 0, (uint)method.MethodDef.Method.Instructions.Length - 1, null);
             {
                 CfgBuilder cfgBuilder = new CfgBuilder(mainRegion, builder, cls, method, args.ToArray(), locals.ToArray());
@@ -146,12 +178,24 @@ namespace AssemblyImporter.CppExport
 
             writer.Flush();
 
-            CppMidCompiler midCompiler = new CppMidCompiler(builder, cls, method, mainRegion, args.ToArray(), locals.ToArray());
-            midCompiler.EmitAll(writer.BaseStream);
+            CppMidCompiler midCompiler = new CppMidCompiler(builder, cls, method, mainRegion, "bTLFrame", args.ToArray(), locals.ToArray());
+            midCompiler.EmitAll(depSet, writer.BaseStream);
             writer.BaseStream.Flush();
             //MidCompile(builder, cls, method, mainRegion, args.ToArray(), locals.ToArray(), writer.BaseStream);
 
             writer.WriteLine("}");
+
+
+            foreach (VReg vReg in locals)
+            {
+                if (!vReg.IsAlive || vReg.IsZombie)
+                    throw new Exception("Internal error: local vreg was killed");
+            }
+            foreach (VReg vReg in args)
+            {
+                if (!vReg.IsAlive || vReg.IsZombie)
+                    throw new Exception("Internal error: arg vreg was killed");
+            }
         }
     }
 }

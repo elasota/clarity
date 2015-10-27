@@ -47,6 +47,14 @@ namespace AssemblyImporter.CLR
                     ExplicitThis = true;
             }
 
+            if ((baseByte & (int)CLRSignatureParser.Token.GENERIC) != 0)
+            {
+                if (allowedKind != Kind.Def && allowedKind != Kind.DefOrRef && allowedKind != Kind.Ref)
+                    throw new ParseFailedException("Invalid method signature");
+                allowedKind = Kind.Def;
+                NumGenericParameters = parser.ReadCompressedUInt();
+            }
+
             switch (callingConvention)
             {
                 case CLRSignatureParser.Token.DEFAULT:
@@ -57,12 +65,6 @@ namespace AssemblyImporter.CLR
                     break;
                 case CLRSignatureParser.Token.VARARG:
                     CallingConvention = CallingConventionType.VarArg;
-                    break;
-                case CLRSignatureParser.Token.GENERIC:
-                    if (allowedKind != Kind.Def && allowedKind != Kind.DefOrRef && allowedKind != Kind.Ref)
-                        throw new ParseFailedException("Invalid method signature");
-                    allowedKind = Kind.Def;
-                    NumGenericParameters = parser.ReadCompressedUInt();
                     break;
                 case CLRSignatureParser.Token.C:
                     if (allowedKind != Kind.StandAlone)

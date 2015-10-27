@@ -20,9 +20,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ClarityCompilerDefs.h" />
+    <ClInclude Include="ClarityConfig.h" />
     <ClInclude Include="ClarityCore.h" />
     <ClInclude Include="ClarityExec.h" />
+    <ClInclude Include="ClarityExec_Defs.h" />
+    <ClInclude Include="ClarityInternalSupport.h" />
+    <ClInclude Include="ClarityTypes.h" />
     <ClInclude Include="ClarityUtil.h" />
+    <ClInclude Include="ClarityVM.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{C28AF17C-F497-4D52-852D-120CD041E521}</ProjectGuid>

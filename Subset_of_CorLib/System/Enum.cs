@@ -10,7 +10,6 @@ namespace System
     [Serializable]
     public abstract class Enum : ValueType
     {
-
         public override String ToString()
         {
             Type eT = this.GetType();
@@ -20,6 +19,8 @@ namespace System
             return obj.ToString();
         }
 
+        [MethodImplAttribute(MethodImplOptions.InternalCall)]
+        public extern TypeCode GetTypeCode();
     }
 }
 

@@ -27,5 +27,20 @@
     <ClInclude Include="ClarityCompilerDefs.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="ClarityTypes.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ClarityVM.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ClarityConfig.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ClarityInternalSupport.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ClarityExec_Defs.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

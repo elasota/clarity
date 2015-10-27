@@ -18,7 +18,7 @@ namespace AssemblyImporter.CppExport
             OriginallyGenericParam = (field.Signature.Type is CLRSigTypeVarOrMVar);
             Name = field.Name;
             Field = field;
-            DeclaredInClassSpec = CppBuilder.CreateInstanceTypeDef(assemblies, field.Owner);
+            DeclaredInClassSpec = CppBuilder.CreateInstanceTypeSpec(assemblies, field.Owner);
         }
 
         private CppField(CppField baseInstance, CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)

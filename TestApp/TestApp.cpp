@@ -1,10 +1,10 @@
-#include "tSystem\tObject.Def.h"
 #include "..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision.Def.h"
 
 int main(int argc, const char **argv)
 {
+    ::CLRCore::IObjectManager *objManager = CLARITY_NULLPTR;
     ::CLRX::NtTests::tTestInterfaceOverrideCollision test;
-    ::CLRExec::Frame frame;
-    test.mcall_tRun(frame);
+    ::CLRExec::RootLevelFrame frame(objManager);
+    test.mcall_itRun(frame);
     return 0;
 }

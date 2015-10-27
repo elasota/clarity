@@ -160,6 +160,8 @@
     <Compile Include="CppExport\CppRegionEmitter.cs" />
     <Compile Include="CppExport\CppRegisterAllocator.cs" />
     <Compile Include="CppExport\CppScopeStack.cs" />
+    <Compile Include="CppExport\CppTraceabilityEnum.cs" />
+    <Compile Include="CppExport\CppVtableSlotOverrideImpl.cs" />
     <Compile Include="CppExport\ExceptionHandlingCluster.cs" />
     <Compile Include="CppExport\ExceptionHandlingRegion.cs" />
     <Compile Include="CppExport\CppAssignabilityResolver.cs" />
@@ -190,37 +192,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RvaAndSize.cs" />
     <Compile Include="StreamParser.cs" />
-    <Compile Include="TCLR\BinaryBlob.cs" />
-    <Compile Include="TCLR\BinaryBlobRepository.cs" />
-    <Compile Include="TCLR\TCLRAssemblyBuilderPassCache.cs" />
-    <Compile Include="TCLR\TCLRBytecodeBuilder.cs" />
-    <Compile Include="TCLR\TCLRCallingConvention.cs" />
-    <Compile Include="TCLR\TCLRDataType.cs" />
-    <Compile Include="TCLR\TCLRMetaItem.cs" />
-    <Compile Include="TCLR\BigEndianBinaryWriter.cs" />
-    <Compile Include="TCLR\TCLRAssembly.cs" />
-    <Compile Include="TCLR\TCLRAssemblyBuilder.cs" />
-    <Compile Include="TCLR\TCLRAssemblyRef.cs" />
-    <Compile Include="TCLR\TCLRAttribute.cs" />
-    <Compile Include="TCLR\TCLREH.cs" />
-    <Compile Include="TCLR\TCLRFieldDef.cs" />
-    <Compile Include="TCLR\TCLRFieldRef.cs" />
-    <Compile Include="TCLR\TCLRIndex.cs" />
-    <Compile Include="TCLR\TCLRMethodDef.cs" />
-    <Compile Include="TCLR\TCLRMethodRef.cs" />
-    <Compile Include="TCLR\TCLROffset.cs" />
-    <Compile Include="TCLR\TCLROffsetLong.cs" />
-    <Compile Include="TCLR\TCLROpcode.cs" />
-    <Compile Include="TCLR\TCLRResource.cs" />
-    <Compile Include="TCLR\TCLRResourceFile.cs" />
-    <Compile Include="TCLR\TCLRSig.cs" />
-    <Compile Include="TCLR\TCLRSignatureBuilder.cs" />
-    <Compile Include="TCLR\TCLRString.cs" />
-    <Compile Include="TCLR\TCLRTablesEnum.cs" />
-    <Compile Include="TCLR\TCLRTypeDef.cs" />
-    <Compile Include="TCLR\TCLRTypeRef.cs" />
-    <Compile Include="TCLR\TCLRTypeSpec.cs" />
-    <Compile Include="TCLR\TCLRVersion.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

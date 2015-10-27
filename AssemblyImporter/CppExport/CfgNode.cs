@@ -91,19 +91,22 @@ namespace AssemblyImporter.CppExport
             private VType.ValTypeEnum m_source1;
             private VType.ValTypeEnum m_source2;
             private VType.ValTypeEnum m_converged;
+            private bool m_typeMustMatch;
 
-            public ValTypeConvergence(VType.ValTypeEnum source1, VType.ValTypeEnum source2, VType.ValTypeEnum converged)
+            public ValTypeConvergence(VType.ValTypeEnum source1, VType.ValTypeEnum source2, VType.ValTypeEnum converged, bool typeMustMatch)
             {
                 m_source1 = source1;
                 m_source2 = source2;
                 m_converged = converged;
+                m_typeMustMatch = typeMustMatch;
             }
 
-            public bool TryConverge(VType.ValTypeEnum source1, VType.ValTypeEnum source2, ref VType.ValTypeEnum converged)
+            public bool TryConverge(VType.ValTypeEnum source1, VType.ValTypeEnum source2, ref VType.ValTypeEnum converged, ref bool typeMustMatch)
             {
                 if ((source1 == m_source1 && source2 == m_source2) || (source2 == m_source1 && source1 == m_source2))
                 {
                     converged = m_converged;
+                    typeMustMatch = m_typeMustMatch;
                     return true;
                 }
                 return false;
@@ -113,13 +116,16 @@ namespace AssemblyImporter.CppExport
         private static ValTypeConvergence[] InitConvergences()
         {
             List<ValTypeConvergence> convergences = new List<ValTypeConvergence>();
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NotNullReferenceValue));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NotNullReferenceValue, VType.ValTypeEnum.NotNullReferenceValue));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NullableReferenceValue, VType.ValTypeEnum.NullableReferenceValue));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ValueValue));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ValueValue, VType.ValTypeEnum.ValueValue));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.NotNullReferenceValue, VType.ValTypeEnum.NullableReferenceValue, VType.ValTypeEnum.NullableReferenceValue));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NotNullReferenceValue, false));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NotNullReferenceValue, VType.ValTypeEnum.NotNullReferenceValue, false));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NullableReferenceValue, VType.ValTypeEnum.NullableReferenceValue, false));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ValueValue, false));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ValueValue, VType.ValTypeEnum.ValueValue, false));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.NotNullReferenceValue, VType.ValTypeEnum.NullableReferenceValue, VType.ValTypeEnum.NullableReferenceValue, false));
 
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.AnchoredManagedPtr, VType.ValTypeEnum.MaybeAnchoredManagedPtr, VType.ValTypeEnum.AnchoredManagedPtr, true));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.LocalManagedPtr, VType.ValTypeEnum.MaybeAnchoredManagedPtr, VType.ValTypeEnum.MaybeAnchoredManagedPtr, true));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.LocalManagedPtr, VType.ValTypeEnum.AnchoredManagedPtr, VType.ValTypeEnum.AnchoredManagedPtr, true));
             return convergences.ToArray();
         }
 
@@ -172,11 +178,15 @@ namespace AssemblyImporter.CppExport
             {
                 // Different val types
                 bool anyMatched = false;
+                bool typeMustMatch = false;
                 foreach (ValTypeConvergence convergence in ms_convergences)
-                    anyMatched = anyMatched || convergence.TryConverge(vType1.ValType, vType2.ValType, ref convergedValType);
+                    anyMatched = anyMatched || convergence.TryConverge(vType1.ValType, vType2.ValType, ref convergedValType, ref typeMustMatch);
 
                 if (!anyMatched)
                     throw new ArgumentException();
+
+                if (typeMustMatch && !vType1.TypeSpec.Equals(vType2.TypeSpec))
+                    throw new ParseFailedException("CFG edge merge failed to merge managed ptrs");
             }
 
             // Same value type?

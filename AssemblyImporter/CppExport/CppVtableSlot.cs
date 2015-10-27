@@ -4,7 +4,7 @@ using AssemblyImporter.CLR;
 
 namespace AssemblyImporter.CppExport
 {
-    public sealed class CppVtableSlot
+    public sealed class CppVtableSlot : IEquatable<CppVtableSlot>
     {
         public sealed class SlotKey : IEquatable<SlotKey>
         {
@@ -35,7 +35,7 @@ namespace AssemblyImporter.CppExport
         public string InternalName { get; private set; }
         public bool IsGenericInterface { get; private set; }
 
-        public CppVtableSlot(CLRMethodSignatureInstance sig, CLRTypeSpec disambig, string name, string internalName, string vtableMangle, bool isGenericInterface)
+        public CppVtableSlot(CLRMethodSignatureInstance sig, CLRTypeSpec disambig, string name, string internalName, string vtableMangle, bool isGenericInterface, CLRMethodDefRow rootMethodDef)
         {
             if (name.Contains("."))
                 throw new ArgumentException();
@@ -67,6 +67,28 @@ namespace AssemblyImporter.CppExport
         public string GenerateName()
         {
             return "vs" + Name + VtableMangle;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj != null && (obj is CppVtableSlot) && this.Equals((CppVtableSlot)obj);
+        }
+
+        public override int GetHashCode()
+        {
+            // TODO?
+            return Name.GetHashCode();
+        }
+
+        public bool Equals(CppVtableSlot other)
+        {
+            return Signature.Equals(other.Signature) &&
+                DeclaredSignature.Equals(other.DeclaredSignature) &&
+                DisambigSpec.Equals(other.DisambigSpec) &&
+                Name == other.Name &&
+                VtableMangle == other.VtableMangle &&
+                InternalName == other.InternalName &&
+                IsGenericInterface == other.IsGenericInterface;
         }
     }
 }

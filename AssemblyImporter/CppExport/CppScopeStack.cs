@@ -29,10 +29,14 @@ namespace AssemblyImporter.CppExport
         private Stack<Entry> m_regStack;
         private string m_indent;
 
-        public CppScopeStack()
+        public string Indent { get { return m_indent; } }
+
+        public CppScopeStack(int indentLevels)
         {
             m_regStack = new Stack<Entry>();
             m_indent = "";
+            for (int i = 0; i < indentLevels; i++)
+                m_indent += "\t";
         }
 
         private void AddReg(SsaRegister reg)
@@ -45,23 +49,13 @@ namespace AssemblyImporter.CppExport
         {
             if (reg.IsSpilled)
                 return false;
-            if (reg.VType.ValType == VType.ValTypeEnum.Null
-                || reg.VType.ValType == VType.ValTypeEnum.ConstantValue
-                || reg.VType.ValType == VType.ValTypeEnum.ConstantReference
-                || reg.VType.ValType == VType.ValTypeEnum.DelegateVirtualMethod
-                || reg.VType.ValType == VType.ValTypeEnum.DelegateSimpleMethod)
-                return false;
-            return true;
+            return CppRegisterAllocator.IsVTypeSpillable(reg.VType);
         }
 
-        public void LivenReg(SsaRegister reg, StreamWriter writer)
+        public void LivenReg(SsaRegister reg, CppBuilder builder, StreamWriter writer)
         {
-            Console.WriteLine("Live reg: " + reg.SsaID);
             if (!IsRegScopable(reg))
-            {
-                writer.WriteLine("value in ssa " + reg.SsaID + " is a constant");
                 return;
-            }
 
             writer.Write(m_indent);
             writer.WriteLine("{");
@@ -69,7 +63,7 @@ namespace AssemblyImporter.CppExport
             AddReg(reg);
 
             writer.Write(m_indent);
-            writer.WriteLine("add ssa reg " + reg.VType.TypeSpec + " ssa" + reg.SsaID);
+            writer.WriteLine(builder.VTypeStorageToValueType(reg.VType) + " ssa" + reg.SsaID + ";");
         }
 
         public void KillReg(SsaRegister reg, StreamWriter writer)

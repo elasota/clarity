@@ -22,13 +22,13 @@ namespace AssemblyImporter.CppExport
         public bool Final { get; private set; }
         public CppVtableSlot ReplacesStandardSlot { get; set; }
         public CppVtableSlot CreatesSlot { get; private set; }
-        public uint NumGenericParameters { get; private set; }
+        public int NumGenericParameters { get; private set; }
         public CLRMethodDefRow MethodDef { get; private set; }
 
         public CppMethod(CLRAssemblyCollection assemblies, CLRTypeDefRow declaredInClass, CLRMethodDefRow methodDef)
         {
             // Hack: Solve whether value type?
-            DeclaredInClassSpec = CppBuilder.CreateInstanceTypeDef(assemblies, declaredInClass);
+            DeclaredInClassSpec = CppBuilder.CreateInstanceTypeSpec(assemblies, declaredInClass);
             DeclaredInClass = declaredInClass;
             MethodSignature = new CLRMethodSignatureInstance(assemblies, methodDef.Signature);
             DeclaredMethodSignature = MethodSignature;
@@ -52,7 +52,7 @@ namespace AssemblyImporter.CppExport
                 CppMangleBuilder builder = new CppMangleBuilder();
                 builder.Add(methodDef.GenericParameters.Length);
                 GenericMethodParamMangle = "_gm" + builder.Finish();
-                NumGenericParameters = (uint)methodDef.GenericParameters.Length;
+                NumGenericParameters = methodDef.GenericParameters.Length;
             }
 
             if (methodDef.Virtual && !Overrides)
@@ -67,7 +67,7 @@ namespace AssemblyImporter.CppExport
 
                 bool isGenericInterface = ((methodDef.Owner.Semantics == CLRTypeDefRow.TypeSemantics.Interface) && methodDef.Owner.GenericParameters != null && methodDef.Owner.GenericParameters.Length > 0);
 
-                CreatesSlot = new CppVtableSlot(MethodSignature, DeclaredInClassSpec, CppBuilder.LegalizeName(Name, true), Name, VtableSlotMangle, isGenericInterface);
+                CreatesSlot = new CppVtableSlot(MethodSignature, DeclaredInClassSpec, CppBuilder.LegalizeName(Name, true), Name, VtableSlotMangle, isGenericInterface, methodDef);
             }
         }
 
@@ -88,6 +88,7 @@ namespace AssemblyImporter.CppExport
                 CreatesSlot = baseInstance.CreatesSlot.Instantiate(typeParams, methodParams);
             Final = baseInstance.Final;
             NumGenericParameters = baseInstance.NumGenericParameters;
+            MethodDef = baseInstance.MethodDef;
         }
 
         public CppMethod Instantiate(CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)
@@ -97,12 +98,23 @@ namespace AssemblyImporter.CppExport
 
         public string GenerateBaseName()
         {
-            string methodBaseName = CppBuilder.LegalizeName(Name, true);
+            string methodBaseName = MethodDef.Static ? "s" : "i";
+            methodBaseName += CppBuilder.LegalizeName(Name, true);
             if (GenericTypeParamMangle != null)
                 methodBaseName += GenericTypeParamMangle;
             if (GenericMethodParamMangle != null)
                 methodBaseName += GenericMethodParamMangle;
             return methodBaseName;
+        }
+
+        public string GenerateCallName()
+        {
+            return "mcall_" + GenerateBaseName();
+        }
+
+        public string GenerateCodeName()
+        {
+            return "mcode_" + GenerateBaseName();
         }
 
         public void ResolveOverrides(List<CppVtableSlot> overridableSlots)

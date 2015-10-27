@@ -21,5 +21,23 @@
     <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision.Code.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyBase.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyDerived.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyInterfaceA_t_1.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyInterfaceB.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyInterfaceC.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tObject.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

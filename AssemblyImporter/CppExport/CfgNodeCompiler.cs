@@ -301,7 +301,7 @@ namespace AssemblyImporter.CppExport
             }
             throw new ArgumentException();
         }
-        
+
         private MidInstruction.ArithEnum ArithModeForUnaryOp(CLRTypeSpec ts)
         {
             // III.6
@@ -322,10 +322,6 @@ namespace AssemblyImporter.CppExport
         {
             switch (opcode)
             {
-                case CLR.CIL.HLOpcode.beq:
-                    return MidInstruction.OpcodeEnum.beq;
-                case CLR.CIL.HLOpcode.bne:
-                    return MidInstruction.OpcodeEnum.bne;
                 case CLR.CIL.HLOpcode.bge:
                     return MidInstruction.OpcodeEnum.bge;
                 case CLR.CIL.HLOpcode.bgt:
@@ -336,14 +332,6 @@ namespace AssemblyImporter.CppExport
                     return MidInstruction.OpcodeEnum.blt;
                 case CLR.CIL.HLOpcode.clt:
                     return MidInstruction.OpcodeEnum.clt;
-                case CLR.CIL.HLOpcode.cgt:
-                    return MidInstruction.OpcodeEnum.cgt;
-                case CLR.CIL.HLOpcode.ceq:
-                    return MidInstruction.OpcodeEnum.ceq;
-                case CLR.CIL.HLOpcode.brtrue:
-                    return MidInstruction.OpcodeEnum.brtrue;
-                case CLR.CIL.HLOpcode.brfalse:
-                    return MidInstruction.OpcodeEnum.brfalse;
                 case CLR.CIL.HLOpcode.add:
                     return MidInstruction.OpcodeEnum.add;
                 case CLR.CIL.HLOpcode.sub:
@@ -371,6 +359,31 @@ namespace AssemblyImporter.CppExport
                 default:
                     throw new ArgumentException();
             }
+        }
+
+        private static bool IsComparisonValueReference(VType vType)
+        {
+            switch (vType.ValType)
+            {
+                case VType.ValTypeEnum.NotNullReferenceValue:
+                case VType.ValTypeEnum.NullableReferenceValue:
+                case VType.ValTypeEnum.ConstantReference:
+                case VType.ValTypeEnum.Null:
+                    return true;
+                case VType.ValTypeEnum.ValueValue:
+                case VType.ValTypeEnum.ConstantValue:
+                    return false;
+                default:
+                    throw new Exception("Invalid value type for comparison");
+            }
+        }
+
+        private static bool IsComparisonReference(VType vType1, VType vType2)
+        {
+            bool isRef = IsComparisonValueReference(vType1);
+            if (isRef != IsComparisonValueReference(vType2))
+                throw new Exception("Couldn't resolve comparison reference status");
+            return isRef;
         }
 
         public void Compile()
@@ -466,6 +479,7 @@ namespace AssemblyImporter.CppExport
 
                             // Determine the parameter set.
                             // Unlike when making calls, we don't spill here because we already spilled during the AllocObject call
+
                             SsaRegister[] passedParams = new SsaRegister[numParams];
                             for (int p = 0; p < numParams; p++)
                             {
@@ -474,7 +488,7 @@ namespace AssemblyImporter.CppExport
                             }
 
                             // Make the actual ctor call
-                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.CallConstructor, ctorMethodSpec, instanceReg, passedParams));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.CallConstructor, ctorMethodSpec, null, null, instanceReg, passedParams));
 
                             // Kill all of the parameter registers
                             for (int p = 0; p < numParams; p++)
@@ -488,7 +502,7 @@ namespace AssemblyImporter.CppExport
                         if (stackTracker.Depth == 1)
                         {
                             SsaRegister returnValue = stackTracker.Pop();
-                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.ReturnValue, returnValue));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.ReturnValue, returnValue, method.MethodSignature.RetType));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, returnValue));
                         }
                         else if (stackTracker.Depth == 0)
@@ -510,7 +524,9 @@ namespace AssemblyImporter.CppExport
                             string loadSrc = argReg.SlotName;
                             switch (argReg.VType.ValType)
                             {
-                                case VType.ValTypeEnum.ManagedPtr:
+                                case VType.ValTypeEnum.AnchoredManagedPtr:
+                                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
+                                case VType.ValTypeEnum.LocalManagedPtr:
                                     midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LoadReg_ManagedPtr, argReg, evalReg));
                                     break;
                                 case VType.ValTypeEnum.NullableReferenceValue:
@@ -538,9 +554,8 @@ namespace AssemblyImporter.CppExport
                                 //case VType.ValTypeEnum.NotNullReferenceValue: // ldarga on "this" isn't allowed
                                 case VType.ValTypeEnum.ValueValue:
                                     opcode = MidInstruction.OpcodeEnum.LoadArgA_Value;
-                                    outEvalType = new VType(VType.ValTypeEnum.ManagedPtr, argReg.VType.TypeSpec);
+                                    outEvalType = new VType(VType.ValTypeEnum.LocalManagedPtr, argReg.VType.TypeSpec);
                                     break;
-                                case VType.ValTypeEnum.ManagedPtr:
                                 default:
                                     throw new ArgumentException();
                             }
@@ -559,7 +574,6 @@ namespace AssemblyImporter.CppExport
 
                             switch (valueReg.VType.ValType)
                             {
-                                //case VType.ValTypeEnum.ManagedPtr:
                                 case VType.ValTypeEnum.NullableReferenceValue:
                                 case VType.ValTypeEnum.NotNullReferenceValue:
                                 case VType.ValTypeEnum.ValueValue:
@@ -567,6 +581,11 @@ namespace AssemblyImporter.CppExport
                                 case VType.ValTypeEnum.ConstantValue:
                                 case VType.ValTypeEnum.Null:
                                     midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreReg_Value, argReg, valueReg));
+                                    break;
+                                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
+                                case VType.ValTypeEnum.AnchoredManagedPtr:
+                                case VType.ValTypeEnum.LocalManagedPtr:
+                                    midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreReg_ManagedPtr, argReg, valueReg));
                                     break;
                                 default:
                                     throw new ArgumentException();
@@ -578,8 +597,21 @@ namespace AssemblyImporter.CppExport
                     case CLR.CIL.HLOpcode.call:
                     case CLR.CIL.HLOpcode.callvirt:
                         {
+                            bool devirtualize = false;
+
+                            CLRTypeSpec constraintType = null;
+                            if (instrNum != 0)
+                            {
+                                CLR.CIL.HLInstruction prevInstr = cilMethod.Instructions[instrNum - 1];
+                                if (prevInstr.Opcode == CLR.CIL.HLOpcode.constrained_pfx)
+                                    constraintType = m_cppBuilder.Assemblies.InternTypeDefOrRefOrSpec((CLRTableRow)prevInstr.Arguments.ObjValue);
+                            }
+
                             CppMethodSpec calledMethodSpec = ResolveMethod((CLRTableRow)instr.Arguments.ObjValue);
                             CppMethod calledMethod = calledMethodSpec.CppMethod;
+
+                            if (!calledMethod.Virtual)
+                                devirtualize = true;
 
                             int numParams = calledMethod.MethodSignature.ParamTypes.Length;
 
@@ -597,10 +629,20 @@ namespace AssemblyImporter.CppExport
                                 thisReg = stackTracker.GetFromTop(numParams);
 
                             MidInstruction.OpcodeEnum midOpcode;
-                            if (instr.Opcode == CLR.CIL.HLOpcode.call)
-                                midOpcode = MidInstruction.OpcodeEnum.CallMethod;
+                            if (instr.Opcode == CLR.CIL.HLOpcode.call || devirtualize)
+                            {
+                                if (constraintType != null)
+                                    midOpcode = MidInstruction.OpcodeEnum.ConstrainedCallMethod;
+                                else
+                                    midOpcode = MidInstruction.OpcodeEnum.CallMethod;
+                            }
                             else if (instr.Opcode == CLR.CIL.HLOpcode.callvirt)
-                                midOpcode = MidInstruction.OpcodeEnum.CallVirtualMethod;
+                            {
+                                if (constraintType != null)
+                                    midOpcode = MidInstruction.OpcodeEnum.ConstrainedCallVirtualMethod;
+                                else
+                                    midOpcode = MidInstruction.OpcodeEnum.CallVirtualMethod;
+                            }
                             else
                                 throw new ArgumentException();
 
@@ -618,7 +660,7 @@ namespace AssemblyImporter.CppExport
                             stackTracker.SpillStack();
 
                             // Emit the actual call
-                            midInstrs.Add(new MidInstruction(midOpcode, calledMethodSpec, returnReg, thisReg, passedParams));
+                            midInstrs.Add(new MidInstruction(midOpcode, calledMethodSpec, constraintType, returnReg, thisReg, passedParams));
 
                             // Emit parameter deadens (in stack order)
                             for (int p = 0; p < numParams; p++)
@@ -641,7 +683,18 @@ namespace AssemblyImporter.CppExport
                         {
                             SsaRegister evalVar = stackTracker.Pop();
                             VReg localVar = locals[instr.Arguments.U32Value];
-                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.Store, localVar, evalVar));
+                            switch (localVar.VType.ValType)
+                            {
+                                case VType.ValTypeEnum.ValueValue:
+                                case VType.ValTypeEnum.NullableReferenceValue:
+                                    midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreReg_Value, localVar, evalVar));
+                                    break;
+                                case VType.ValTypeEnum.AnchoredManagedPtr:
+                                    midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreReg_ManagedPtr, localVar, evalVar));
+                                    break;
+                                default:
+                                    throw new ArgumentException();
+                            }
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, evalVar));
                         }
                         break;
@@ -654,7 +707,8 @@ namespace AssemblyImporter.CppExport
 
                             switch (localVar.VType.ValType)
                             {
-                                case VType.ValTypeEnum.ManagedPtr:
+                                case VType.ValTypeEnum.AnchoredManagedPtr:
+                                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
                                     midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LoadReg_ManagedPtr, localVar, evalReg));
                                     break;
                                 case VType.ValTypeEnum.ValueValue:
@@ -671,7 +725,7 @@ namespace AssemblyImporter.CppExport
                     case CLR.CIL.HLOpcode.ldloca:
                         {
                             VReg localVar = locals[instr.Arguments.U32Value];
-                            SsaRegister evalReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.ManagedPtr, localVar.VType.TypeSpec));
+                            SsaRegister evalReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.LocalManagedPtr, localVar.VType.TypeSpec));
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, evalReg));
 
@@ -688,8 +742,46 @@ namespace AssemblyImporter.CppExport
                             stackTracker.Push(evalReg);
                         }
                         break;
-                    case CLR.CIL.HLOpcode.beq:    // [.un]
                     case CLR.CIL.HLOpcode.bne:    // [.un]
+                        {
+                            SsaRegister value2 = stackTracker.Pop();
+                            SsaRegister value1 = stackTracker.Pop();
+
+                            bool isRefComparison = IsComparisonReference(value1.VType, value2.VType);
+
+                            CfgOutboundEdgePrototype edgeProto = stackTracker.GenerateCfgEdge();
+
+                            CfgNode targetNode = cfgBuilder.AddCfgTarget(this, (int)instr.Arguments.U32Value, edgeProto.OutboundTypes);
+                            CfgNode fallThroughNode = cfgBuilder.AddCfgTarget(this, nextInstr, edgeProto.OutboundTypes);
+
+                            midInstrs.Add(new MidInstruction(isRefComparison ? MidInstruction.OpcodeEnum.bne_ref : MidInstruction.OpcodeEnum.bne_val, value1, value2, new CfgOutboundEdge(targetNode, edgeProto), (instr.Flags & CLR.CIL.HLOpFlags.Un) != 0));
+
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value2));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value1));
+
+                            isTerminalEdge = true;
+                        }
+                        break;
+                    case CLR.CIL.HLOpcode.beq:    // [.un]
+                        {
+                            SsaRegister value2 = stackTracker.Pop();
+                            SsaRegister value1 = stackTracker.Pop();
+
+                            CfgOutboundEdgePrototype edgeProto = stackTracker.GenerateCfgEdge();
+
+                            bool isRefComparison = IsComparisonReference(value1.VType, value2.VType);
+
+                            CfgNode targetNode = cfgBuilder.AddCfgTarget(this, (int)instr.Arguments.U32Value, edgeProto.OutboundTypes);
+                            CfgNode fallThroughNode = cfgBuilder.AddCfgTarget(this, nextInstr, edgeProto.OutboundTypes);
+
+                            midInstrs.Add(new MidInstruction(isRefComparison ? MidInstruction.OpcodeEnum.beq_ref : MidInstruction.OpcodeEnum.beq_val, value1, value2, new CfgOutboundEdge(targetNode, edgeProto), (instr.Flags & CLR.CIL.HLOpFlags.Un) != 0));
+
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value2));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value1));
+
+                            isTerminalEdge = true;
+                        }
+                        break;
                     case CLR.CIL.HLOpcode.bge:    // [.un]
                     case CLR.CIL.HLOpcode.bgt:    // [.un]
                     case CLR.CIL.HLOpcode.ble:    // [.un]
@@ -732,7 +824,41 @@ namespace AssemblyImporter.CppExport
                         }
                         break;
                     case CLR.CIL.HLOpcode.ceq:
+                        {
+                            SsaRegister value2 = stackTracker.Pop();
+                            SsaRegister value1 = stackTracker.Pop();
+                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.I32));
+
+                            bool isRefComparison = IsComparisonReference(value1.VType, value2.VType);
+
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, returnValue));
+                            midInstrs.Add(new MidInstruction(isRefComparison ? MidInstruction.OpcodeEnum.ceq_ref : MidInstruction.OpcodeEnum.ceq_val, returnValue, value1, value2, false));
+
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value2));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value1));
+
+                            stackTracker.Push(returnValue);
+                        }
+                        break;
                     case CLR.CIL.HLOpcode.cgt:    // [.un]
+                        {
+                            SsaRegister value2 = stackTracker.Pop();
+                            SsaRegister value1 = stackTracker.Pop();
+                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.I32));
+
+                            // Per III.4, cgt.un is used for reference non-equality checks.
+                            // For some reason there isn't a cne instruction...
+                            bool isRefComparison = IsComparisonReference(value1.VType, value2.VType);
+
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, returnValue));
+                            midInstrs.Add(new MidInstruction(isRefComparison ? MidInstruction.OpcodeEnum.cne_ref : MidInstruction.OpcodeEnum.cgt, returnValue, value1, value2, (instr.Flags & CLR.CIL.HLOpFlags.Un) != 0));
+
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value2));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value1));
+
+                            stackTracker.Push(returnValue);
+                        }
+                        break;
                     case CLR.CIL.HLOpcode.clt:    // [.un]
                         {
                             SsaRegister value2 = stackTracker.Pop();
@@ -784,7 +910,29 @@ namespace AssemblyImporter.CppExport
                             CfgNode targetNode = cfgBuilder.AddCfgTarget(this, (int)instr.Arguments.U32Value, edgeProto.OutboundTypes);
                             CfgNode fallThroughNode = cfgBuilder.AddCfgTarget(this, nextInstr, edgeProto.OutboundTypes);
 
-                            midInstrs.Add(new MidInstruction(SimpleTranslateInstr(instr.Opcode), v, new CfgOutboundEdge(targetNode, edgeProto)));
+                            MidInstruction.OpcodeEnum opcode;
+                            switch (v.VType.ValType)
+                            {
+                                case VType.ValTypeEnum.ConstantValue:
+                                case VType.ValTypeEnum.NullableReferenceValue:
+                                case VType.ValTypeEnum.ValueValue:
+                                    if (instr.Opcode == CLR.CIL.HLOpcode.brtrue)
+                                        opcode = MidInstruction.OpcodeEnum.brnotzero;
+                                    else
+                                        opcode = MidInstruction.OpcodeEnum.brzero;
+                                    break;
+                                case VType.ValTypeEnum.ConstantReference:
+                                case VType.ValTypeEnum.Null:
+                                case VType.ValTypeEnum.NotNullReferenceValue:
+                                    if (instr.Opcode == CLR.CIL.HLOpcode.brtrue)
+                                        opcode = MidInstruction.OpcodeEnum.brnotnull;
+                                    else
+                                        opcode = MidInstruction.OpcodeEnum.brnull;
+                                    break;
+                                default:
+                                    throw new Exception("Unsupported stack op type passed to brtrue or brfalse");
+                            }
+                            midInstrs.Add(new MidInstruction(opcode, v, new CfgOutboundEdge(targetNode, edgeProto)));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, v));
 
                             OutputFallThroughEdge = new CfgOutboundEdge(fallThroughNode, edgeProto);
@@ -843,10 +991,14 @@ namespace AssemblyImporter.CppExport
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, valueReg));
 
                             MidInstruction.OpcodeEnum opcode;
-                            if (objValType == VType.ValTypeEnum.ManagedPtr)
+                            if (objValType == VType.ValTypeEnum.LocalManagedPtr ||
+                                objValType == VType.ValTypeEnum.MaybeAnchoredManagedPtr ||
+                                objValType == VType.ValTypeEnum.AnchoredManagedPtr)
                                 opcode = MidInstruction.OpcodeEnum.LoadField_ManagedPtr;
                             else if (objValType == VType.ValTypeEnum.NotNullReferenceValue || objValType == VType.ValTypeEnum.NullableReferenceValue)
                                 opcode = MidInstruction.OpcodeEnum.LoadField_Object;
+                            else if (objValType == VType.ValTypeEnum.ValueValue)
+                                opcode = MidInstruction.OpcodeEnum.LoadField_Value;
                             else
                                 throw new ArgumentException();
 
@@ -858,19 +1010,27 @@ namespace AssemblyImporter.CppExport
                         break;
                     case CLR.CIL.HLOpcode.ldflda:
                         {
+                            SsaRegister objReg = stackTracker.Pop();
+
                             CppField field = ResolveField((CLRTableRow)instr.Arguments.ObjValue);
                             CLRTypeSpec fieldValueSpec = field.Type;
-                            VType.ValTypeEnum valType = VType.ValTypeEnum.ManagedPtr;
+                            VType.ValTypeEnum valType = VType.ValTypeEnum.AnchoredManagedPtr;
+
+                            bool isManagedPtr = (objReg.VType.ValType == VType.ValTypeEnum.LocalManagedPtr ||
+                                objReg.VType.ValType == VType.ValTypeEnum.MaybeAnchoredManagedPtr ||
+                                objReg.VType.ValType == VType.ValTypeEnum.AnchoredManagedPtr);
+
+                            if (isManagedPtr)
+                                valType = objReg.VType.ValType;
 
                             SsaRegister valueReg = stackTracker.NewReg(new VType(valType, fieldValueSpec));
-                            SsaRegister objReg = stackTracker.Pop();
 
                             VType.ValTypeEnum objValType = objReg.VType.ValType;
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, valueReg));
 
                             MidInstruction.OpcodeEnum opcode;
-                            if (objValType == VType.ValTypeEnum.ManagedPtr)
+                            if (isManagedPtr)
                                 opcode = MidInstruction.OpcodeEnum.LoadFieldA_ManagedPtr;
                             else if (objValType == VType.ValTypeEnum.NotNullReferenceValue || objValType == VType.ValTypeEnum.NullableReferenceValue)
                                 opcode = MidInstruction.OpcodeEnum.LoadFieldA_Object;
@@ -916,7 +1076,7 @@ namespace AssemblyImporter.CppExport
                             }
                             else if (instr.Opcode == CLR.CIL.HLOpcode.ldelema)
                             {
-                                valType = VType.ValTypeEnum.ManagedPtr;
+                                valType = VType.ValTypeEnum.AnchoredManagedPtr;
                                 op = MidInstruction.OpcodeEnum.LoadArrayElemAddr;
                             }
                             else
@@ -956,7 +1116,9 @@ namespace AssemblyImporter.CppExport
 
                             VType.ValTypeEnum objValType = objReg.VType.ValType;
 
-                            if (objValType == VType.ValTypeEnum.ManagedPtr)
+                            if (objValType == VType.ValTypeEnum.AnchoredManagedPtr ||
+                                objValType == VType.ValTypeEnum.MaybeAnchoredManagedPtr ||
+                                objValType == VType.ValTypeEnum.LocalManagedPtr)
                                 midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreField_ManagedPtr, objReg, valueReg, field.Name));
                             else if (objValType == VType.ValTypeEnum.NotNullReferenceValue || objValType == VType.ValTypeEnum.NullableReferenceValue)
                                 midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LoadField_Object, objReg, valueReg, field.Name));
@@ -1107,7 +1269,9 @@ namespace AssemblyImporter.CppExport
                     case CLR.CIL.HLOpcode.ldobj:
                         {
                             SsaRegister addr = stackTracker.Pop();
-                            if (addr.VType.ValType != VType.ValTypeEnum.ManagedPtr)
+                            if (addr.VType.ValType != VType.ValTypeEnum.AnchoredManagedPtr &&
+                                addr.VType.ValType != VType.ValTypeEnum.LocalManagedPtr &&
+                                addr.VType.ValType != VType.ValTypeEnum.MaybeAnchoredManagedPtr)
                                 throw new ArgumentException();
 
                             SsaRegister val = stackTracker.NewReg(new VType(CppCilExporter.ValTypeForTypeSpec(m_cppBuilder, addr.VType.TypeSpec), addr.VType.TypeSpec));
@@ -1124,7 +1288,9 @@ namespace AssemblyImporter.CppExport
                         {
                             SsaRegister val = stackTracker.Pop();
                             SsaRegister addr = stackTracker.Pop();
-                            if (addr.VType.ValType != VType.ValTypeEnum.ManagedPtr)
+                            if (addr.VType.ValType != VType.ValTypeEnum.AnchoredManagedPtr &&
+                                addr.VType.ValType != VType.ValTypeEnum.LocalManagedPtr &&
+                                addr.VType.ValType != VType.ValTypeEnum.MaybeAnchoredManagedPtr)
                                 throw new ArgumentException();
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreIndirect, addr, val));
@@ -1321,7 +1487,7 @@ namespace AssemblyImporter.CppExport
                             CLRTypeSpec typeTok = m_cppBuilder.Assemblies.InternTypeDefOrRefOrSpec((CLRTableRow)instr.Arguments.ObjValue);
 
                             SsaRegister objReg = stackTracker.Pop();
-                            SsaRegister valueReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.ManagedPtr, typeTok));
+                            SsaRegister valueReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.AnchoredManagedPtr, typeTok));
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, valueReg));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.UnboxPtr, objReg, valueReg));
@@ -1335,7 +1501,7 @@ namespace AssemblyImporter.CppExport
                             CLRTypeSpec typeTok = m_cppBuilder.Assemblies.InternTypeDefOrRefOrSpec((CLRTableRow)instr.Arguments.ObjValue);
 
                             SsaRegister objReg = stackTracker.Pop();
-                            SsaRegister valueReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.ManagedPtr, typeTok));
+                            SsaRegister valueReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, typeTok));
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, valueReg));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.UnboxValue, objReg, valueReg));
@@ -1384,7 +1550,10 @@ namespace AssemblyImporter.CppExport
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.ExitFinally));
                             while (stackTracker.Depth > 0)
                                 midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, stackTracker.Pop()));
+                            isTerminalEdge = true;
                         }
+                        break;
+                    case CLR.CIL.HLOpcode.constrained_pfx:
                         break;
                     case CLR.CIL.HLOpcode.jmp:
                     case CLR.CIL.HLOpcode.calli:
@@ -1400,7 +1569,6 @@ namespace AssemblyImporter.CppExport
                     case CLR.CIL.HLOpcode.unaligned_pfx:
                     case CLR.CIL.HLOpcode.volatile_pfx:
                     case CLR.CIL.HLOpcode.tail_pfx:
-                    case CLR.CIL.HLOpcode.constrained_pfx:
                     case CLR.CIL.HLOpcode.cpblk:
                     case CLR.CIL.HLOpcode.initblk:
                     case CLR.CIL.HLOpcode.no_pfx:

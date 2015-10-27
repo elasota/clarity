@@ -36,7 +36,11 @@ namespace AssemblyImporter.CLR
 
         public CLRSignatureParser(ArraySegment<byte> seg, CLRMetaDataTables tables)
         {
-            m_memoryStream = new MemoryStream(seg.Array, seg.Offset, seg.Count, false);
+            byte[] hack = new byte[seg.Count];
+            for (int i = 0; i < seg.Count; i++)
+                hack[i] = seg.Array[seg.Offset + i];
+            //m_memoryStream = new MemoryStream(seg.Array, seg.Offset, seg.Count, false);
+            m_memoryStream = new MemoryStream(hack, 0, seg.Count, false);
             m_tables = tables;
             m_reader = new BinaryReader(m_memoryStream);
         }

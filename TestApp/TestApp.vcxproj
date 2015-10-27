@@ -66,7 +66,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tObject.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyBase.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyDerived.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyInterfaceA_t_1.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyInterfaceB.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyInterfaceC.Code.cpp" />
     <ClCompile Include="TestApp.cpp" />
   </ItemGroup>
   <ItemGroup>

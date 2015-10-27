@@ -13,6 +13,7 @@ namespace AssemblyImporter.CppExport
         public VType VType { get { return m_vType; } }
         public VReg SpillVReg { get; set; }
         public VReg SinglePredecessorSpillVReg { get; set; }
+        public object ConstantValue { get { return m_constantValue; } }
 
         public int SsaID
         {

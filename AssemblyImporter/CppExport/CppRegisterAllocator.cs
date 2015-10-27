@@ -9,14 +9,16 @@ namespace AssemblyImporter.CppExport
         private int m_ssaID;
         private int m_cfgID;
         private Dictionary<CfgNode, int> m_cfgNodeIDs;
+        private CppBuilder m_builder;
 
         public IEnumerable<VReg> AllRegisters { get { return m_registers; } }
 
-        public CppRegisterAllocator()
+        public CppRegisterAllocator(CppBuilder builder)
         {
             m_registers = new List<VReg>();
             m_ssaID = 1;
             m_cfgNodeIDs = new Dictionary<CfgNode, int>();
+            m_builder = builder;
         }
 
         public int NewSsaID()
@@ -29,15 +31,17 @@ namespace AssemblyImporter.CppExport
             VType.ValTypeEnum storageType;
             switch (vType.ValType)
             {
+                // These types have explicit representations in exported C++
                 case VType.ValTypeEnum.ValueValue:
-                    storageType = VType.ValTypeEnum.ValueValue;
-                    break;
-                case VType.ValTypeEnum.NotNullReferenceValue:
+                case VType.ValTypeEnum.AnchoredManagedPtr:
+                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
+                case VType.ValTypeEnum.LocalManagedPtr:
                 case VType.ValTypeEnum.NullableReferenceValue:
-                    storageType = VType.ValTypeEnum.NullableReferenceValue;
+                    storageType = vType.ValType;
                     break;
-                case VType.ValTypeEnum.ManagedPtr:
-                    storageType = VType.ValTypeEnum.ManagedPtr;
+                // These are only differ from normally spillable types in semantics
+                case VType.ValTypeEnum.NotNullReferenceValue:
+                    storageType = VType.ValTypeEnum.NullableReferenceValue;
                     break;
                 default:
                     throw new ArgumentException("Illegal register allocation");
@@ -45,9 +49,9 @@ namespace AssemblyImporter.CppExport
             return new VType(storageType, vType.TypeSpec);
         }
 
-        private VReg NewDeadReg(VType vType)
+        private VReg NewDeadReg(VType vType, VReg.UsageEnum usage)
         {
-            VReg newReg = new VReg("VReg", vType, m_registers.Count);
+            VReg newReg = new VReg(m_builder, "bVReg", vType, m_registers.Count, usage);
             m_registers.Add(newReg);
             return newReg;
         }
@@ -67,7 +71,7 @@ namespace AssemblyImporter.CppExport
             }
 
             if (resultReg == null)
-                resultReg = NewDeadReg(regVType);
+                resultReg = NewDeadReg(regVType, VReg.UsageEnum.Temporary);
 
             resultReg.Liven();
             return resultReg;
@@ -87,11 +91,10 @@ namespace AssemblyImporter.CppExport
         {
             if (inputType.ValType == VType.ValTypeEnum.ConstantReference ||
                 inputType.ValType == VType.ValTypeEnum.ConstantValue ||
-                inputType.ValType == VType.ValTypeEnum.Null)
-                return false;
-            if (inputType.ValType == VType.ValTypeEnum.DelegateSimpleMethod ||
+                inputType.ValType == VType.ValTypeEnum.Null ||
+                inputType.ValType == VType.ValTypeEnum.DelegateSimpleMethod ||
                 inputType.ValType == VType.ValTypeEnum.DelegateVirtualMethod)
-                throw new Exception("Delegate binding crossed a CFG edge");
+                return false;
             return true;
         }
 
@@ -128,7 +131,7 @@ namespace AssemblyImporter.CppExport
 
                 if (!matched)
                 {
-                    VReg newReg = NewDeadReg(regVType);
+                    VReg newReg = NewDeadReg(regVType, VReg.UsageEnum.Temporary);
                     regs.Add(newReg);
                     markedRegSet.Add(newReg);
                 }

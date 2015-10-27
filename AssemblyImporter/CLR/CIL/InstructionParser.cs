@@ -106,7 +106,7 @@ namespace AssemblyImporter.CLR.CIL
             switch (opcode)
             {
                 case 0x16:
-                    return new HLInstruction(HLOpcode.constrained_pfx);
+                    return new HLInstruction(HLOpcode.constrained_pfx).Args(DecodeArgs(ArgEncoding.TypeDefOrRefOrSpec));
                 case 0x19:
                     return new HLInstruction(HLOpcode.no_pfx).Args(DecodeArgs(ArgEncoding.No));
                 case 0x1e:
