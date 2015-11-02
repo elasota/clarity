@@ -4,6 +4,7 @@
 
 #include "ClarityConfig.h"
 #include "ClarityInternalSupport.h"
+#include "ClarityTypes.h"
 
 namespace CLRX
 {
@@ -58,23 +59,23 @@ namespace CLRPrivate
         static TValueType &KillAndReturn(::CLRVM::TransientLocal<TValueType> &local);
     };
 
-    template<class T, int TIsValueType>
-    struct TRefValueResolver_IsValueType
-        : public ::ClarityInternal::NoCreate
-    {
-    };
+	template<class T, int TIsValueType>
+	struct TValueObjectTypeResolver_IsValueType
+		: public ::ClarityInternal::NoCreate
+	{
+	};
 
-    template<class T>
-    struct TRefValueResolver_IsValueType<T, 1>
-        : public ::ClarityInternal::TypeDef< typename ::CLRUtil::TRef< ::CLRUtil::Boxed<T> >::Type >
-    {
-    };
+	template<class T>
+	struct TValueObjectTypeResolver_IsValueType<T, 1>
+		: public ::ClarityInternal::TypeDef< ::CLRUtil::Boxed<T> >
+	{
+	};
 
-    template<class T>
-    struct TRefValueResolver_IsValueType<T, 0>
-        : public ::ClarityInternal::TypeDef< typename ::CLRUtil::TRef<T>::Type >
-    {
-    };
+	template<class T>
+	struct TValueObjectTypeResolver_IsValueType<T, 0>
+		: public ::ClarityInternal::TypeDef< T >
+	{
+	};
 
     template<class T, int TIsValueType>
     struct TValValueResolver_IsValueType
@@ -93,6 +94,74 @@ namespace CLRPrivate
         : public ::ClarityInternal::TypeDef< typename ::CLRUtil::TRef<T>::Type >
     {
     };
+
+	template<int TIsValueType, int TIsValueTraceable, class T>
+	struct ValTracer
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+	template<class T>
+	struct ValTracer<0, 1, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		static void Trace(::CLRExec::IRefVisitor &visitor, typename ::CLRUtil::TRef<T>::Type &ref);
+	};
+
+	template<class T>
+	struct ValTracer<1, 0, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		static void Trace(::CLRExec::IRefVisitor &visitor, T &ref);
+	};
+
+	template<class T>
+	struct ValTracer<1, 1, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		static void Trace(::CLRExec::IRefVisitor &visitor, T &ref);
+	};
+
+	template<int TAIsInterface, int TBIsInterface, int TTypesAreSame, class TA, class TB>
+	struct ReferenceEqualityComparer_ByTraits
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+	template<int TTypesAreSame, class TA, class TB>
+	struct ReferenceEqualityComparer_ByTraits<0, 0, TTypesAreSame, TA, TB>
+		: public ::ClarityInternal::NoCreate
+	{
+		static bool AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b);
+	};
+
+	template<class TA, class TB>
+	struct ReferenceEqualityComparer_ByTraits<1, 0, 0, TA, TB>
+		: public ::ClarityInternal::NoCreate
+	{
+		static bool AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b);
+	};
+
+	template<class TA, class TB>
+	struct ReferenceEqualityComparer_ByTraits<0, 1, 0, TA, TB>
+		: public ::ClarityInternal::NoCreate
+	{
+		static bool AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b);
+	};
+
+	template<class TA, class TB>
+	struct ReferenceEqualityComparer_ByTraits<1, 1, 0, TA, TB>
+		: public ::ClarityInternal::NoCreate
+	{
+		static bool AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b);
+	};
+
+	template<class T>
+	struct ReferenceEqualityComparer_ByTraits<1, 1, 1, T, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		static bool AreEqual(const typename ::CLRVM::TRefValue<T>::Type &a, const typename ::CLRVM::TRefValue<T>::Type &b);
+	};
 }
 
 namespace CLRVM
@@ -139,9 +208,15 @@ namespace CLRVM
     {
     };
 
+	template<class T>
+	struct TValueObjectType
+		: public ::ClarityInternal::TypeDef<typename ::CLRPrivate::TValueObjectTypeResolver_IsValueType<T, ::CLRTI::TypeProtoTraits<T>::IsValueType>::Type>
+	{
+	};
+
     template<class T>
     struct TRefValue
-        : public ::ClarityInternal::TypeDef<typename ::CLRPrivate::TRefValueResolver_IsValueType<T, ::CLRTI::TypeProtoTraits<T>::IsValueType>::Type>
+        : public ::ClarityInternal::TypeDef< typename ::CLRUtil::TRef< typename ::CLRVM::TValueObjectType<T>::Type >::Type >
     {
     };
 
@@ -401,14 +476,43 @@ namespace CLRVM
     typename TLocalType::LocalValueType &VRegValue(TLocalType &local);
 
     template<class TA, class TB>
-    bool CompareEqualReferences(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b);
+	struct ReferenceEqualityComparer
+		: public ::CLRPrivate::ReferenceEqualityComparer_ByTraits<
+			::CLRTI::TypeProtoTraits<TA>::IsInterface,
+			::CLRTI::TypeProtoTraits<TB>::IsInterface,
+			::ClarityInternal::AreTypesSame<TA, TB>::Value,
+			TA, TB
+		>
+	{
+	};
 
-    template<class T>
-    bool IsZero(const T &a);
+	template<class T>
+	bool IsZero(const typename ::CLRVM::TValValue<T>::Type &a);
+
+	template<class T>
+	bool IsNull(const typename ::CLRVM::TRefValue<T>::Type &a);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 #include "ClarityExec.h"
+
+
+template<class T>
+CLARITY_FORCEINLINE void ::CLRPrivate::ValTracer<0, 1, T>::Trace(::CLRExec::IRefVisitor &visitor, typename ::CLRUtil::TRef<T>::Type &ref)
+{
+	ref = ::CLRUtil::RetargetRef<T>(visitor, ref);
+}
+
+template<class T>
+CLARITY_FORCEINLINE void ::CLRPrivate::ValTracer<1, 0, T>::Trace(::CLRExec::IRefVisitor &visitor, T &ref)
+{
+}
+
+template<class T>
+CLARITY_FORCEINLINE void ::CLRPrivate::ValTracer<1, 1, T>::Trace(::CLRExec::IRefVisitor &visitor, T &ref)
+{
+	ref.VisitReferences(visitor);
+}
 
 #if CLARITY_PRECISE_TEMPORARY_MARKING
 
@@ -537,25 +641,27 @@ CLARITY_FORCEINLINE void ::CLRVM::LocalTracerFuncs<TLocalType, T>::TraceRefLocal
 template<class T>
 CLARITY_FORCEINLINE void ::CLRVM::TracerFuncs<T>::TraceAnchoredManagedPtr(::CLRExec::IRefVisitor &visitor, typename ::CLRUtil::TAnchoredManagedPtr<T>::Type &ref)
 {
-    visitor.Test();
+	ref.Visit(visitor);
 }
 
 template<class T>
 CLARITY_FORCEINLINE void ::CLRVM::TracerFuncs<T>::TraceMaybeAnchoredManagedPtr(::CLRExec::IRefVisitor &visitor, typename ::CLRVM::TMaybeAnchoredManagedPtr<T>::Type &ref)
 {
-    visitor.Test();
+#if CLARITY_MEMORY_RELOCATION != 0
+	ref.Visit(visitor);
+#endif
 }
 
 template<class T>
 CLARITY_FORCEINLINE void ::CLRVM::TracerFuncs<T>::TraceVal(::CLRExec::IRefVisitor &visitor, typename ::CLRVM::TValValue<T>::Type &ref)
 {
-    visitor.Test();
+	::CLRPrivate::ValTracer<::CLRTI::TypeProtoTraits<T>::IsValueType, ::CLRTI::TypeTraits<T>::IsValueTraceable, T>::Trace(visitor, ref);
 }
 
 template<class T>
 CLARITY_FORCEINLINE void ::CLRVM::TracerFuncs<T>::TraceRef(::CLRExec::IRefVisitor &visitor, typename ::CLRVM::TRefValue<T>::Type &ref)
 {
-    visitor.Test();
+	::CLRUtil::RetargetRef<typename ::CLRVM::TValueObjectType<T>::Type>(visitor, ref);
 }
 
 
@@ -605,17 +711,67 @@ CLARITY_FORCEINLINE bool CompareEqual(const T &a, const T &b)
 }
 
 template<class T>
-CLARITY_FORCEINLINE bool IsZero(const T &v)
+CLARITY_FORCEINLINE bool ::CLRVM::IsZero(const typename ::CLRVM::TValValue<T>::Type &v)
 {
-    return v == 0;
+    return v == typename ::CLRVM::TValValue<T>::Type(0);
 }
 
 template<class T>
-CLARITY_FORCEINLINE bool IsNotZero(const T &v)
+CLARITY_FORCEINLINE bool ::CLRVM::IsNull(const typename ::CLRVM::TRefValue<T>::Type &v)
 {
-    return v == 0;
+#if CLARITY_USE_STRICT_REFS != 0
+	return v.IsNull();
+#else
+	return v == CLARITY_NULLPTR;
+#endif
 }
 
 
+template<int TTypesAreSame, class TA, class TB>
+CLARITY_FORCEINLINE bool ::CLRPrivate::ReferenceEqualityComparer_ByTraits<0, 0, TTypesAreSame, TA, TB>::AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b)
+{
+	// Object-object
+	return a == b;
+}
+
+template<class TA, class TB>
+inline bool ::CLRPrivate::ReferenceEqualityComparer_ByTraits<1, 0, 0, TA, TB>::AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b)
+{
+	// Interface-object
+	typename ::CLRVM::TValueObjectType<TA>::Type *ifcA = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TA>::Type *>(a);
+	::CLRCore::GCObject *refB = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TB>::Type *>(b);
+
+	if (ifcA == CLARITY_NULLPTR)
+		return refB == CLARITY_NULLPTR;
+	return ifcA->GetRootObject() == refB;
+}
+
+template<class TA, class TB>
+inline bool ::CLRPrivate::ReferenceEqualityComparer_ByTraits<0, 1, 0, TA, TB>::AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b)
+{
+	// Object-interface
+	::CLRCore::GCObject *refA = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TA>::Type *>(a);
+	typename ::CLRVM::TValueObjectType<TA>::Type *ifcB = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TB>::Type *>(b);
+
+	if (ifcB == CLARITY_NULLPTR)
+		return refA == CLARITY_NULLPTR;
+	return ifcB->GetRootObject() == refA;
+}
+
+
+template<class TA, class TB>
+inline bool ::CLRPrivate::ReferenceEqualityComparer_ByTraits<1, 1, 0, TA, TB>::AreEqual(const typename ::CLRVM::TRefValue<TA>::Type &a, const typename ::CLRVM::TRefValue<TB>::Type &b)
+{
+	// Interface-interface, different types
+	typename ::CLRVM::TValueObjectType<TA>::Type *ifcA = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TA>::Type *>(a);
+	typename ::CLRVM::TValueObjectType<TA>::Type *ifcB = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TB>::Type *>(b);
+
+	if (ifcA == CLARITY_NULLPTR)
+		return ifcB == CLARITY_NULLPTR;
+	if (ifcB == CLARITY_NULLPTR)
+		return false;
+
+	return ifcB->GetRootObject() == ifcA->GetRootObject();
+}
 
 #endif

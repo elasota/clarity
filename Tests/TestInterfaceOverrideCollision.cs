@@ -37,8 +37,14 @@ namespace Tests
             }
         }
 
+        public struct MyContainsRef<T>
+        {
+            public T a;
+        }
+
         public void Run()
         {
+            MyContainsRef<MyDerived> r;
             MyDerived d = new MyDerived();
             d.Test();
             ((MyInterfaceA<int>)d).Test();

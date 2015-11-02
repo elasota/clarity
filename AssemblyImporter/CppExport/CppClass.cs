@@ -26,7 +26,6 @@ namespace AssemblyImporter.CppExport
 
         public IEnumerable<CppVtableSlot> AllVtableSlots { get { return m_allVtableSlots; } }
         public IEnumerable<CppVtableSlot> VisibleVtableSlots { get { return m_visibleVtableSlots; } }
-        public IEnumerable<CppVtableSlotOverrideImpl> OverrideImpls { get { return m_overrideImpls; } }
 
         public CLRTypeDefRow TypeDef { get { return m_typeDef; } }
         public IEnumerable<CLRTypeSpec> GenericParameters { get { return m_genericParameters; } }
@@ -37,7 +36,6 @@ namespace AssemblyImporter.CppExport
         private List<CppMethod> m_methods;
         private List<CppVtableSlot> m_allVtableSlots;       // All slots
         private List<CppVtableSlot> m_visibleVtableSlots;   // Slots that haven't been overlapped by a NewSlot
-        private List<CppVtableSlotOverrideImpl> m_overrideImpls;
         private List<CppField> m_fields;
         private List<CppField> m_inheritedFields;
         private List<CLRTypeSpec> m_newlyImplementedInterfaces;

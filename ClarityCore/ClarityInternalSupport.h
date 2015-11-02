@@ -39,6 +39,25 @@ namespace ClarityInternal
     {
         static void ZeroFill(T &instance);
     };
+
+	template<class TA, class TB>
+	struct AreTypesSame
+	{
+		enum
+		{
+			Value = 0,
+		};
+	};
+
+
+	template<class T>
+	struct AreTypesSame<T, T>
+	{
+		enum
+		{
+			Value = 1,
+		};
+	};
 }
 
 #include <string.h>

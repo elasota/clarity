@@ -576,10 +576,10 @@ namespace AssemblyImporter.CppExport
                             {
                                 case VType.ValTypeEnum.NullableReferenceValue:
                                 case VType.ValTypeEnum.NotNullReferenceValue:
-                                case VType.ValTypeEnum.ValueValue:
                                 case VType.ValTypeEnum.ConstantReference:
-                                case VType.ValTypeEnum.ConstantValue:
                                 case VType.ValTypeEnum.Null:
+                                case VType.ValTypeEnum.ValueValue:
+                                case VType.ValTypeEnum.ConstantValue:
                                     midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreReg_Value, argReg, valueReg));
                                     break;
                                 case VType.ValTypeEnum.MaybeAnchoredManagedPtr:

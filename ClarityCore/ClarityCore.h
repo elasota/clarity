@@ -20,6 +20,15 @@ namespace CLRTI
 namespace CLRExec
 {
     class Frame;
+	struct IRefVisitor;
+}
+
+namespace CLRX
+{
+	namespace NtSystem
+	{
+		struct tObject;
+	}
 }
 
 namespace CLRCore
@@ -28,12 +37,13 @@ namespace CLRCore
 
     struct RefTarget
     {
-        virtual GCObject *GetRootRefTarget() CLARITY_PURE;
+        virtual ::CLRX::NtSystem::tObject *GetRootObject() CLARITY_PURE;
+		virtual ::CLRCore::GCObject *GetRootRefTarget() CLARITY_PURE;
     };
 
     struct GCObject : public RefTarget
     {
-        virtual GCObject *GetRootRefTarget() CLARITY_OVERRIDE;
+		virtual void VisitReferences(::CLRExec::IRefVisitor &visitor) CLARITY_PURE;
     };
 
     template<class T>
@@ -54,10 +64,14 @@ namespace CLRCore
 template<class T>
 struct ::CLRTI::TypeProtoTraits< ::CLRCore::SZArray<T> >
 {
-    enum
-    {
-        IsValueType = 0,
-        IsArray = 1,
+	enum
+	{
+		IsValueType = 0,
+		IsArray = 1,
+		IsInterface = 0,
+		IsDelegate = 0,
+		IsMulticastDelegate = 0,
+		IsEnum = 0,
     };
 };
 
@@ -68,11 +82,6 @@ struct ::CLRTI::TypeProtoTraits< ::CLRCore::SZArray<T> >
 #include "ClarityVM.h"
 
 #include <new>
-
-inline ::CLRCore::GCObject *::CLRCore::GCObject::GetRootRefTarget()
-{
-    return this;
-}
 
 template<class T>
 inline T *::CLRCore::IObjectManager::AllocObject(const ::CLRExec::Frame &frame)

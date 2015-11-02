@@ -417,11 +417,11 @@ namespace AssemblyImporter.CppExport
             switch (sourceVType.ValType)
             {
                 case VType.ValTypeEnum.ValueValue:
-                    result += "::CLRUtil::PassiveConvertValue< ";
+                    result += "::CLRUtil::PassiveValueConverter< ";
                     break;
                 case VType.ValTypeEnum.NotNullReferenceValue:
                 case VType.ValTypeEnum.NullableReferenceValue:
-                    result += "::CLRUtil::PassiveConvertReference< ";
+                    result += "::CLRUtil::PassiveReferenceConverter< ";
                     break;
                 default:
                     throw new Exception("Strange passive conversion requested");
@@ -430,7 +430,7 @@ namespace AssemblyImporter.CppExport
             result += m_builder.SpecToAmbiguousStorage(sourceVType.TypeSpec);
             result += ", ";
             result += m_builder.SpecToAmbiguousStorage(targetTypeSpec);
-            result += " >(";
+            result += " >::Convert(";
             result += valStr;
             result += ")";
             return result;
@@ -498,6 +498,8 @@ namespace AssemblyImporter.CppExport
                             CppMethod cppMethod = methodSpec.CppMethod;
                             CppClass thisClass = m_builder.GetCachedClass(cppMethod.DeclaredInClassSpec);
 
+                            m_depSet.AddTypeSpecDependencies(cppMethod.DeclaredInClassSpec, true);
+
                             SsaRegister returnReg = midInstr.RegArg;
                             SsaRegister thisReg = midInstr.RegArg2;
                             SsaRegister[] paramsRegs = midInstr.RegArgs;
@@ -530,11 +532,11 @@ namespace AssemblyImporter.CppExport
 
                                     CLR.CLRTypeSpec destTypeSpec = cppMethod.DeclaredInClassSpec;
                                     CLR.CLRTypeSpec sourceTypeSpec = thisReg.VType.TypeSpec;
-                                    writer.Write("(::CLRUtil::PassiveConvertReference< ");
+                                    writer.Write("(::CLRUtil::PassiveReferenceConverter< ");
                                     writer.Write(m_builder.SpecToAmbiguousStorage(sourceTypeSpec));
                                     writer.Write(", ");
                                     writer.Write(m_builder.SpecToAmbiguousStorage(destTypeSpec));
-                                    writer.Write(" >(");
+                                    writer.Write(" >::Convert(");
                                     writer.Write(StorageLocForSsaReg(thisReg, false, shouldZombifyThis));
                                     writer.Write("))->");
                                 }
@@ -604,6 +606,8 @@ namespace AssemblyImporter.CppExport
                             CppMethod cppMethod = methodSpec.CppMethod;
                             CppClass thisClass = m_builder.GetCachedClass(cppMethod.DeclaredInClassSpec);
 
+                            m_depSet.AddTypeSpecDependencies(cppMethod.DeclaredInClassSpec, true);
+
                             SsaRegister returnReg = midInstr.RegArg;
                             SsaRegister thisReg = midInstr.RegArg2;
                             SsaRegister[] paramsRegs = midInstr.RegArgs;
@@ -652,6 +656,7 @@ namespace AssemblyImporter.CppExport
                                 else
                                     writer.Write(paramValue);
                             }
+
                             writer.WriteLine(");");
                         }
                         break;
@@ -739,20 +744,24 @@ namespace AssemblyImporter.CppExport
                         break;
                     case MidInstruction.OpcodeEnum.LoadReg_Value:
                         writer.Write(scopeStack.Indent);
-                        writer.WriteLine(StorageLocForSsaReg(midInstr.RegArg, true, false) + " = " +
-                        PassiveConvertValue(midInstr.RegArg.VType, midInstr.VRegArg.VType.TypeSpec, StorageLocForVReg(midInstr.VRegArg, false, false)) + ";");
+                        writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
+                        writer.Write(" = ");
+                        writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.VRegArg.VType.TypeSpec, StorageLocForVReg(midInstr.VRegArg, false, false)));
+                        writer.WriteLine(";");
                         break;
                     case MidInstruction.OpcodeEnum.StoreReg_ManagedPtr:
                         writer.Write(scopeStack.Indent);
-                        writer.WriteLine(StorageLocForVReg(midInstr.VRegArg, false, false) + " = " + StorageLocForSsaReg(midInstr.RegArg, false, false) + ";");
+                        writer.Write(StorageLocForVReg(midInstr.VRegArg, false, false));
+                        writer.Write(" = ");
+                        writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
+                        writer.WriteLine(";");
                         break;
                     case MidInstruction.OpcodeEnum.StoreReg_Value:
                         writer.Write(scopeStack.Indent);
-                        writer.WriteLine(
-                            StorageLocForVReg(midInstr.VRegArg, false, false)
-                            + " = "
-                            + PassiveConvertValue(midInstr.RegArg.VType, midInstr.VRegArg.VType.TypeSpec, StorageLocForSsaReg(midInstr.RegArg, false, false))
-                            + ";");
+                        writer.Write(StorageLocForVReg(midInstr.VRegArg, false, false));
+                        writer.Write(" = ");
+                        writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.VRegArg.VType.TypeSpec, StorageLocForSsaReg(midInstr.RegArg, false, false)));
+                        writer.WriteLine(";");
                         break;
                     case MidInstruction.OpcodeEnum.beq_ref:
                         writer.WriteLine("beq_ref Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
@@ -807,17 +816,17 @@ namespace AssemblyImporter.CppExport
                         writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
                         writer.Write(" = ");
                         if (midInstr.Opcode == MidInstruction.OpcodeEnum.ceq_ref)
-                            writer.Write("(::CLRVM::CompareEqualReferences< ");
+                            writer.Write("(::CLRVM::ReferenceEqualityComparer< ");
                         else if (midInstr.Opcode == MidInstruction.OpcodeEnum.cne_ref)
-                            writer.Write("(!::CLRVM::CompareEqualReferences< ");
+                            writer.Write("(!::CLRVM::ReferenceEqualityComparer< ");
                         else if (midInstr.Opcode == MidInstruction.OpcodeEnum.ceq_val)
-                            writer.Write("(CompareEqualValues< ");
+                            writer.Write("(::CLRVM::ValueEqualityComparer< ");
                         else
                             throw new ArgumentException();
                         writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg2.VType.TypeSpec));
                         writer.Write(", ");
                         writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg3.VType.TypeSpec));
-                        writer.Write(" >(");
+                        writer.Write(" >::AreEqual(");
                         writer.Write(StorageLocForSsaReg(midInstr.RegArg2, false, false));
                         writer.Write(", ");
                         writer.Write(StorageLocForSsaReg(midInstr.RegArg3, false, false));
@@ -828,7 +837,27 @@ namespace AssemblyImporter.CppExport
                         break;
                     case MidInstruction.OpcodeEnum.brzero:
                         writer.Write(scopeStack.Indent);
-                        writer.Write("if (::CLRVM::IsZero(");
+                        writer.Write("if (");
+
+                        switch(midInstr.RegArg.VType.ValType)
+                        {
+                            case VType.ValTypeEnum.NotNullReferenceValue:
+                            case VType.ValTypeEnum.NullableReferenceValue:
+                            case VType.ValTypeEnum.Null:
+                            case VType.ValTypeEnum.ConstantReference:
+                                writer.Write("::CLRVM::IsNull");
+                                break;
+                            case VType.ValTypeEnum.ConstantValue:
+                            case VType.ValTypeEnum.ValueValue:
+                                writer.Write("::CLRVM::IsZero");
+                                break;
+                            default:
+                                throw new ArgumentException();
+                        }
+
+                        writer.Write("< ");
+                        writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
+                        writer.Write(" >(");
                         writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, true));
                         writer.WriteLine("))");
                         writer.Write(scopeStack.Indent);

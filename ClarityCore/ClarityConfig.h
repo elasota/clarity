@@ -8,4 +8,6 @@
 // If non-zero, spilled temporaries are unmarked
 #define CLARITY_PRECISE_TEMPORARY_MARKING 1
 
+#define CLARITY_USE_STRICT_REFS 1
+
 #endif

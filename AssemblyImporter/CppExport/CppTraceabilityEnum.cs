@@ -7,7 +7,6 @@
         NotTraced,
         MaybeTraced,
         DefinitelyTraced,
-        Untraced,
         TracedIfMovingGC,
     }
 }

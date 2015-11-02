@@ -1,6 +1,7 @@
 #ifndef __CLARITY_UTIL_H__
 #define __CLARITY_UTIL_H__
 
+#include "ClarityConfig.h"
 #include "ClarityCompilerDefs.h"
 #include "ClarityInternalSupport.h"
 #include "ClarityTypes.h"
@@ -8,6 +9,11 @@
 namespace CLRCore
 {
     struct RefTarget;
+}
+
+namespace CLRExec
+{
+	struct IRefVisitor;
 }
 
 namespace CLRVM
@@ -20,6 +26,8 @@ namespace CLRVM
 namespace CLRUtil
 {
     template<class T> struct TRef;
+
+	typedef ::CLRCore::RefTarget *TDGTarget;
 }
 
 namespace CLRPrivate
@@ -40,10 +48,107 @@ namespace CLRPrivate
     {
         typedef typename ::CLRUtil::TRef<T>::Type *Type;
     };
+
+	template<int TIsInterface, class T>
+	struct RefRetargeter
+		: ::ClarityInternal::NoCreate
+	{
+	};
+
+	template<class T>
+	struct RefRetargeter<0, T>
+		: ::ClarityInternal::NoCreate
+	{
+		static T *Retarget(::CLRExec::IRefVisitor &visitor, T *ref);
+	};
+
+	template<class T>
+	struct RefRetargeter<1, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		static T *Retarget(::CLRExec::IRefVisitor &visitor, T *ref);
+	};
+
+	template<int TIsValueType, int TIsInterface, class T>
+	struct DelegateTargetConverter_ByTraits
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+	template<class T>
+	struct DelegateTargetConverter_ByTraits<1, 0, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		typedef ::CLRUtil::Boxed<T> *TResolvedTarget;
+
+		static ::CLRUtil::Boxed<T> *FromTarget(::CLRUtil::TDGTarget dgTarget);
+		static ::CLRUtil::TDGTarget ToTarget(const typename ::CLRVM::TRefValue<T>::Type &ref);
+	};
+
+	template<class T>
+	struct DelegateTargetConverter_ByTraits<0, 0, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		typedef T *TResolvedTarget;
+
+		static T *FromTarget(::CLRUtil::TDGTarget dgTarget);
+		static ::CLRUtil::TDGTarget ToTarget(const typename ::CLRVM::TRefValue<T>::Type &ref);
+	};
+
+	template<class T>
+	struct DelegateTargetConverter_ByTraits<0, 1, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		typedef T *TResolvedTarget;
+
+		static T *FromTarget(::CLRUtil::TDGTarget dgTarget);
+		static ::CLRUtil::TDGTarget ToTarget(const typename ::CLRVM::TRefValue<T>::Type &ref);
+	};
+
+	template<class T>
+	struct DelegateTargetConverter
+		: public ::CLRPrivate::DelegateTargetConverter_ByTraits<::CLRTI::TypeProtoTraits<T>::IsValueType, ::CLRTI::TypeProtoTraits<T>::IsInterface, T>
+	{
+	};
+
+	template<int TSourceIsInterface, int TDestIsInterface, class TSource, class TDest>
+	struct PassiveReferenceConverter_ByTraits
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_ByTraits<0, 0, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_ByTraits<0, 1, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_ByTraits<1, 0, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_ByTraits<1, 1, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
 }
 
 namespace CLRUtil
 {
+#if CLARITY_USE_STRICT_REFS != 0
     template<class T>
     class StrictRef
     {
@@ -51,9 +156,13 @@ namespace CLRUtil
         StrictRef();
         StrictRef(const StrictRef &other);
         explicit StrictRef(T *ptr);
-        StrictRef &operator =(const StrictRef& other);
+        StrictRef<T> &operator =(const StrictRef<T>& other);
+		bool operator ==(const StrictRef<T>& other) const;
         T *operator ->();
         const T *operator ->() const;
+		StrictRef<T> Retarget(::CLRExec::IRefVisitor &visitor) const;
+		bool IsNull() const;
+		T *GetPtr() const;
 
     private:
         T *m_ptr;
@@ -65,12 +174,35 @@ namespace CLRUtil
     {
     };
 
+	template<class T>
+	T *RefToPtr(const StrictRef<T> &ref);
+
+#else
+	template<class T>
+	struct TRef
+		: public ::ClarityInternal::TypeDef<T*>
+	{
+	};
+
+	template<class T>
+	T *RefToPtr(T *ref);
+#endif
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter
+		: public ::CLRPrivate::PassiveReferenceConverter_ByTraits<::CLRTI::TypeProtoTraits<TSource>::IsInterface, ::CLRTI::TypeProtoTraits<TDest>::IsInterface, TSource, TDest>
+	{
+	};
+
+	template<class T>
+	typename ::CLRUtil::TRef<T>::Type RetargetRef(::CLRExec::IRefVisitor &visitor, const typename ::CLRUtil::TRef<T>::Type & ref);
 
     template<class T>
     class AnchoredManagedPtr
     {
     public:
-        void GetRefTargetAndValue(::CLRCore::RefTarget *&refTarget, T *&valuePtr);
+		void Visit(::CLRExec::IRefVisitor &refVisitor);
+
     private:
         ::CLRCore::RefTarget *m_object;
         T *m_value;
@@ -90,8 +222,6 @@ namespace CLRUtil
     private:
         TDGBoundReturn();
     };
-
-    typedef ::CLRCore::RefTarget *TDGTarget;
 
     template<class T>
     struct TVal
@@ -185,17 +315,37 @@ namespace CLRUtil
     typename ::CLRUtil::TAnchoredManagedPtr<T>::Type Unbox(::CLRUtil::Boxed<T> *box);
 
     template<class TSource, class TDest>
-    typename ::CLRVM::TRefValue<TDest>::Type PassiveConvertReference(typename ::CLRVM::TRefValue<TSource>::Type ref);
-
-    template<class TSource, class TDest>
-    typename ::CLRVM::TValValue<TDest>::Type PassiveConvertValue(typename ::CLRVM::TValValue<TSource>::Type ref);
+	struct PassiveValueConverter
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TValValue<TDest>::Type Convert(typename ::CLRVM::TValValue<TSource>::Type ref);
+	};
 
     template<class T>
-    T *ConvertDelegateTarget(::CLRUtil::TDGTarget dgtarget);
+	typename ::CLRPrivate::DelegateTargetConverter<T>::TResolvedTarget ConvertDelegateTarget(::CLRUtil::TDGTarget dgtarget);
 
     template<class T>
     typename ::CLRVM::TRefValue<T>::Type NullReference();
 }
+
+
+
+template<class T>
+CLARITY_FORCEINLINE T *::CLRPrivate::RefRetargeter<0, T>::Retarget(::CLRExec::IRefVisitor &visitor, T *ref)
+{
+	// Classes implement multiple ref targets.  Disambiguate to the root one.
+	return static_cast<T*>(static_cast<::CLRCore::GCObject*>(visitor.TouchReference(static_cast<::CLRCore::GCObject*>(ref))));
+}
+
+template<class T>
+CLARITY_FORCEINLINE T *::CLRPrivate::RefRetargeter<1, T>::Retarget(::CLRExec::IRefVisitor &visitor, T *ref)
+{
+	// Interfaces only implement one ref target.
+	return static_cast<T*>(visitor.TouchReference(ref));
+}
+
+
+#if CLARITY_USE_STRICT_REFS != 0
 
 template<class T>
 CLARITY_FORCEINLINE ::CLRUtil::StrictRef<T>::StrictRef()
@@ -222,6 +372,12 @@ CLARITY_FORCEINLINE ::CLRUtil::StrictRef<T> &::CLRUtil::StrictRef<T>::operator =
 }
 
 template<class T>
+CLARITY_FORCEINLINE bool ::CLRUtil::StrictRef<T>::operator ==(const ::CLRUtil::StrictRef<T>& other) const
+{
+	return this->m_ptr == other.m_ptr;
+}
+
+template<class T>
 CLARITY_FORCEINLINE T *::CLRUtil::StrictRef<T>::operator ->()
 {
     return m_ptr;
@@ -232,15 +388,143 @@ CLARITY_FORCEINLINE const T *::CLRUtil::StrictRef<T>::operator ->() const
 {
     return m_ptr;
 }
+template<class T>
+CLARITY_FORCEINLINE ::CLRUtil::StrictRef<T> (::CLRUtil::StrictRef<T>::Retarget)(::CLRExec::IRefVisitor &visitor) const
+{
+	return ::CLRUtil::StrictRef<T>(::CLRPrivate::RefRetargeter<::CLRTI::TypeProtoTraits<T>::IsInterface, T>::Retarget(visitor, this->m_ptr));
+}
+
+template<class T>
+CLARITY_FORCEINLINE ::CLRUtil::Boxed<T> *::CLRPrivate::DelegateTargetConverter_ByTraits<1, 0, T>::FromTarget(::CLRUtil::TDGTarget dgTarget)
+{
+	return static_cast<::CLRUtil::Boxed<T>*>(static_cast<::CLRCore::GCObject*>(dgTarget));
+}
+
+template<class T>
+CLARITY_FORCEINLINE ::CLRUtil::TDGTarget (::CLRPrivate::DelegateTargetConverter_ByTraits<1, 0, T>::ToTarget)(const typename ::CLRVM::TRefValue<T>::Type &ref)
+{
+	return static_cast<::CLRCore::GCObject*>(ref
+#if CLARITY_USE_STRICT_REFS != 0
+		.GetPtr()
+#endif
+		);
+}
+
+template<class T>
+CLARITY_FORCEINLINE T *::CLRPrivate::DelegateTargetConverter_ByTraits<0, 0, T>::FromTarget(::CLRUtil::TDGTarget dgTarget)
+{
+	return static_cast<T*>(static_cast<::CLRCore::GCObject*>(dgTarget));
+}
+
+template<class T>
+CLARITY_FORCEINLINE ::CLRUtil::TDGTarget (::CLRPrivate::DelegateTargetConverter_ByTraits<0, 0, T>::ToTarget)(const typename ::CLRVM::TRefValue<T>::Type &ref)
+{
+	return static_cast<::CLRCore::GCObject*>(ref
+#if CLARITY_USE_STRICT_REFS != 0
+		.GetPtr()
+#endif
+		);
+}
+
+template<class T>
+CLARITY_FORCEINLINE T *::CLRPrivate::DelegateTargetConverter_ByTraits<0, 1, T>::FromTarget(::CLRUtil::TDGTarget dgTarget)
+{
+	return static_cast<T*>(dgTarget);
+}
+
+template<class T>
+CLARITY_FORCEINLINE ::CLRUtil::TDGTarget (::CLRPrivate::DelegateTargetConverter_ByTraits<0, 1, T>::ToTarget)(const typename ::CLRVM::TRefValue<T>::Type &ref)
+{
+	return ref
+#if CLARITY_USE_STRICT_REFS != 0
+		.GetPtr()
+#endif
+		;
+}
+
 
 template<class TSource, class TDest>
-CLARITY_FORCEINLINE typename ::CLRVM::TValValue<TDest>::Type (::CLRUtil::PassiveConvertValue<TSource, TDest>)(typename ::CLRVM::TValValue<TSource>::Type val)
+CLARITY_FORCEINLINE typename ::CLRVM::TRefValue<TDest>::Type (::CLRPrivate::PassiveReferenceConverter_ByTraits<0, 0, TSource, TDest>::Convert)(const typename ::CLRVM::TRefValue<TSource>::Type &ref)
+{
+	// Object to object conversion
+	typename ::CLRVM::TValueObjectType<TSource>::Type *srcPtr = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TSource>::Type>(ref);
+	typename ::CLRVM::TValueObjectType<TDest>::Type *destPtr = srcPtr;
+	return typename ::CLRVM::TRefValue<TDest>::Type(destPtr);
+}
+
+template<class TSource, class TDest>
+CLARITY_FORCEINLINE typename ::CLRVM::TRefValue<TDest>::Type (::CLRPrivate::PassiveReferenceConverter_ByTraits<0, 1, TSource, TDest>::Convert)(const typename ::CLRVM::TRefValue<TSource>::Type &ref)
+{
+	// Object to interface conversion
+	typename ::CLRVM::TValueObjectType<TSource>::Type *srcPtr = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TSource>::Type>(ref);
+	typename ::CLRVM::TValueObjectType<TDest>::Type *destPtr = srcPtr;
+	return typename ::CLRVM::TRefValue<TDest>::Type(destPtr);
+}
+
+template<class TSource, class TDest>
+inline typename ::CLRVM::TRefValue<TDest>::Type (::CLRPrivate::PassiveReferenceConverter_ByTraits<1, 0, TSource, TDest>::Convert)(const typename ::CLRVM::TRefValue<TSource>::Type &ref)
+{
+	// Interface to object conversion.  This is ONLY valid for conversion to System.Object
+	typename ::CLRVM::TValueObjectType<TSource>::Type *srcPtr = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TSource>::Type>(ref);
+	typename ::CLRVM::TValueObjectType<TDest>::Type *destPtr = (srcPtr == CLARITY_NULLPTR) ? CLARITY_NULLPTR : srcPtr->GetRootObject();
+	return typename ::CLRVM::TRefValue<TDest>::Type(destPtr);
+}
+
+template<class TSource, class TDest>
+inline typename ::CLRVM::TRefValue<TDest>::Type (::CLRPrivate::PassiveReferenceConverter_ByTraits<1, 1, TSource, TDest>::Convert)(const typename ::CLRVM::TRefValue<TSource>::Type &ref)
+{
+	// Interface to interface conversion
+	typename ::CLRVM::TValueObjectType<TSource>::Type *srcPtr = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TSource>::Type>(ref);
+	typename ::CLRVM::TValueObjectType<TDest>::Type *destPtr;
+	if (srcPtr == CLARITY_NULLPTR)
+		destPtr = CLARITY_NULLPTR;
+	else
+		srcPtr->iPassiveConvertInterface(destPtr);
+	return typename ::CLRVM::TRefValue<TDest>::Type(destPtr);
+}
+
+template<class T>
+CLARITY_FORCEINLINE bool (::CLRUtil::StrictRef<T>::IsNull)() const
+{
+	return this->m_ptr == CLARITY_NULLPTR;
+}
+
+template<class T>
+CLARITY_FORCEINLINE T *(::CLRUtil::StrictRef<T>::GetPtr)() const
+{
+	return this->m_ptr;
+}
+
+template<class T>
+typename ::CLRUtil::TRef<T>::Type (::CLRUtil::RetargetRef)(::CLRExec::IRefVisitor &visitor, const typename ::CLRUtil::TRef<T>::Type &ref)
+{
+	return ref.Retarget(visitor);
+}
+
+#else
+
+template<class T>
+::CLRUtil::TRef<T>::Type(::CLRUtil::RetargetRef)(::CLRExec::IRefVisitor &visitor, const ::CLRUtil::TRef<T>::Type & ref)
+{
+	return ::CLRPrivate::RefRetargeter<::CLRTI::TypeProtoTraits<T>::IsInterface, T>::Retarget(visitor, ref);
+}
+
+#endif
+
+template<class TSource, class TDest>
+CLARITY_FORCEINLINE typename ::CLRVM::TValValue<TDest>::Type (::CLRUtil::PassiveValueConverter<TSource, TDest>::Convert)(typename ::CLRVM::TValValue<TSource>::Type val)
 {
     return ::CLRUtil::PassiveValueConversionWriter<typename ::CLRVM::TValValue<TDest>::Type>::FromMid(::CLRUtil::PassiveValueConversionLoader<typename ::CLRVM::TValValue<TSource>::Type>::ToMid(val));
 }
 
 template<class T>
-CLARITY_FORCEINLINE typename ::CLRVM::TRefValue<T>::Type (::CLRVM::NullReference)()
+CLARITY_FORCEINLINE typename ::CLRPrivate::DelegateTargetConverter<T>::TResolvedTarget (::CLRUtil::ConvertDelegateTarget)(::CLRUtil::TDGTarget dgtarget)
+{
+	return ::CLRPrivate::DelegateTargetConverter<T>::FromTarget(dgtarget);
+}
+
+template<class T>
+CLARITY_FORCEINLINE typename ::CLRVM::TRefValue<T>::Type (::CLRUtil::NullReference)()
 {
     return ::CLRVM::TRefValue<T>::Type(static_cast<T*>(CLARITY_NULLPTR));
 }
@@ -267,6 +551,37 @@ CLARITY_FORCEINLINE ::CLRTypes::Bool (::CLRUtil::PassiveValueConversionWriter<::
 {
     return ::CLRTypes::Bool(mid != 0);
 }
+
+template<class T>
+inline void ::CLRUtil::AnchoredManagedPtr<T>::Visit(::CLRExec::IRefVisitor &refVisitor)
+{
+	::CLRCore::RefTarget *ref = this->m_object;
+	if (ref != CLARITY_NULLPTR)
+	{
+		::CLRTypes::PtrDiffT valueOffset = reinterpret_cast<const ::CLRTypes::U8*>(this->m_value) - reinterpret_cast<const ::CLRTypes::U8*>(ref);
+		ref = refVisitor.TouchReference(ref);
+		this->m_object = ref;
+		this->m_value = reinterpret_cast<T*>(reinterpret_cast<::CLRTypes::U8*>(ref) + valueOffset);
+	}
+}
+
+#if CLARITY_USE_STRICT_REFS != 0
+
+template<class T>
+CLARITY_FORCEINLINE T *::CLRUtil::RefToPtr(const StrictRef<T> &ref)
+{
+	return ref.GetPtr();
+}
+
+#else
+
+template<class T>
+CLARITY_FORCEINLINE T *::CLRUtil::RefToPtr(T *ref)
+{
+	return ref;
+}
+
+#endif
 
 
 #endif

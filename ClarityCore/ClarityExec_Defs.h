@@ -97,7 +97,7 @@ namespace CLRExec
 
     struct IRefVisitor
     {
-        void Test();
+		virtual ::CLRCore::RefTarget *TouchReference(::CLRCore::RefTarget *refTarget) CLARITY_PURE;
     };
 
     template<class T>

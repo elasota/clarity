@@ -1,4 +1,4 @@
-#include "..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision.Def.h"
+#include "..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision.h"
 
 int main(int argc, const char **argv)
 {
