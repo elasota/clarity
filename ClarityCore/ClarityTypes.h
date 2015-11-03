@@ -3,6 +3,7 @@
 #define __CLARITY_TYPES_H__
 
 #include <stdint.h>
+#include <cstddef>
 
 namespace CLRTypes
 {
@@ -21,13 +22,13 @@ namespace CLRTypes
 }
 
 #define CLARITY_BOOLCONSTANT(n)     ((n) != 0)
-#define CLARITY_INT8CONSTANT(n)     (static_cast<::CLRTypes::S8>(n))
-#define CLARITY_UINT8CONSTANT(n)    (static_cast<::CLRTypes::U8>(n))
-#define CLARITY_INT16CONSTANT(n)    (static_cast<::CLRTypes::S16>(n))
-#define CLARITY_UINT16CONSTANT(n)   (static_cast<::CLRTypes::U16>(n))
-#define CLARITY_INT32CONSTANT(n)    (static_cast<::CLRTypes::S32>(n))
-#define CLARITY_UINT32CONSTANT(n)   (static_cast<::CLRTypes::U32>(n))
-#define CLARITY_INT64CONSTANT(n)    (static_cast<::CLRTypes::S32>(n##LL))
-#define CLARITY_UINT64CONSTANT(n)   (static_cast<::CLRTypes::U32>(n##ULL))
+#define CLARITY_INT8CONSTANT(n)     (static_cast< ::CLRTypes::S8 >(n))
+#define CLARITY_UINT8CONSTANT(n)    (static_cast< ::CLRTypes::U8 >(n))
+#define CLARITY_INT16CONSTANT(n)    (static_cast< ::CLRTypes::S16 >(n))
+#define CLARITY_UINT16CONSTANT(n)   (static_cast< ::CLRTypes::U16 >(n))
+#define CLARITY_INT32CONSTANT(n)    (static_cast< ::CLRTypes::S32 >(n))
+#define CLARITY_UINT32CONSTANT(n)   (static_cast< ::CLRTypes::U32 >(n))
+#define CLARITY_INT64CONSTANT(n)    (static_cast< ::CLRTypes::S32 >(n##LL))
+#define CLARITY_UINT64CONSTANT(n)   (static_cast< ::CLRTypes::U32 >(n##ULL))
 
 #endif

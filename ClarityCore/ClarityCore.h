@@ -46,10 +46,22 @@ namespace CLRCore
 		virtual void VisitReferences(::CLRExec::IRefVisitor &visitor) CLARITY_PURE;
     };
 
-    template<class T>
-    struct SZArray
-    {
-    };
+	class ArrayInfoBlock
+	{
+	public:
+		::CLRCore::GCObject *GetObject() const;
+		::CLRTypes::SizeT GetDimension(::CLRTypes::SizeT index) const;
+		void *GetStorage() const;
+
+	private:
+		const ::CLRTypes::SizeT *m_dimensions;
+		void *m_storage;
+	};
+
+	template<class T>
+	struct SZArray
+	{
+	};
 
     struct IObjectManager
     {
@@ -61,19 +73,23 @@ namespace CLRCore
     };
 }
 
-template<class T>
-struct ::CLRTI::TypeProtoTraits< ::CLRCore::SZArray<T> >
+namespace CLRTI
 {
-	enum
+	template<class T>
+	struct TypeProtoTraits< ::CLRCore::SZArray<T> >
 	{
-		IsValueType = 0,
-		IsArray = 1,
-		IsInterface = 0,
-		IsDelegate = 0,
-		IsMulticastDelegate = 0,
-		IsEnum = 0,
-    };
-};
+		enum
+		{
+			IsValueType = 0,
+			IsArray = 1,
+			IsInterface = 0,
+			IsDelegate = 0,
+			IsMulticastDelegate = 0,
+			IsEnum = 0,
+			IsReferenceArray = (::CLRTI::TypeProtoTraits<T>::IsValueType == 0) ? 1 : 0,
+		};
+	};
+}
 
 
 #include "ClarityExec.h"

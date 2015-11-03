@@ -57,7 +57,7 @@ namespace AssemblyImporter.CppExport
             }
         }
 
-        public static void WriteMethodCode(CppBuilder builder, CppClass cls, CppMethod method, System.IO.StreamWriter writer, CppDependencySet depSet, bool exportInline)
+        public static void WriteMethodCode(CppBuilder builder, CppClass cls, CppMethod method, System.IO.Stream stream, CppDependencySet depSet, bool exportInline)
         {
             int nClassParameters = cls.NumGenericParameters;
             int nMethodParameters = method.NumGenericParameters;
@@ -66,6 +66,9 @@ namespace AssemblyImporter.CppExport
 
             if (isMethodInline != exportInline)
                 return;
+
+            MemoryStream mainMethodStream = new MemoryStream();
+            StreamWriter writer = new StreamWriter(mainMethodStream);
 
             if (nClassParameters != 0 || nMethodParameters != 0)
             {
@@ -179,7 +182,10 @@ namespace AssemblyImporter.CppExport
             writer.Flush();
 
             CppMidCompiler midCompiler = new CppMidCompiler(builder, cls, method, mainRegion, "bTLFrame", args.ToArray(), locals.ToArray());
-            midCompiler.EmitAll(depSet, writer.BaseStream);
+
+            MemoryStream localClusterStream = new MemoryStream();
+            midCompiler.EmitAll(depSet, localClusterStream, writer.BaseStream);
+
             writer.BaseStream.Flush();
             //MidCompile(builder, cls, method, mainRegion, args.ToArray(), locals.ToArray(), writer.BaseStream);
 
@@ -196,6 +202,11 @@ namespace AssemblyImporter.CppExport
                 if (!vReg.IsAlive || vReg.IsZombie)
                     throw new Exception("Internal error: arg vreg was killed");
             }
+
+            writer.Flush();
+
+            localClusterStream.WriteTo(stream);
+            mainMethodStream.WriteTo(stream);
         }
     }
 }

@@ -227,56 +227,56 @@ namespace CLRVM
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tByte>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::U8>
+    struct TValValue< ::CLRX::NtSystem::tByte >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::U8 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tSByte>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::S8>
+    struct TValValue< ::CLRX::NtSystem::tSByte >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::S8 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tInt16>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::S16>
+    struct TValValue< ::CLRX::NtSystem::tInt16 >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::S16 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tUInt16>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::U16>
+    struct TValValue< ::CLRX::NtSystem::tUInt16 >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::U16 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tInt32>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::S32>
+    struct TValValue< ::CLRX::NtSystem::tInt32 >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::S32 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tUInt32>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::U32>
+    struct TValValue< ::CLRX::NtSystem::tUInt32 >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::U32 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tInt64>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::S64>
+    struct TValValue< ::CLRX::NtSystem::tInt64 >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::S64 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tUInt64>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::U64>
+    struct TValValue< ::CLRX::NtSystem::tUInt64 >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::U64 >
     {
     };
 
     template<>
-    struct TValValue<::CLRX::NtSystem::tBoolean>
-        : public ::ClarityInternal::TypeDef<::CLRTypes::Bool>
+    struct TValValue< ::CLRX::NtSystem::tBoolean >
+        : public ::ClarityInternal::TypeDef< ::CLRTypes::Bool >
     {
     };
 
@@ -470,7 +470,7 @@ namespace CLRVM
     typename TLocalType::LocalValueType &KillAndReturnVReg(TLocalType &local);
 
     template<class TLocalType>
-    typename void KillVReg(TLocalType &local);
+    void KillVReg(TLocalType &local);
 
     template<class TLocalType>
     typename TLocalType::LocalValueType &VRegValue(TLocalType &local);
@@ -607,7 +607,7 @@ CLARITY_FORCEINLINE TValueType &::CLRPrivate::VRegOps_ByValueType<TValueType>::K
 
 
 template<class T>
-CLARITY_FORCEINLINE typename ::CLRUtil::TRef<T>::Type (::CLRVM::ParamThis<T>)(T *bThis)
+CLARITY_FORCEINLINE typename ::CLRUtil::TRef<T>::Type (::CLRVM::ParamThis)(T *bThis)
 {
     return typename ::CLRUtil::TRef<T>::Type(bThis);
 }
@@ -655,7 +655,7 @@ CLARITY_FORCEINLINE void ::CLRVM::TracerFuncs<T>::TraceMaybeAnchoredManagedPtr(:
 template<class T>
 CLARITY_FORCEINLINE void ::CLRVM::TracerFuncs<T>::TraceVal(::CLRExec::IRefVisitor &visitor, typename ::CLRVM::TValValue<T>::Type &ref)
 {
-	::CLRPrivate::ValTracer<::CLRTI::TypeProtoTraits<T>::IsValueType, ::CLRTI::TypeTraits<T>::IsValueTraceable, T>::Trace(visitor, ref);
+	::CLRPrivate::ValTracer< ::CLRTI::TypeProtoTraits<T>::IsValueType, ::CLRTI::TypeTraits<T>::IsValueTraceable, T >::Trace(visitor, ref);
 }
 
 template<class T>
@@ -669,28 +669,28 @@ CLARITY_FORCEINLINE void ::CLRVM::TracerFuncs<T>::TraceRef(::CLRExec::IRefVisito
 
 // Precise temporary marking tracers
 template<class T>
-inline void ::CLRVM::LocalTracerFuncs<::CLRVM::ELocalType::Temporary, T>::TraceAnchoredManagedPtrLocal(::CLRExec::IRefVisitor &visitor, typename TAnchoredManagedPtrLocal<::CLRVM::ELocalType::Temporary, T>::Type &ref)
+inline void ::CLRVM::LocalTracerFuncs< ::CLRVM::ELocalType::Temporary, T >::TraceAnchoredManagedPtrLocal(::CLRExec::IRefVisitor &visitor, typename TAnchoredManagedPtrLocal< ::CLRVM::ELocalType::Temporary, T >::Type &ref)
 {
     if (ref.m_isAlive)
         ::CLRVM::TracerFuncs<T>::TraceAnchoredManagedPtr(visitor, ref.m_value);
 }
 
 template<class T>
-inline void ::CLRVM::LocalTracerFuncs<::CLRVM::ELocalType::Temporary, T>::TraceMaybeAnchoredManagedPtrLocal(::CLRExec::IRefVisitor &visitor, typename TMaybeAnchoredManagedPtrLocal<::CLRVM::ELocalType::Temporary, T>::Type &ref)
+inline void ::CLRVM::LocalTracerFuncs< ::CLRVM::ELocalType::Temporary, T >::TraceMaybeAnchoredManagedPtrLocal(::CLRExec::IRefVisitor &visitor, typename TMaybeAnchoredManagedPtrLocal< ::CLRVM::ELocalType::Temporary, T >::Type &ref)
 {
     if (ref.m_isAlive)
         ::CLRVM::TracerFuncs<T>::TraceMaybeAnchoredManagedPtr(visitor, ref.m_value);
 }
 
 template<class T>
-inline void ::CLRVM::LocalTracerFuncs<::CLRVM::ELocalType::Temporary, T>::TraceValLocal(::CLRExec::IRefVisitor &visitor, typename TValLocal<::CLRVM::ELocalType::Temporary, T>::Type &ref)
+inline void ::CLRVM::LocalTracerFuncs< ::CLRVM::ELocalType::Temporary, T >::TraceValLocal(::CLRExec::IRefVisitor &visitor, typename TValLocal< ::CLRVM::ELocalType::Temporary, T >::Type &ref)
 {
     if (ref.m_isAlive)
         ::CLRVM::TracerFuncs<T>::TraceVal(visitor, ref.m_value);
 }
 
 template<class T>
-inline void ::CLRVM::LocalTracerFuncs<::CLRVM::ELocalType::Temporary, T>::TraceRefLocal(::CLRExec::IRefVisitor &visitor, typename TRefLocal<::CLRVM::ELocalType::Temporary, T>::Type &ref)
+inline void ::CLRVM::LocalTracerFuncs< ::CLRVM::ELocalType::Temporary, T >::TraceRefLocal(::CLRExec::IRefVisitor &visitor, typename TRefLocal< ::CLRVM::ELocalType::Temporary, T >::Type &ref)
 {
     if (ref.m_isAlive)
         ::CLRVM::TracerFuncs<T>::TraceRef(visitor, ref.m_value);
@@ -699,7 +699,7 @@ inline void ::CLRVM::LocalTracerFuncs<::CLRVM::ELocalType::Temporary, T>::TraceR
 #endif
 
 template<class T>
-inline typename ::CLRVM::TRefValue<T>::Type (::CLRVM::AllocObject<T>)(const ::CLRExec::Frame &frame)
+inline typename ::CLRVM::TRefValue<T>::Type (::CLRVM::AllocObject)(const ::CLRExec::Frame &frame)
 {
     return typename ::CLRVM::TRefValue<T>::Type(frame.GetObjectManager()->AllocObject<T>(frame));
 }

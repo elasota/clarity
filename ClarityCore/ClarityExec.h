@@ -29,7 +29,7 @@ CLARITY_FORCEINLINE ::CLRCore::IObjectManager *::CLRExec::Frame::GetObjectManage
 template<class T>
 CLARITY_FORCEINLINE ::CLRExec::TracingLocalFrame<T> (::CLRPrivate::TMaybeTracingLocalFrame_Disambiguation<0, T>::Disambiguate)(const ::CLRExec::Frame &frame, T& tracedLocals)
 {
-    return ::CLRExec::TracingLocalFrame<T>(frame, tracedLocals)
+	return ::CLRExec::TracingLocalFrame<T>(frame, tracedLocals);
 }
 
 template<class T>

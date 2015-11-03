@@ -65,7 +65,7 @@ namespace ClarityInternal
 template<class T>
 CLARITY_FORCEINLINE void ::ClarityInternal::ConditionalZeroFiller<T, 1>::ZeroFill(T &instance)
 {
-    memset(&instance, 0, sizeof(T))
+	memset(&instance, 0, sizeof(T));
 };
 
 template<class T>

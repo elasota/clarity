@@ -10,4 +10,6 @@
 
 #define CLARITY_USE_STRICT_REFS 1
 
+#define CLARITY_CPP11 0
+
 #endif

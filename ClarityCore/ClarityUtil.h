@@ -19,6 +19,7 @@ namespace CLRExec
 namespace CLRVM
 {
     template<class T> struct TMaybeAnchoredManagedPtr;
+	template<class T> struct TValueObjectType;
     template<class T> struct TRefValue;
     template<class T> struct TValValue;
 }
@@ -26,6 +27,12 @@ namespace CLRVM
 namespace CLRUtil
 {
     template<class T> struct TRef;
+
+#if CLARITY_USE_STRICT_REFS != 0
+	template<class T> class StrictRef;
+#endif
+
+	template<class T> class RefArrayReference;
 
 	typedef ::CLRCore::RefTarget *TDGTarget;
 }
@@ -105,9 +112,79 @@ namespace CLRPrivate
 		static ::CLRUtil::TDGTarget ToTarget(const typename ::CLRVM::TRefValue<T>::Type &ref);
 	};
 
+	// Delegate parameter converter
+
+	template<int TSourceIsValueType, int TDestIsValueType, class TSource, class TDest>
+	struct DelegateVarianceConverter_ByTraits
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+	// Type sameness is enforced for delegates - They can not be variant even if passive conversions are possible
 	template<class T>
-	struct DelegateTargetConverter
-		: public ::CLRPrivate::DelegateTargetConverter_ByTraits<::CLRTI::TypeProtoTraits<T>::IsValueType, ::CLRTI::TypeProtoTraits<T>::IsInterface, T>
+	struct DelegateVarianceConverter_ByTraits<1, 1, T, T>
+		: public ::ClarityInternal::NoCreate
+	{
+		static const typename ::CLRVM::TValValue<T>::Type &Convert(const typename ::CLRVM::TValValue<T>::Type &value);
+	};
+
+	// Type sameness is enforced for delegates - They can not be variant even if passive conversions are possible
+	template<class TSource, class TDest>
+	struct DelegateVarianceConverter_ByTraits<0, 0, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static const typename ::CLRVM::TValValue<TSource>::Type &Convert(const typename ::CLRVM::TValValue<TSource>::Type &value);
+	};
+
+	// RefArray to RefArray conversion
+	template<int TTypesAreSame, class TSource, class TDest>
+	struct PassiveReferenceConverter_RefArrayRefArray_ByTraits
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_RefArrayRefArray_ByTraits<0, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_RefArrayRefArray_ByTraits<1, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	// Object to object ref conversion
+	template<int TSourceIsRefArray, int TDestIsRefArray, class TSource, class TDest>
+	struct PassiveReferenceConverter_ObjObj_ByTraits
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_ObjObj_ByTraits<0, 0, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_ObjObj_ByTraits<1, 0, TSource, TDest>
+		: public ::ClarityInternal::NoCreate
+	{
+		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveReferenceConverter_ObjObj_ByTraits<1, 1, TSource, TDest>
+		: public ::CLRPrivate::PassiveReferenceConverter_RefArrayRefArray_ByTraits<
+			::ClarityInternal::AreTypesSame<TSource, TDest>::Value,
+			TSource,
+			TDest
+		>
 	{
 	};
 
@@ -117,11 +194,16 @@ namespace CLRPrivate
 	{
 	};
 
+	// Ref to ref conversion
 	template<class TSource, class TDest>
 	struct PassiveReferenceConverter_ByTraits<0, 0, TSource, TDest>
-		: public ::ClarityInternal::NoCreate
+		: public ::CLRPrivate::PassiveReferenceConverter_ObjObj_ByTraits<
+			::CLRTI::TypeProtoTraits<TSource>::IsReferenceArray,
+			::CLRTI::TypeProtoTraits<TDest>::IsReferenceArray,
+			TSource,
+			TDest
+		>
 	{
-		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
 	};
 
 	template<class TSource, class TDest>
@@ -143,6 +225,32 @@ namespace CLRPrivate
 		: public ::ClarityInternal::NoCreate
 	{
 		static typename ::CLRVM::TRefValue<TDest>::Type Convert(const typename ::CLRVM::TRefValue<TSource>::Type &ref);
+	};
+
+	template<int TIsReferenceArray, class T>
+	struct TRef_ByTraits
+		: public ::ClarityInternal::NoCreate
+	{
+	};
+
+#if CLARITY_USE_STRICT_REFS
+	template<class T>
+	struct TRef_ByTraits<0, T>
+		: public ::ClarityInternal::TypeDef< ::CLRUtil::StrictRef<T> >
+	{
+	};
+#else
+	template<class T>
+	struct TRef_ByTraits<0, T>
+		: public ::ClarityInternal::TypeDef<T*>
+	{
+	};
+#endif
+
+	template<class T>
+	struct TRef_ByTraits<1, T>
+		: public ::ClarityInternal::TypeDef< ::CLRUtil::RefArrayReference<T> >
+	{
 	};
 }
 
@@ -188,9 +296,36 @@ namespace CLRUtil
 	T *RefToPtr(T *ref);
 #endif
 
+	typedef ::CLRCore::RefTarget *(*ReferenceConversionFunc)(::CLRCore::RefTarget *storedTarget);
+
+	template<class T>
+	class RefArrayReference
+	{
+	private:
+		::CLRCore::ArrayInfoBlock *m_array;
+		ReferenceConversionFunc m_convFunc;
+	};
+
 	template<class TSource, class TDest>
 	struct PassiveReferenceConverter
-		: public ::CLRPrivate::PassiveReferenceConverter_ByTraits<::CLRTI::TypeProtoTraits<TSource>::IsInterface, ::CLRTI::TypeProtoTraits<TDest>::IsInterface, TSource, TDest>
+		: public ::CLRPrivate::PassiveReferenceConverter_ByTraits< ::CLRTI::TypeProtoTraits<TSource>::IsInterface, ::CLRTI::TypeProtoTraits<TDest>::IsInterface, TSource, TDest >
+	{
+	};
+
+	template<class T>
+	struct DelegateTargetConverter
+		: public ::CLRPrivate::DelegateTargetConverter_ByTraits< ::CLRTI::TypeProtoTraits<T>::IsValueType, ::CLRTI::TypeProtoTraits<T>::IsInterface, T >
+	{
+	};
+
+	template<class TSource, class TDest>
+	struct DelegateVarianceConverter
+		: public ::CLRPrivate::DelegateVarianceConverter_ByTraits<
+			::CLRTI::TypeProtoTraits<TSource>::IsValueType,
+			::CLRTI::TypeProtoTraits<TDest>::IsValueType,
+			TSource,
+			TDest
+		>
 	{
 	};
 
@@ -226,7 +361,7 @@ namespace CLRUtil
     template<class T>
     struct TVal
     {
-        typedef typename ::CLRPrivate::TValResolver<::CLRTI::TypeProtoTraits<T>::IsValueType, T>::Type Type;
+        typedef typename ::CLRPrivate::TValResolver< ::CLRTI::TypeProtoTraits<T>::IsValueType, T >::Type Type;
     };
 
     // Boxed<T>::Type is a container of a boxed value of type T
@@ -271,20 +406,20 @@ namespace CLRUtil
     };
 
     template<>
-    struct PassiveValueConversionLoader<::CLRTypes::Bool>
+    struct PassiveValueConversionLoader< ::CLRTypes::Bool >
     {
         typedef ::CLRTypes::S32 MidType;
         static ::CLRTypes::S32 ToMid(::CLRTypes::Bool src);
     };
 
-    template<> struct PassiveValueConversionLoader<::CLRTypes::U8>  : public PassiveValueSimpleConversionLoader<::CLRTypes::U8, ::CLRTypes::S32> { };
-    template<> struct PassiveValueConversionLoader<::CLRTypes::U16> : public PassiveValueSimpleConversionLoader<::CLRTypes::U16, ::CLRTypes::S32> { };
-    template<> struct PassiveValueConversionLoader<::CLRTypes::U32> : public PassiveValueSimpleConversionLoader<::CLRTypes::U32, ::CLRTypes::S32> { };
-    template<> struct PassiveValueConversionLoader<::CLRTypes::U64> : public PassiveValueSimpleConversionLoader<::CLRTypes::U64, ::CLRTypes::S64> { };
-    template<> struct PassiveValueConversionLoader<::CLRTypes::S8>  : public PassiveValueSimpleConversionLoader<::CLRTypes::S8, ::CLRTypes::S32> { };
-    template<> struct PassiveValueConversionLoader<::CLRTypes::S16> : public PassiveValueSimpleConversionLoader<::CLRTypes::S16, ::CLRTypes::S32> { };
-    template<> struct PassiveValueConversionLoader<::CLRTypes::S32> : public PassiveValueSimpleConversionLoader<::CLRTypes::S32, ::CLRTypes::S32> { };
-    template<> struct PassiveValueConversionLoader<::CLRTypes::S64> : public PassiveValueSimpleConversionLoader<::CLRTypes::S64, ::CLRTypes::S64> { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::U8 >  : public PassiveValueSimpleConversionLoader< ::CLRTypes::U8, ::CLRTypes::S32 > { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::U16 > : public PassiveValueSimpleConversionLoader< ::CLRTypes::U16, ::CLRTypes::S32 > { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::U32 > : public PassiveValueSimpleConversionLoader< ::CLRTypes::U32, ::CLRTypes::S32 > { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::U64 > : public PassiveValueSimpleConversionLoader< ::CLRTypes::U64, ::CLRTypes::S64 > { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::S8 >  : public PassiveValueSimpleConversionLoader< ::CLRTypes::S8, ::CLRTypes::S32 > { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::S16 > : public PassiveValueSimpleConversionLoader< ::CLRTypes::S16, ::CLRTypes::S32 > { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::S32 > : public PassiveValueSimpleConversionLoader< ::CLRTypes::S32, ::CLRTypes::S32 > { };
+    template<> struct PassiveValueConversionLoader< ::CLRTypes::S64 > : public PassiveValueSimpleConversionLoader< ::CLRTypes::S64, ::CLRTypes::S64 > { };
 
     ////////////////////////////////////////////////////////////////////////////////
     template<class TMid, class TDest>
@@ -297,19 +432,19 @@ namespace CLRUtil
     struct PassiveValueConversionWriter { };
 
     template<>
-    struct PassiveValueConversionWriter<::CLRTypes::Bool>
+    struct PassiveValueConversionWriter< ::CLRTypes::Bool >
     {
         static ::CLRTypes::Bool FromMid(::CLRTypes::S32 src);
     };
 
-    template<> struct PassiveValueConversionWriter<::CLRTypes::U8>  : public PassiveValueSimpleConversionWriter<::CLRTypes::S32, ::CLRTypes::U8> { };
-    template<> struct PassiveValueConversionWriter<::CLRTypes::U16> : public PassiveValueSimpleConversionWriter<::CLRTypes::S32, ::CLRTypes::U16> { };
-    template<> struct PassiveValueConversionWriter<::CLRTypes::U32> : public PassiveValueSimpleConversionWriter<::CLRTypes::S32, ::CLRTypes::U32> { };
-    template<> struct PassiveValueConversionWriter<::CLRTypes::U64> : public PassiveValueSimpleConversionWriter<::CLRTypes::S64, ::CLRTypes::U64> { };
-    template<> struct PassiveValueConversionWriter<::CLRTypes::S8>  : public PassiveValueSimpleConversionWriter<::CLRTypes::S32, ::CLRTypes::S8> { };
-    template<> struct PassiveValueConversionWriter<::CLRTypes::S16> : public PassiveValueSimpleConversionWriter<::CLRTypes::S32, ::CLRTypes::S16> { };
-    template<> struct PassiveValueConversionWriter<::CLRTypes::S32> : public PassiveValueSimpleConversionWriter<::CLRTypes::S32, ::CLRTypes::S32> { };
-    template<> struct PassiveValueConversionWriter<::CLRTypes::S64> : public PassiveValueSimpleConversionWriter<::CLRTypes::S64, ::CLRTypes::S64> { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::U8 >  : public PassiveValueSimpleConversionWriter< ::CLRTypes::S32, ::CLRTypes::U8 > { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::U16 > : public PassiveValueSimpleConversionWriter< ::CLRTypes::S32, ::CLRTypes::U16 > { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::U32 > : public PassiveValueSimpleConversionWriter< ::CLRTypes::S32, ::CLRTypes::U32 > { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::U64 > : public PassiveValueSimpleConversionWriter< ::CLRTypes::S64, ::CLRTypes::U64 > { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::S8 >  : public PassiveValueSimpleConversionWriter< ::CLRTypes::S32, ::CLRTypes::S8 > { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::S16 > : public PassiveValueSimpleConversionWriter< ::CLRTypes::S32, ::CLRTypes::S16 > { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::S32 > : public PassiveValueSimpleConversionWriter< ::CLRTypes::S32, ::CLRTypes::S32 > { };
+    template<> struct PassiveValueConversionWriter< ::CLRTypes::S64 > : public PassiveValueSimpleConversionWriter< ::CLRTypes::S64, ::CLRTypes::S64 > { };
 
     template<class T>
     typename ::CLRUtil::TAnchoredManagedPtr<T>::Type Unbox(::CLRUtil::Boxed<T> *box);
@@ -322,9 +457,6 @@ namespace CLRUtil
 	};
 
     template<class T>
-	typename ::CLRPrivate::DelegateTargetConverter<T>::TResolvedTarget ConvertDelegateTarget(::CLRUtil::TDGTarget dgtarget);
-
-    template<class T>
     typename ::CLRVM::TRefValue<T>::Type NullReference();
 }
 
@@ -334,7 +466,7 @@ template<class T>
 CLARITY_FORCEINLINE T *::CLRPrivate::RefRetargeter<0, T>::Retarget(::CLRExec::IRefVisitor &visitor, T *ref)
 {
 	// Classes implement multiple ref targets.  Disambiguate to the root one.
-	return static_cast<T*>(static_cast<::CLRCore::GCObject*>(visitor.TouchReference(static_cast<::CLRCore::GCObject*>(ref))));
+	return static_cast<T*>(static_cast< ::CLRCore::GCObject* >(visitor.TouchReference(static_cast< ::CLRCore::GCObject* >(ref))));
 }
 
 template<class T>
@@ -391,19 +523,19 @@ CLARITY_FORCEINLINE const T *::CLRUtil::StrictRef<T>::operator ->() const
 template<class T>
 CLARITY_FORCEINLINE ::CLRUtil::StrictRef<T> (::CLRUtil::StrictRef<T>::Retarget)(::CLRExec::IRefVisitor &visitor) const
 {
-	return ::CLRUtil::StrictRef<T>(::CLRPrivate::RefRetargeter<::CLRTI::TypeProtoTraits<T>::IsInterface, T>::Retarget(visitor, this->m_ptr));
+	return ::CLRUtil::StrictRef<T>(::CLRPrivate::RefRetargeter< ::CLRTI::TypeProtoTraits<T>::IsInterface, T >::Retarget(visitor, this->m_ptr));
 }
 
 template<class T>
 CLARITY_FORCEINLINE ::CLRUtil::Boxed<T> *::CLRPrivate::DelegateTargetConverter_ByTraits<1, 0, T>::FromTarget(::CLRUtil::TDGTarget dgTarget)
 {
-	return static_cast<::CLRUtil::Boxed<T>*>(static_cast<::CLRCore::GCObject*>(dgTarget));
+	return static_cast< ::CLRUtil::Boxed<T>* >(static_cast< ::CLRCore::GCObject* >(dgTarget));
 }
 
 template<class T>
 CLARITY_FORCEINLINE ::CLRUtil::TDGTarget (::CLRPrivate::DelegateTargetConverter_ByTraits<1, 0, T>::ToTarget)(const typename ::CLRVM::TRefValue<T>::Type &ref)
 {
-	return static_cast<::CLRCore::GCObject*>(ref
+	return static_cast< ::CLRCore::GCObject* >(ref
 #if CLARITY_USE_STRICT_REFS != 0
 		.GetPtr()
 #endif
@@ -413,13 +545,13 @@ CLARITY_FORCEINLINE ::CLRUtil::TDGTarget (::CLRPrivate::DelegateTargetConverter_
 template<class T>
 CLARITY_FORCEINLINE T *::CLRPrivate::DelegateTargetConverter_ByTraits<0, 0, T>::FromTarget(::CLRUtil::TDGTarget dgTarget)
 {
-	return static_cast<T*>(static_cast<::CLRCore::GCObject*>(dgTarget));
+	return static_cast<T*>(static_cast< ::CLRCore::GCObject* >(dgTarget));
 }
 
 template<class T>
 CLARITY_FORCEINLINE ::CLRUtil::TDGTarget (::CLRPrivate::DelegateTargetConverter_ByTraits<0, 0, T>::ToTarget)(const typename ::CLRVM::TRefValue<T>::Type &ref)
 {
-	return static_cast<::CLRCore::GCObject*>(ref
+	return static_cast< ::CLRCore::GCObject* >(ref
 #if CLARITY_USE_STRICT_REFS != 0
 		.GetPtr()
 #endif
@@ -443,14 +575,6 @@ CLARITY_FORCEINLINE ::CLRUtil::TDGTarget (::CLRPrivate::DelegateTargetConverter_
 }
 
 
-template<class TSource, class TDest>
-CLARITY_FORCEINLINE typename ::CLRVM::TRefValue<TDest>::Type (::CLRPrivate::PassiveReferenceConverter_ByTraits<0, 0, TSource, TDest>::Convert)(const typename ::CLRVM::TRefValue<TSource>::Type &ref)
-{
-	// Object to object conversion
-	typename ::CLRVM::TValueObjectType<TSource>::Type *srcPtr = ::CLRUtil::RefToPtr<typename ::CLRVM::TValueObjectType<TSource>::Type>(ref);
-	typename ::CLRVM::TValueObjectType<TDest>::Type *destPtr = srcPtr;
-	return typename ::CLRVM::TRefValue<TDest>::Type(destPtr);
-}
 
 template<class TSource, class TDest>
 CLARITY_FORCEINLINE typename ::CLRVM::TRefValue<TDest>::Type (::CLRPrivate::PassiveReferenceConverter_ByTraits<0, 1, TSource, TDest>::Convert)(const typename ::CLRVM::TRefValue<TSource>::Type &ref)
@@ -506,7 +630,7 @@ typename ::CLRUtil::TRef<T>::Type (::CLRUtil::RetargetRef)(::CLRExec::IRefVisito
 template<class T>
 ::CLRUtil::TRef<T>::Type(::CLRUtil::RetargetRef)(::CLRExec::IRefVisitor &visitor, const ::CLRUtil::TRef<T>::Type & ref)
 {
-	return ::CLRPrivate::RefRetargeter<::CLRTI::TypeProtoTraits<T>::IsInterface, T>::Retarget(visitor, ref);
+	return ::CLRPrivate::RefRetargeter< ::CLRTI::TypeProtoTraits<T>::IsInterface, T >::Retarget(visitor, ref);
 }
 
 #endif
@@ -518,15 +642,9 @@ CLARITY_FORCEINLINE typename ::CLRVM::TValValue<TDest>::Type (::CLRUtil::Passive
 }
 
 template<class T>
-CLARITY_FORCEINLINE typename ::CLRPrivate::DelegateTargetConverter<T>::TResolvedTarget (::CLRUtil::ConvertDelegateTarget)(::CLRUtil::TDGTarget dgtarget)
-{
-	return ::CLRPrivate::DelegateTargetConverter<T>::FromTarget(dgtarget);
-}
-
-template<class T>
 CLARITY_FORCEINLINE typename ::CLRVM::TRefValue<T>::Type (::CLRUtil::NullReference)()
 {
-    return ::CLRVM::TRefValue<T>::Type(static_cast<T*>(CLARITY_NULLPTR));
+    return typename ::CLRVM::TRefValue<T>::Type(static_cast<T*>(CLARITY_NULLPTR));
 }
 
 
@@ -536,7 +654,7 @@ CLARITY_FORCEINLINE TMid (::CLRUtil::PassiveValueSimpleConversionLoader<TSource,
     return TMid(src);
 }
 
-CLARITY_FORCEINLINE ::CLRTypes::S32 (::CLRUtil::PassiveValueConversionLoader<::CLRTypes::Bool>::ToMid)(::CLRTypes::Bool src)
+CLARITY_FORCEINLINE ::CLRTypes::S32 (::CLRUtil::PassiveValueConversionLoader< ::CLRTypes::Bool >::ToMid)(::CLRTypes::Bool src)
 {
     return (src == false) ? (::CLRTypes::S32(1)) : (::CLRTypes::S32(0));
 };
@@ -547,7 +665,7 @@ CLARITY_FORCEINLINE TDest (::CLRUtil::PassiveValueSimpleConversionWriter<TMid, T
     return TDest(mid);
 };
 
-CLARITY_FORCEINLINE ::CLRTypes::Bool (::CLRUtil::PassiveValueConversionWriter<::CLRTypes::Bool>::FromMid)(::CLRTypes::S32 mid)
+CLARITY_FORCEINLINE ::CLRTypes::Bool (::CLRUtil::PassiveValueConversionWriter< ::CLRTypes::Bool >::FromMid)(::CLRTypes::S32 mid)
 {
     return ::CLRTypes::Bool(mid != 0);
 }
@@ -561,7 +679,7 @@ inline void ::CLRUtil::AnchoredManagedPtr<T>::Visit(::CLRExec::IRefVisitor &refV
 		::CLRTypes::PtrDiffT valueOffset = reinterpret_cast<const ::CLRTypes::U8*>(this->m_value) - reinterpret_cast<const ::CLRTypes::U8*>(ref);
 		ref = refVisitor.TouchReference(ref);
 		this->m_object = ref;
-		this->m_value = reinterpret_cast<T*>(reinterpret_cast<::CLRTypes::U8*>(ref) + valueOffset);
+		this->m_value = reinterpret_cast<T*>(reinterpret_cast< ::CLRTypes::U8* >(ref) + valueOffset);
 	}
 }
 

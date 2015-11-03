@@ -3,7 +3,7 @@
 #include "ClarityCore.h"
 #include "tSystem\tObject.Def.h"
 
-void ::CLRX::NtSystem::tObject::mcode_it_d_ctor(const ::CLRExec::Frame &frame, ::CLRUtil::TRef<::CLRX::NtSystem::tObject >::Type bThis0)
+void ::CLRX::NtSystem::tObject::mcode_it_d_ctor(const ::CLRExec::Frame &frame, ::CLRVM::TRefValue< ::CLRX::NtSystem::tObject >::Type bThis0)
 {
 }
 

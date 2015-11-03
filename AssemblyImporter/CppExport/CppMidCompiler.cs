@@ -39,7 +39,7 @@ namespace AssemblyImporter.CppExport
             emitter.Emit(m_instructionWriter);
         }
 
-        public void EmitAll(CppDependencySet depSet, Stream baseStream)
+        public void EmitAll(CppDependencySet depSet, Stream localClusterStream, Stream baseStream)
         {
             EmitRegion(depSet, 1, m_mainRegion);
 
@@ -53,6 +53,9 @@ namespace AssemblyImporter.CppExport
             List<VReg> allVRegs = new List<VReg>();
             allVRegs.AddRange(paramVRegs);
             allVRegs.AddRange(m_regAllocator.AllRegisters);
+
+            MemoryStream localClusterTempStream = null;
+            StreamWriter localClusterWriter = null;
 
             // Emit locals
             using (MemoryStream localsStream = new MemoryStream())
@@ -79,17 +82,42 @@ namespace AssemblyImporter.CppExport
                     // Emit traced regs
                     if (haveAnyTraced)
                     {
-                        localsWriter.WriteLine("\tstruct bTracedLocalsStruct");
-                        localsWriter.WriteLine("\t{");
+                        localClusterTempStream = new MemoryStream();
+                        localClusterWriter = new StreamWriter(localClusterTempStream);
+
+                        string localClusterMangle;
+                        {
+                            CppMangleBuilder localClusterMangleBuilder = new CppMangleBuilder();
+                            localClusterMangleBuilder.Add(CppBuilder.CreateInstanceTypeSpec(m_builder.Assemblies, m_cls.TypeDef));
+                            localClusterMangleBuilder.Add(m_method.Name);
+                            localClusterMangleBuilder.Add(m_method.MethodSignature);
+                            localClusterMangle = localClusterMangleBuilder.Finish();
+                        }
+
+                        localClusterWriter.WriteLine("namespace CLRX");
+                        localClusterWriter.WriteLine("{");
+                        localClusterWriter.WriteLine("namespace bLocalClusters");
+                        localClusterWriter.WriteLine("{");
+
+                        if (m_cls.NumGenericParameters > 0 || m_method.NumGenericParameters > 0)
+                        {
+                            localClusterWriter.Write("\ttemplate< ");
+                            CppBuilder.WriteTemplateDualParamCluster(false, m_cls.NumGenericParameters, m_method.NumGenericParameters, "class T", "class M", localClusterWriter);
+                            localClusterWriter.WriteLine(" >");
+                        }
+
+                        localClusterWriter.Write("\tstruct bLocalCluster_");
+                        localClusterWriter.WriteLine(localClusterMangle);
+                        localClusterWriter.WriteLine("\t{");
                         bool compileTimeEvaluateTrace = true;
                         foreach (VReg vReg in allVRegs)
                         {
                             if (vReg.Traceability != CppTraceabilityEnum.NotTraced)
                             {
                                 depSet.AddTypeSpecDependencies(vReg.VType.TypeSpec, true);
-                                localsWriter.Write("\t\t");
+                                localClusterWriter.Write("\t\t");
                                 if (vReg.VType.TypeSpec.UsesAnyGenericParams)
-                                    localsWriter.Write("typename ");
+                                    localClusterWriter.Write("typename ");
 
                                 if (vReg.Traceability != CppTraceabilityEnum.MaybeTraced)
                                     compileTimeEvaluateTrace = false;
@@ -97,128 +125,150 @@ namespace AssemblyImporter.CppExport
                                 switch (vReg.VType.ValType)
                                 {
                                     case VType.ValTypeEnum.AnchoredManagedPtr:
-                                        localsWriter.Write("::CLRVM::TAnchoredManagedPtrLocal< ");
+                                        localClusterWriter.Write("::CLRVM::TAnchoredManagedPtrLocal< ");
                                         break;
                                     case VType.ValTypeEnum.LocalManagedPtr:
-                                        localsWriter.Write("::CLRVM::TLocalManagedPtrLocal< ");
+                                        localClusterWriter.Write("::CLRVM::TLocalManagedPtrLocal< ");
                                         break;
                                     case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                                        localsWriter.Write("::CLRVM::TMaybeAnchoredManagedPtrLocal< ");
+                                        localClusterWriter.Write("::CLRVM::TMaybeAnchoredManagedPtrLocal< ");
                                         break;
                                     case VType.ValTypeEnum.ValueValue:
-                                        localsWriter.Write("::CLRVM::TValLocal< ");
+                                        localClusterWriter.Write("::CLRVM::TValLocal< ");
                                         break;
                                     case VType.ValTypeEnum.NotNullReferenceValue:
                                     case VType.ValTypeEnum.NullableReferenceValue:
-                                        localsWriter.Write("::CLRVM::TRefLocal< ");
+                                        localClusterWriter.Write("::CLRVM::TRefLocal< ");
                                         break;
                                     default:
                                         throw new ArgumentException();
                                 }
-                                localsWriter.Write("::CLRVM::ELocalType::");
-                                localsWriter.Write(vReg.Usage.ToString());
-                                localsWriter.Write(", ");
-                                localsWriter.Write(m_builder.SpecToAmbiguousStorage(vReg.VType.TypeSpec));
-                                localsWriter.Write(" >::Type ");
-                                localsWriter.Write(vReg.BasicName);
-                                localsWriter.WriteLine(";");
+                                localClusterWriter.Write("::CLRVM::ELocalType::");
+                                localClusterWriter.Write(vReg.Usage.ToString());
+                                localClusterWriter.Write(", ");
+                                localClusterWriter.Write(m_builder.SpecToAmbiguousStorage(vReg.VType.TypeSpec));
+                                localClusterWriter.Write(" >::Type ");
+                                localClusterWriter.Write(vReg.BasicName);
+                                localClusterWriter.WriteLine(";");
                             }
                         }
 
                         // Emit tracing flag
-                        localsWriter.WriteLine("\t\tenum");
-                        localsWriter.WriteLine("\t\t{");
-                        localsWriter.Write("\t\t\tIsTraceable = ");
+                        localClusterWriter.WriteLine("\t\tenum");
+                        localClusterWriter.WriteLine("\t\t{");
+                        localClusterWriter.Write("\t\t\tIsTraceable = ");
                         if (compileTimeEvaluateTrace)
                         {
                             bool first = true;
-                            localsWriter.WriteLine("(");
+                            localClusterWriter.WriteLine("(");
                             foreach (VReg vReg in allVRegs)
                             {
                                 if (vReg.Traceability == CppTraceabilityEnum.MaybeTraced)
                                 {
-                                    localsWriter.Write("\t\t\t\t");
+                                    localClusterWriter.Write("\t\t\t\t");
                                     if (first)
                                         first = false;
                                     else
-                                        localsWriter.Write("|| ");
+                                        localClusterWriter.Write("|| ");
 
-                                    localsWriter.Write("(");
-                                    localsWriter.Write("::CLRTI::TypeTraits< ");
-                                    localsWriter.Write(m_builder.SpecToAmbiguousStorage(vReg.VType.TypeSpec));
-                                    localsWriter.Write(" >::IsValueTraceable != 0");
-                                    localsWriter.WriteLine(")");
+                                    localClusterWriter.Write("(");
+                                    localClusterWriter.Write("::CLRTI::TypeTraits< ");
+                                    localClusterWriter.Write(m_builder.SpecToAmbiguousStorage(vReg.VType.TypeSpec));
+                                    localClusterWriter.Write(" >::IsValueTraceable != 0");
+                                    localClusterWriter.WriteLine(")");
                                 }
                             }
-                            localsWriter.WriteLine("\t\t\t) ? 1 : 0;");
+                            localClusterWriter.WriteLine("\t\t\t) ? 1 : 0;");
                         }
                         else
-                            localsWriter.WriteLine("1");
-                        localsWriter.WriteLine("\t\t};");
+                            localClusterWriter.WriteLine("1");
+                        localClusterWriter.WriteLine("\t\t};");
 
                         // Emit visitor callback
-                        localsWriter.WriteLine("\t\tvoid VisitReferences(::CLRExec::IRefVisitor &visitor)");
-                        localsWriter.WriteLine("\t\t{");
+                        localClusterWriter.WriteLine("\t\tvoid VisitReferences(::CLRExec::IRefVisitor &visitor)");
+                        localClusterWriter.WriteLine("\t\t{");
                         foreach (VReg vReg in allVRegs)
                         {
                             if (vReg.Traceability != CppTraceabilityEnum.NotTraced)
                             {
                                 depSet.AddTypeSpecDependencies(vReg.VType.TypeSpec, true);
-                                localsWriter.Write("\t\t\t");
+                                localClusterWriter.Write("\t\t\t");
 
                                 if (vReg.Traceability != CppTraceabilityEnum.MaybeTraced)
                                     compileTimeEvaluateTrace = false;
 
-                                localsWriter.Write("::CLRVM::LocalTracerFuncs< ::CLRVM::ELocalType::");
-                                localsWriter.Write(vReg.Usage.ToString());
-                                localsWriter.Write(", ");
-                                localsWriter.Write(m_builder.SpecToAmbiguousStorage(vReg.VType.TypeSpec));
-                                localsWriter.Write(" >");
+                                localClusterWriter.Write("::CLRVM::LocalTracerFuncs< ::CLRVM::ELocalType::");
+                                localClusterWriter.Write(vReg.Usage.ToString());
+                                localClusterWriter.Write(", ");
+                                localClusterWriter.Write(m_builder.SpecToAmbiguousStorage(vReg.VType.TypeSpec));
+                                localClusterWriter.Write(" >");
 
                                 switch (vReg.VType.ValType)
                                 {
                                     case VType.ValTypeEnum.AnchoredManagedPtr:
-                                        localsWriter.Write("::TraceAnchoredManagedPtrLocal");
+                                        localClusterWriter.Write("::TraceAnchoredManagedPtrLocal");
                                         break;
                                     case VType.ValTypeEnum.LocalManagedPtr:
-                                        localsWriter.Write("::TraceLocalManagedPtrLocal");
+                                        localClusterWriter.Write("::TraceLocalManagedPtrLocal");
                                         break;
                                     case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                                        localsWriter.Write("::TraceMaybeAnchoredManagedPtrLocal");
+                                        localClusterWriter.Write("::TraceMaybeAnchoredManagedPtrLocal");
                                         break;
                                     case VType.ValTypeEnum.ValueValue:
-                                        localsWriter.Write("::TraceValLocal");
+                                        localClusterWriter.Write("::TraceValLocal");
                                         break;
                                     case VType.ValTypeEnum.NotNullReferenceValue:
                                     case VType.ValTypeEnum.NullableReferenceValue:
-                                        localsWriter.Write("::TraceRefLocal");
+                                        localClusterWriter.Write("::TraceRefLocal");
                                         break;
                                     default:
                                         throw new ArgumentException();
                                 }
 
-                                localsWriter.Write("(visitor, this->");
-                                localsWriter.Write(vReg.BasicName);
-                                localsWriter.WriteLine(");");
+                                localClusterWriter.Write("(visitor, this->");
+                                localClusterWriter.Write(vReg.BasicName);
+                                localClusterWriter.WriteLine(");");
                             }
                         }
 
-                        localsWriter.WriteLine("\t\t}");
+                        localClusterWriter.WriteLine("\t\t}");
+                        localClusterWriter.WriteLine("\t};");
+                        localClusterWriter.WriteLine("}");
+                        localClusterWriter.WriteLine("}");
 
 
-                        localsWriter.WriteLine("\t};");
-                        localsWriter.WriteLine("\tbTracedLocalsStruct bTracedLocals;");
+                        localsWriter.Write("\t::CLRX::bLocalClusters::bLocalCluster_");
+                        localsWriter.Write(localClusterMangle);
+                        CppBuilder.WriteTemplateDualParamCluster(true, m_cls.NumGenericParameters, m_method.NumGenericParameters, "T", "M", localsWriter);
+                        localsWriter.WriteLine(" bTracedLocals;");
 
                         if (compileTimeEvaluateTrace)
-                            localsWriter.WriteLine("\tconst ::CLRExec::TMaybeTracingLocalFrame<bTracedLocalsStruct>::Type bTLFrame = ::CLRVM::DisambiguateTLFrame<bTracedLocalsStruct>(frame, bTracedLocals);");
+                        {
+                            localsWriter.Write("\tconst ::CLRExec::TMaybeTracingLocalFrame< ::CLRX::bLocalClusters::bLocalCluster_");
+                            localsWriter.Write(localClusterMangle);
+                            CppBuilder.WriteTemplateDualParamCluster(true, m_cls.NumGenericParameters, m_method.NumGenericParameters, "T", "M", localsWriter);
+                            localsWriter.WriteLine(" >::Type bTLFrame = ::CLRVM::DisambiguateTLFrame<bTracedLocalsStruct>(frame, bTracedLocals);");
+                        }
                         else
-                            localsWriter.WriteLine("\tconst ::CLRExec::TracingLocalFrame<bTracedLocalsStruct> bTLFrame(frame, bTracedLocals);");
+                        {
+                            localsWriter.Write("\tconst ::CLRExec::TracingLocalFrame< ::CLRX::bLocalClusters::bLocalCluster_");
+                            localsWriter.Write(localClusterMangle);
+                            CppBuilder.WriteTemplateDualParamCluster(true, m_cls.NumGenericParameters, m_method.NumGenericParameters, "T", "M", localsWriter);
+                            localsWriter.WriteLine(" > bTLFrame(frame, bTracedLocals);");
+                        }
                     }
                     else
-                        localsWriter.WriteLine("\tconst ::CLRExec::Frame<bTracedLocalsStruct> &bTLFrame = frame;");
+                        localsWriter.WriteLine("\tconst ::CLRExec::Frame &bTLFrame = frame;");
 
                     localsWriter.Flush();
                     localsStream.WriteTo(baseStream);
+
+                    if (haveAnyTraced)
+                    {
+                        localClusterWriter.Flush();
+                        localClusterTempStream.WriteTo(localClusterStream);
+                        localClusterWriter.Dispose();
+                    }
                 }
             }
 

@@ -245,28 +245,32 @@ namespace AssemblyImporter.CppExport
 
                 for (int i = 1; i < path.Length - 1; i++)
                     writer.WriteLine("}");
-                writer.Write("template<");
+                writer.WriteLine();
+                writer.WriteLine("namespace CLRTI");
+                writer.WriteLine("{");
+                writer.Write("\ttemplate<");
                 WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
 
                 writer.WriteLine(">");
-                writer.Write("struct ::CLRTI::TypeProtoTraits<");
+                writer.Write("\tstruct TypeProtoTraits< ");
                 writer.Write(classCppName);
                 WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
 
                 writer.WriteLine(" >");
-                writer.WriteLine("{");
-
-                writer.WriteLine("\tenum");
                 writer.WriteLine("\t{");
-                writer.WriteLine("\t\tIsValueType = " + (cls.IsValueType ? "1" : "0") + ",");
-                writer.WriteLine("\t\tIsInterface = " + ((cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Interface) ? "1" : "0") + ",");
-                writer.WriteLine("\t\tIsDelegate = " + (cls.IsDelegate ? "1" : "0") + ",");
-                writer.WriteLine("\t\tIsMulticastDelegate = " + (cls.IsMulticastDelegate ? "1" : "0") + ",");
-                writer.WriteLine("\t\tIsEnum = " + (cls.IsEnum ? "1" : "0") + ",");
-                writer.WriteLine("\t\tIsArray = 0,");
-                writer.WriteLine("\t};");
 
-                writer.WriteLine("};");
+                writer.WriteLine("\t\tenum");
+                writer.WriteLine("\t\t{");
+                writer.WriteLine("\t\t\tIsValueType = " + (cls.IsValueType ? "1" : "0") + ",");
+                writer.WriteLine("\t\t\tIsInterface = " + ((cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Interface) ? "1" : "0") + ",");
+                writer.WriteLine("\t\t\tIsDelegate = " + (cls.IsDelegate ? "1" : "0") + ",");
+                writer.WriteLine("\t\t\tIsMulticastDelegate = " + (cls.IsMulticastDelegate ? "1" : "0") + ",");
+                writer.WriteLine("\t\t\tIsEnum = " + (cls.IsEnum ? "1" : "0") + ",");
+                writer.WriteLine("\t\t\tIsArray = 0,");
+                writer.WriteLine("\t\t\tIsReferenceArray = 0,");
+                writer.WriteLine("\t\t};");
+                writer.WriteLine("\t};");
+                writer.WriteLine("}");
 
                 writer.WriteLine("#endif");
             }
@@ -274,7 +278,7 @@ namespace AssemblyImporter.CppExport
 
         private static string MakeRefName(string name, bool usesGenericParams)
         {
-            string result = "::CLRUtil::TRef<" + name + " >::Type";
+            string result = "::CLRVM::TRefValue< " + name + " >::Type";
             if (usesGenericParams)
                 result = "typename " + result;
             return result;
@@ -282,7 +286,7 @@ namespace AssemblyImporter.CppExport
 
         private static string MakeValueName(string name, bool usesGenericParams)
         {
-            string result = "::CLRVM::TValValue<" + name + " >::Type";
+            string result = "::CLRVM::TValValue< " + name + " >::Type";
             if (usesGenericParams)
                 result = "typename " + result;
             return result;
@@ -340,7 +344,7 @@ namespace AssemblyImporter.CppExport
             {
                 CLRTypeSpecGenericInstantiation gi = (CLRTypeSpecGenericInstantiation)ts;
                 string name = SpecToClassName(gi.GenericType);
-                name += " <";
+                name += "< ";
                 for (int i = 0; i < gi.ArgTypes.Length; i++)
                 {
                     if (i != 0)
@@ -364,7 +368,8 @@ namespace AssemblyImporter.CppExport
             }
             else if (ts is CLRTypeSpecVarOrMVar)
             {
-                return prefix + SpecToClassName(ts);
+                // C++ does not allow typename followed by a template parameter
+                return SpecToClassName(ts);
             }
             else
                 throw new ArgumentException();
@@ -700,7 +705,7 @@ namespace AssemblyImporter.CppExport
 
                 if (param.TypeOfType == CLRSigParamOrRetType.TypeOfTypeEnum.ByRef)
                 {
-                    writer.Write("typename ::CLRUtil::TRefParameter<");
+                    writer.Write("typename ::CLRUtil::TRefParameter< ");
                     writer.Write(SpecToValueType(param.Type));
                     writer.Write(" >::Type dgparam" + i.ToString());
                 }
@@ -715,7 +720,6 @@ namespace AssemblyImporter.CppExport
                 else
                     throw new NotSupportedException("Unsupported method parameter type");
             }
-
 
             writer.Write(")");
 
@@ -750,7 +754,7 @@ namespace AssemblyImporter.CppExport
                         writer.Write("\t\t\t");
                         writer.Write(SpecToValueType(param.Type));
                         writer.WriteLine(" dgparam" + i.ToString() + ";");
-                        writer.WriteLine("\t\t\t::CLRUtil::ConvertDelegateParam<P" + i.ToString() + ", " + SpecToClassName(param.Type) + ">(dgparam" + i.ToString() + ", param" + i.ToString() + ");");
+                        writer.WriteLine("\t\t\t::CLRUtil::DelegateVarianceConverter<P" + i.ToString() + ", " + SpecToClassName(param.Type) + ">::Convert(dgparam" + i.ToString() + ", param" + i.ToString() + ");");
                         depSet.AddTypeSpecDependencies(param.Type, true);
                     }
                     else
@@ -764,12 +768,12 @@ namespace AssemblyImporter.CppExport
 
                 if (!isStatic)
                 {
-                    writer.Write("(::CLRUtil::ConvertDelegateTarget<");
+                    writer.Write("(::CLRUtil::DelegateTargetConverter< ");
                     writer.Write(cls.GenerateCppClassName());
                     depSet.AddTypeSpecDependencies(new CLRTypeSpecClass(cls.TypeDef), true);
                     if (cls.NumGenericParameters > 0)
                     {
-                        writer.Write("<");
+                        writer.Write("< ");
                         for (int i = 0; i < cls.NumGenericParameters; i++)
                         {
                             if (i != 0)
@@ -779,21 +783,21 @@ namespace AssemblyImporter.CppExport
                         writer.Write(" >");
                     }
 
-                    writer.Write(" >(dgtarget))->");
+                    writer.Write(" >::FromTarget(dgtarget))->");
                 }
 
                 writer.Write(funcName);
 
                 if (numMethodGenericParams > 0)
                 {
-                    writer.Write("<");
+                    writer.Write("< ");
                     for (uint i = 0; i < numMethodGenericParams; i++)
                     {
                         if (i != 0)
                             writer.Write(", ");
                         writer.Write("M" + i.ToString());
                     }
-                    writer.Write(">");
+                    writer.Write(" >");
                 }
 
                 writer.Write("(frame");
@@ -805,7 +809,11 @@ namespace AssemblyImporter.CppExport
                 writer.WriteLine(");");
 
                 if (haveRP)
-                    writer.WriteLine("\t\t\treturn ::CLRUtil::ConvertDelegateReturn<PR>(dgreturnValue);");
+                {
+                    writer.Write("\t\t\treturn ::CLRUtil::DelegateVarianceConverter< ");
+                    writer.Write(SpecToAmbiguousStorage(sig.RetType));
+                    writer.Write(", PR>::Convert(dgreturnValue);");
+                }
 
                 writer.WriteLine("\t\t}");
             }
@@ -1024,29 +1032,31 @@ namespace AssemblyImporter.CppExport
 
                     if (mappingType == InterfaceConstraintMappingType.GenericConstraint)
                     {
-                        writer.Write("template<");
+                        writer.WriteLine("namespace CLRUtil");
+                        writer.WriteLine("{");
+                        writer.Write("\ttemplate<");
                         WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
 
                         writer.WriteLine(" >");
 
-                        writer.Write("struct ::CLRUtil::ConstrainedInterfaceBindingGlue<");
+                        writer.Write("\tstruct ::CLRUtil::ConstrainedInterfaceBindingGlue<");
                         writer.Write(cls.GenerateCppClassName());
                         WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
                         writer.Write(",");
                         writer.Write(SpecToClassName(conv));
                         writer.WriteLine(" >");
-                        writer.WriteLine("{");
-                        writer.Write("\t\t::CLRUtil::ConstrainedVtableGlue<");
+                        writer.WriteLine("\t{");
+                        writer.Write("\t\t\t::CLRUtil::ConstrainedVtableGlue< ");
                         writer.Write(cls.GenerateCppClassName());
                         WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
                         writer.WriteLine(" > bGlue;");
-                        writer.Write("\t\tCLARITY_FORCEINLINE explicit ConstrainedInterfaceBindingGlue(");
+                        writer.Write("\t\t\tCLARITY_FORCEINLINE explicit ConstrainedInterfaceBindingGlue(");
                         writer.Write(cls.GenerateCppClassName());
                         WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
                         writer.WriteLine("* bPtr)");
-                        writer.WriteLine("\t\t\t: bGlue(bPtr)");
-                        writer.WriteLine("\t\t{");
-                        writer.WriteLine("\t\t}");
+                        writer.WriteLine("\t\t\t\t: bGlue(bPtr)");
+                        writer.WriteLine("\t\t\t{");
+                        writer.WriteLine("\t\t\t}");
                     }
 
                     foreach (CppMethod method in ifcClass.Methods)
@@ -1093,7 +1103,10 @@ namespace AssemblyImporter.CppExport
                     }
 
                     if (mappingType == InterfaceConstraintMappingType.GenericConstraint)
-                        writer.WriteLine("};");
+                    {
+                        writer.WriteLine("\t};");
+                        writer.WriteLine("}");
+                    }
                 }
 
                 if (boundImpls.Count > 0)
@@ -1290,10 +1303,22 @@ namespace AssemblyImporter.CppExport
             }
         }
 
+        public static void WriteTemplateDualParamCluster(bool conditionalBrackets, int numTypeParameters, int numMethodParameters, string typePrefix, string methodPrefix, StreamWriter writer)
+        {
+            if (conditionalBrackets && numTypeParameters + numMethodParameters > 0)
+                writer.Write("< ");
+            WriteTemplateParamCluster(false, numTypeParameters, typePrefix, writer);
+            if (numMethodParameters > 0 && numTypeParameters > 0)
+                writer.Write(", ");
+            WriteTemplateParamCluster(false, numMethodParameters, methodPrefix, writer);
+            if (conditionalBrackets && numTypeParameters + numMethodParameters > 0)
+                writer.Write(" >");
+        }
+
         public static void WriteTemplateParamCluster(bool conditionalBrackets, int numParameters, string prefix, StreamWriter writer)
         {
             if (conditionalBrackets && numParameters > 0)
-                writer.Write("<");
+                writer.Write("< ");
             for (int i = 0; i < numParameters; i++)
             {
                 if (i != 0)
@@ -1302,8 +1327,7 @@ namespace AssemblyImporter.CppExport
                 writer.Write(i.ToString());
             }
             if (conditionalBrackets && numParameters > 0)
-                writer.Write(">");
-
+                writer.Write(" >");
         }
 
         public static bool TypeSpecIsVoid(CLRTypeSpec ts)
@@ -1363,12 +1387,14 @@ namespace AssemblyImporter.CppExport
                         writer.Write(CppClass.GenerateDefinitionPathForFullName(parentType));
                         writer.WriteLine("\"");
                     }
-                    writer.WriteLine("");
-                    writer.Write("template<");
+                    writer.WriteLine();
+                    writer.WriteLine("namespace CLRUtil");
+                    writer.WriteLine("{");
+                    writer.Write("\ttemplate< ");
                     WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
-                    writer.WriteLine(">");
+                    writer.WriteLine(" >");
 
-                    writer.Write("struct ::CLRUtil::Boxed<");
+                    writer.Write("\tstruct Boxed< ");
                     writer.Write(classCppName);
                     WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
                     writer.WriteLine(" >");
@@ -1376,8 +1402,8 @@ namespace AssemblyImporter.CppExport
                     foreach (CLRTypeSpec ifc in cls.NewlyImplementedInterfaces)
                         writer.WriteLine("\t, public " + SpecToClassName(ifc));
                     //AddTypeSpecDependencies(cls.ParentTypeSpec, depSet, true, true);
-                    writer.WriteLine("{");
-                    writer.Write("\t");
+                    writer.WriteLine("\t{");
+                    writer.Write("\t\t");
 
                     if (cls.NumGenericParameters > 0)
                         writer.Write("typename ");
@@ -1400,7 +1426,7 @@ namespace AssemblyImporter.CppExport
                         string methodName = method.GenerateCallName();
 
                         // Write new methods
-                        writer.Write("\t");
+                        writer.Write("\t\t");
                         writer.Write(SpecToValueType(method.MethodSignature.RetType));
                         writer.Write(" " + methodName);
                         WriteMethodParameters(writer, null, null, method.MethodSignature, MethodParameterMapping.ClassImpl);
@@ -1412,27 +1438,37 @@ namespace AssemblyImporter.CppExport
                     // CLARITYTODO: Overrides in value types are always final, but may not be emitted as such
                     WriteVtableThunks(cls, writer, VtableThunkMappingType.ClassImpl, depSet, true, true);
                     WriteInterfaceImplementations(cls, writer, InterfaceConstraintMappingType.ClassImpl, true, true);
-                    writer.WriteLine("};");
+                    writer.WriteLine("\t};");
+                    writer.WriteLine("}");
 
                     // Write baseline vtable bindings
-                    writer.Write("template<");
+                    writer.WriteLine("namespace CLRUtil");
+                    writer.WriteLine("{");
+                    writer.Write("\ttemplate<");
                     WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
                     writer.WriteLine(" >");
 
-                    writer.Write("struct ::CLRUtil::ConstrainedVtableGlue<");
+                    writer.Write("\tstruct ::CLRUtil::ConstrainedVtableGlue< ");
                     writer.Write(cls.GenerateCppClassName());
                     WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
                     writer.WriteLine(" >");
-                    writer.WriteLine("{");
-                    writer.WriteLine("private:");
-                    writer.WriteLine("\t\t" + cls.GenerateCppClassName() + "* bGluePtr;");
-                    writer.WriteLine("public:");
-                    writer.WriteLine("\t\tCLARITY_FORCEINLINE explicit ConstrainedVtableGlue(" + cls.GenerateCppClassName() + "* pPtr)");
-                    writer.WriteLine("\t\t\t: bGluePtr(pPtr)");
-                    writer.WriteLine("\t\t{");
-                    writer.WriteLine("\t\t}");
+                    writer.WriteLine("\t{");
+                    writer.WriteLine("\tprivate:");
+                    writer.Write("\t\t\t");
+                    writer.Write(cls.GenerateCppClassName());
+                    WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                    writer.WriteLine("* bGluePtr;");
+                    writer.WriteLine("\tpublic:");
+                    writer.Write("\t\t\tCLARITY_FORCEINLINE explicit ConstrainedVtableGlue(");
+                    writer.Write(cls.GenerateCppClassName());
+                    WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                    writer.WriteLine("* pPtr)");
+                    writer.WriteLine("\t\t\t\t: bGluePtr(pPtr)");
+                    writer.WriteLine("\t\t\t{");
+                    writer.WriteLine("\t\t\t}");
                     WriteVtableThunks(cls, writer, VtableThunkMappingType.StructGlue, depSet, true, true);
-                    writer.WriteLine("};");
+                    writer.WriteLine("\t};");
+                    writer.WriteLine("}");
 
                     // Write interface constraint mappings
                     writer.WriteLine("// interface constraint mappings");
@@ -1469,7 +1505,7 @@ namespace AssemblyImporter.CppExport
                             writer.Write("\tinline ");
                             writer.Write(SpecToValueType(method.MethodSignature.RetType));
                             writer.Write(" ");
-                            writer.Write("(::CLRUtil::Boxed<");
+                            writer.Write("(::CLRUtil::Boxed< ");
                             writer.Write(contentName);
                             writer.Write(" >::mcall_");
                             writer.Write(methodName);
@@ -1609,7 +1645,8 @@ namespace AssemblyImporter.CppExport
                     {
                         if (!method.Abstract && method.MethodDef.Method != null)
                         {
-                            CppCilExporter.WriteMethodCode(this, cls, method, writer, depSet, exportInline);
+                            writer.Flush();
+                            CppCilExporter.WriteMethodCode(this, cls, method, writer.BaseStream, depSet, exportInline);
                         }
                     }
                 }
@@ -1848,31 +1885,36 @@ namespace AssemblyImporter.CppExport
                     if (cls.IsValueType)
                     {
                         writer.WriteLine();
-                        writer.Write("template<");
+                        writer.WriteLine("namespace CLRUtil");
+                        writer.WriteLine("{");
+                        writer.Write("\ttemplate<");
                         WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
                         writer.WriteLine(">");
-                        writer.Write("struct ::CLRUtil::Boxed< ");
+                        writer.Write("\tstruct Boxed< ");
                         writer.Write(classCppName);
                         WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
                         writer.WriteLine(" >;");
+                        writer.WriteLine("}");
                         writer.WriteLine();
                     }
 
                     // Write type traits
                     {
-                        writer.Write("template<");
+                        writer.WriteLine("namespace CLRTI");
+                        writer.WriteLine("{");
+                        writer.Write("\ttemplate<");
                         WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
 
                         writer.WriteLine(">");
-                        writer.Write("struct ::CLRTI::TypeTraits< ");
+                        writer.Write("\tstruct TypeTraits< ");
                         writer.Write(classCppName);
                         WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
 
                         writer.WriteLine(" >");
-                        writer.WriteLine("{");
-
-                        writer.WriteLine("\tenum");
                         writer.WriteLine("\t{");
+
+                        writer.WriteLine("\t\tenum");
+                        writer.WriteLine("\t\t{");
 
                         if (cls.IsValueType)
                         {
@@ -1880,12 +1922,12 @@ namespace AssemblyImporter.CppExport
                             CppTraceabilityEnum traceability = GetCachedTraceability(instanceSpec);
 
                             if (traceability == CppTraceabilityEnum.NotTraced)
-                                writer.WriteLine("\t\tIsValueTraceable = 0,");
+                                writer.WriteLine("\t\t\tIsValueTraceable = 0,");
                             else if (traceability == CppTraceabilityEnum.DefinitelyTraced)
-                                writer.WriteLine("\t\tIsValueTraceable = 1,");
+                                writer.WriteLine("\t\t\tIsValueTraceable = 1,");
                             else if (traceability == CppTraceabilityEnum.MaybeTraced)
                             {
-                                writer.WriteLine("\t\tIsValueTraceable = ((");
+                                writer.WriteLine("\t\t\tIsValueTraceable = ((");
                                 bool first = true;
                                 foreach (CppField field in cls.Fields)
                                 {
@@ -1895,7 +1937,7 @@ namespace AssemblyImporter.CppExport
                                     CppTraceabilityEnum fieldTraceability = GetCachedTraceability(field.Type);
                                     if (fieldTraceability == CppTraceabilityEnum.MaybeTraced)
                                     {
-                                        writer.Write("\t\t\t");
+                                        writer.Write("\t\t\t\t");
                                         if (first)
                                             first = false;
                                         else
@@ -1906,15 +1948,16 @@ namespace AssemblyImporter.CppExport
                                         writer.WriteLine(" >::IsValueTraceable != 0)");
                                     }
                                 }
-                                writer.WriteLine("\t\t) ? 1 : 0),");
+                                writer.WriteLine("\t\t\t) ? 1 : 0),");
                             }
                         }
                         else
-                            writer.WriteLine("\t\tIsValueTraceable = 1,");
+                            writer.WriteLine("\t\t\tIsValueTraceable = 1,");
+
+                        writer.WriteLine("\t\t};");
 
                         writer.WriteLine("\t};");
-
-                        writer.WriteLine("};");
+                        writer.WriteLine("}");
                         writer.WriteLine();
                     }
                 }
