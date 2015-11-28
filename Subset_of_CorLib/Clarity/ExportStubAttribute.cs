@@ -2,7 +2,7 @@
 
 namespace Clarity
 {
-    [AttributeUsage(AttributeTargets.Field)]
+    [AttributeUsage(AttributeTargets.Class)]
     internal sealed class ExportStubAttribute : Attribute
     {
         public ExportStubAttribute(string sourcePath)
