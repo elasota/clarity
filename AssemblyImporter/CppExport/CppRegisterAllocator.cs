@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using AssemblyImporter.CLR;
 
 namespace AssemblyImporter.CppExport
 {
@@ -10,8 +11,17 @@ namespace AssemblyImporter.CppExport
         private int m_cfgID;
         private Dictionary<CfgNode, int> m_cfgNodeIDs;
         private CppBuilder m_builder;
+        private List<CLR.CLRTypeSpec> m_staticInitTokens;
 
         public IEnumerable<VReg> AllRegisters { get { return m_registers; } }
+
+        public int NumStaticTokens
+        {
+            get
+            {
+                return m_staticInitTokens.Count;
+            }
+        }
 
         public CppRegisterAllocator(CppBuilder builder)
         {
@@ -19,6 +29,7 @@ namespace AssemblyImporter.CppExport
             m_ssaID = 1;
             m_cfgNodeIDs = new Dictionary<CfgNode, int>();
             m_builder = builder;
+            m_staticInitTokens = new List<CLR.CLRTypeSpec>();
         }
 
         public int NewSsaID()
@@ -138,6 +149,22 @@ namespace AssemblyImporter.CppExport
             }
 
             return regs.ToArray();
+        }
+
+        public int AllocStaticToken(CLRTypeSpec typeSpecArg)
+        {
+            for (int i = 0; i < m_staticInitTokens.Count; i++)
+            {
+                if (m_staticInitTokens[i].Equals(typeSpecArg))
+                    return i;
+            }
+            m_staticInitTokens.Add(typeSpecArg);
+            return m_staticInitTokens.Count - 1;
+        }
+
+        public CLRTypeSpec GetStaticToken(int index)
+        {
+            return m_staticInitTokens[index];
         }
     }
 }

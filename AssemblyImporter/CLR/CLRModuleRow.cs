@@ -2,10 +2,13 @@
 
 namespace AssemblyImporter.CLR
 {
-    public class CLRModuleRow : CLRTableRow
+    public class CLRModuleRow : CLRTableRow, ICLRHasCustomAttributes
     {
         public string Name { get; private set; }
         public CLRGuid Mvid { get; private set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

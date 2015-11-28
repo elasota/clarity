@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace AssemblyImporter.CLR
 {
-    public class CLRTypeDefRow : CLRTableRow
+    public class CLRTypeDefRow : CLRTableRow, ICLRHasCustomAttributes
     {
         public enum TypeVisibility
         {
@@ -69,6 +69,9 @@ namespace AssemblyImporter.CLR
         private List<CLRTypeDefRow> m_childClasses;
         private List<CLRTableRow> m_implementedInterfaces;
         private List<CLRMethodImplRow> m_methodImpls;
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

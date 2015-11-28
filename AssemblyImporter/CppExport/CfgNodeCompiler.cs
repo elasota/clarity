@@ -95,45 +95,6 @@ namespace AssemblyImporter.CppExport
             throw new ArgumentException();
         }
 
-        private CppMethodSpec ResolveMethod(CLRTableRow tableRow)
-        {
-            if (tableRow is CLRMethodDefRow)
-            {
-                CLRMethodDefRow methodDef = (CLRMethodDefRow)tableRow;
-
-                return new CppMethodSpec(new CppMethod(m_cppBuilder.Assemblies, methodDef.Owner, methodDef));
-            }
-            if (tableRow is CLRMemberRefRow)
-            {
-                CLRMemberRefRow memberRef = (CLRMemberRefRow)tableRow;
-                CLRTypeSpec declaredIn = m_cppBuilder.ResolveTypeDefOrRefOrSpec(memberRef.Class);
-
-                if (declaredIn is CLRTypeSpecComplexArray)
-                    throw new NotImplementedException();
-
-                CppClass cachedClass = m_cppBuilder.GetCachedClass(declaredIn);
-
-                CLRMethodSignatureInstance sig = new CLRMethodSignatureInstance(m_cppBuilder.Assemblies, memberRef.MethodSig);
-
-                foreach (CppMethod method in cachedClass.Methods)
-                {
-                    if (method.Name == memberRef.Name && method.DeclaredMethodSignature.Equals(sig))
-                        return new CppMethodSpec(method);
-                }
-                throw new ParseFailedException("Unresolved method reference");
-            }
-            if (tableRow is CLRMethodSpecRow)
-            {
-                CLRMethodSpecRow methodSpec = (CLRMethodSpecRow)tableRow;
-                CppMethod method = ResolveMethod(methodSpec.Method).CppMethod;
-                List<CLRTypeSpec> types = new List<CLRTypeSpec>();
-                foreach (CLRSigType type in methodSpec.Instantiation.Types)
-                    types.Add(m_cppBuilder.Assemblies.InternVagueType(type));
-                return new CppMethodSpec(method, types.ToArray());
-            }
-            throw new ArgumentException();
-        }
-
         public CLRTypeSpec ArithConvergeValues(CLRTypeSpec ts1, CLRTypeSpec ts2)
         {
             // Both are value types, so these must converge
@@ -454,7 +415,7 @@ namespace AssemblyImporter.CppExport
                         break;
                     case CLR.CIL.HLOpcode.newobj:
                         {
-                            CppMethodSpec ctorMethodSpec = ResolveMethod((CLRTableRow)instr.Arguments.ObjValue);
+                            CppMethodSpec ctorMethodSpec = CppBuilder.ResolveMethodDefOrRef((CLRTableRow)instr.Arguments.ObjValue);
 
                             if (ctorMethodSpec.GenericParameters != null)
                                 throw new ArgumentException();
@@ -607,7 +568,7 @@ namespace AssemblyImporter.CppExport
                                     constraintType = m_cppBuilder.Assemblies.InternTypeDefOrRefOrSpec((CLRTableRow)prevInstr.Arguments.ObjValue);
                             }
 
-                            CppMethodSpec calledMethodSpec = ResolveMethod((CLRTableRow)instr.Arguments.ObjValue);
+                            CppMethodSpec calledMethodSpec = CppBuilder.ResolveMethodDefOrRef((CLRTableRow)instr.Arguments.ObjValue);
                             CppMethod calledMethod = calledMethodSpec.CppMethod;
 
                             if (!calledMethod.Virtual)
@@ -827,12 +788,12 @@ namespace AssemblyImporter.CppExport
                         {
                             SsaRegister value2 = stackTracker.Pop();
                             SsaRegister value1 = stackTracker.Pop();
-                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.I32));
+                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.Boolean));
 
                             bool isRefComparison = IsComparisonReference(value1.VType, value2.VType);
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, returnValue));
-                            midInstrs.Add(new MidInstruction(isRefComparison ? MidInstruction.OpcodeEnum.ceq_ref : MidInstruction.OpcodeEnum.ceq_val, returnValue, value1, value2, false));
+                            midInstrs.Add(new MidInstruction(isRefComparison ? MidInstruction.OpcodeEnum.ceq_ref : MidInstruction.OpcodeEnum.ceq_numeric, returnValue, value1, value2, false));
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value2));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, value1));
@@ -844,7 +805,7 @@ namespace AssemblyImporter.CppExport
                         {
                             SsaRegister value2 = stackTracker.Pop();
                             SsaRegister value1 = stackTracker.Pop();
-                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.I32));
+                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.Boolean));
 
                             // Per III.4, cgt.un is used for reference non-equality checks.
                             // For some reason there isn't a cne instruction...
@@ -863,7 +824,7 @@ namespace AssemblyImporter.CppExport
                         {
                             SsaRegister value2 = stackTracker.Pop();
                             SsaRegister value1 = stackTracker.Pop();
-                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.I32));
+                            SsaRegister returnValue = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.Boolean));
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, returnValue));
                             midInstrs.Add(new MidInstruction(SimpleTranslateInstr(instr.Opcode), returnValue, value1, value2, (instr.Flags & CLR.CIL.HLOpFlags.Un) != 0));
@@ -914,7 +875,6 @@ namespace AssemblyImporter.CppExport
                             switch (v.VType.ValType)
                             {
                                 case VType.ValTypeEnum.ConstantValue:
-                                case VType.ValTypeEnum.NullableReferenceValue:
                                 case VType.ValTypeEnum.ValueValue:
                                     if (instr.Opcode == CLR.CIL.HLOpcode.brtrue)
                                         opcode = MidInstruction.OpcodeEnum.brnotzero;
@@ -923,6 +883,7 @@ namespace AssemblyImporter.CppExport
                                     break;
                                 case VType.ValTypeEnum.ConstantReference:
                                 case VType.ValTypeEnum.Null:
+                                case VType.ValTypeEnum.NullableReferenceValue:
                                 case VType.ValTypeEnum.NotNullReferenceValue:
                                     if (instr.Opcode == CLR.CIL.HLOpcode.brtrue)
                                         opcode = MidInstruction.OpcodeEnum.brnotnull;
@@ -1134,9 +1095,8 @@ namespace AssemblyImporter.CppExport
 
                             CppField field = ResolveField((CLRTableRow)instr.Arguments.ObjValue);
                             CLRTypeSpec fieldValueSpec = field.Type;
-                            VType.ValTypeEnum valType = CppCilExporter.ValTypeForTypeSpec(m_cppBuilder, fieldValueSpec);
 
-                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreStaticField, valueReg, field.DeclaredInClassSpec, field.Name));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.StoreStaticField, valueReg, field.DeclaredInClassSpec, fieldValueSpec, field.Name));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, valueReg));
                         }
                         break;
@@ -1365,6 +1325,7 @@ namespace AssemblyImporter.CppExport
                                     destType = m_commonTypeLookup.F32;
                                     arithMode = MidInstruction.ArithEnum.ArithType_Float32;
                                     break;
+                                case CLR.CIL.HLOpType.R:    // Used by conv.r.un
                                 case CLR.CIL.HLOpType.R8:
                                     destType = m_commonTypeLookup.F64;
                                     arithMode = MidInstruction.ArithEnum.ArithType_Float64;
@@ -1389,7 +1350,7 @@ namespace AssemblyImporter.CppExport
                             SsaRegister srcReg = stackTracker.Pop();
                             SsaRegister destReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, destType));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, destReg));
-                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.ConvertNumber, srcReg, destReg));
+                            midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.ConvertNumber, srcReg, destReg, arithMode));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.KillReg, srcReg));
 
                             stackTracker.Push(destReg);
@@ -1398,7 +1359,7 @@ namespace AssemblyImporter.CppExport
                     case CLR.CIL.HLOpcode.ldlen:
                         {
                             SsaRegister arrayReg = stackTracker.Pop();
-                            SsaRegister resultReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.I32));
+                            SsaRegister resultReg = stackTracker.NewReg(new VType(VType.ValTypeEnum.ValueValue, m_commonTypeLookup.U));
 
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LivenReg, resultReg));
                             midInstrs.Add(new MidInstruction(MidInstruction.OpcodeEnum.LoadArrayLength, arrayReg, resultReg));
@@ -1422,12 +1383,12 @@ namespace AssemblyImporter.CppExport
                                 if (memberRef.FieldSig != null)
                                     fieldResolution = ResolveField(memberRef);
                                 else if (memberRef.MethodSig != null)
-                                    methodResolution = ResolveMethod(memberRef);
+                                    methodResolution = CppBuilder.ResolveMethodDefOrRef(memberRef);
                                 else
                                     throw new ArgumentException();
                             }
                             else if (tokenRow is CLRMethodDefRow)
-                                methodResolution = ResolveMethod(tokenRow);
+                                methodResolution = CppBuilder.ResolveMethodDefOrRef(tokenRow);
                             else if (tokenRow is CLRFieldRow)
                                 fieldResolution = ResolveField(tokenRow);
                             else
@@ -1520,7 +1481,7 @@ namespace AssemblyImporter.CppExport
                         break;
                     case CLR.CIL.HLOpcode.ldftn:
                         {
-                            CppMethodSpec boundMethodSpec = ResolveMethod((CLRTableRow)instr.Arguments.ObjValue);
+                            CppMethodSpec boundMethodSpec = CppBuilder.ResolveMethodDefOrRef((CLRTableRow)instr.Arguments.ObjValue);
 
                             SsaRegister ftnReg = SsaRegister.Constant(new VType(VType.ValTypeEnum.DelegateSimpleMethod, null, boundMethodSpec), boundMethodSpec);
 
@@ -1532,7 +1493,7 @@ namespace AssemblyImporter.CppExport
                         {
                             SsaRegister throwawayObjReg = stackTracker.Pop();
 
-                            CppMethodSpec boundVirtMethod = ResolveMethod((CLRTableRow)instr.Arguments.ObjValue);
+                            CppMethodSpec boundVirtMethod = CppBuilder.ResolveMethodDefOrRef((CLRTableRow)instr.Arguments.ObjValue);
                             SsaRegister ftnReg = SsaRegister.Constant(new VType(VType.ValTypeEnum.DelegateVirtualMethod, null, boundVirtMethod), boundVirtMethod);
                             stackTracker.Push(ftnReg);
 

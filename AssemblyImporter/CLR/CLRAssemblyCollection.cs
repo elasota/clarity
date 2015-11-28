@@ -98,6 +98,7 @@ namespace AssemblyImporter.CLR
                 assm.ParseCustomAttributes(this);
                 assm.ResolveInterfaceImplementations();
                 assm.ResolveMethodImplementations();
+                assm.ResolveCustomAttributes();
             }
         }
 

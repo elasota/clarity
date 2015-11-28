@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.15
-    public class CLRFieldRow : CLRTableRow, ICLROwnedBy<CLRTypeDefRow>, ICLRHasConstant
+    public class CLRFieldRow : CLRTableRow, ICLROwnedBy<CLRTypeDefRow>, ICLRHasConstant, ICLRHasCustomAttributes
     {
         public enum TypeFieldAccess
         {
@@ -32,6 +32,9 @@ namespace AssemblyImporter.CLR
         public CLRConstantRow[] AttachedConstants { get; set; }
 
         public CLRTypeDefRow Owner { get; set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

@@ -10,6 +10,9 @@ add_executable(TestApp
 	ClarityCorLibExported/tTests/tTestInterfaceOverrideCollision/tMyInterfaceC.Code.cpp
 	ClarityCorLibExported/tTests/tTestInterfaceOverrideCollision.Code.cpp
 	ClarityCorLibExported/tSystem/tObject.Code.cpp
+	ClarityCorLibNative/System_Object.cpp
+	ClarityCore/ClarityObjectManager.cpp
+	TestApp/TestApp.cpp
 )
 
 target_include_directories(TestApp PUBLIC

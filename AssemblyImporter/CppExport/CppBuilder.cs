@@ -11,13 +11,15 @@ namespace AssemblyImporter.CppExport
 
         private CLRAssemblyCollection m_assemblies;
         private string m_exportPath;
+        private string m_stubDir;
         private Dictionary<CLRTypeSpec, CppClass> m_typeSpecClasses;
         private Dictionary<string, CppClass> m_fullNameClasses;
 
-        public CppBuilder(string exportDir, CLRAssemblyCollection assemblies)
+        public CppBuilder(string exportDir, string stubDir, CLRAssemblyCollection assemblies)
         {
             m_assemblies = assemblies;
             m_exportPath = exportDir;
+            m_stubDir = stubDir;
             m_typeSpecClasses = new Dictionary<CLRTypeSpec, CppClass>();
             m_fullNameClasses = new Dictionary<string, CppClass>();
 
@@ -172,6 +174,16 @@ namespace AssemblyImporter.CppExport
             Directory.CreateDirectory(dirPath);
         }
 
+        private void ExportClassStubs(CppClass cls)
+        {
+            foreach (CLRCustomAttributeRow caRow in cls.TypeDef.CustomAttributes)
+            {
+                CLRSigCustomAttribute ca = caRow.CustomAttribute;
+                CppMethodSpec ctorSpec = ResolveMethodDefOrRef(ca.Constructor);
+                
+            }
+        }
+
         private void ExportClassBox(CppClass cls)
         {
             if (!cls.IsValueType)
@@ -200,6 +212,32 @@ namespace AssemblyImporter.CppExport
             }
         }
 
+        private static void ExportSimpleClassPrototype(StreamWriter writer, int numGenericParameters, string typeCppName)
+        {
+
+            string[] path = typeCppName.Split(new string[] { "::" }, StringSplitOptions.None);
+            for (int i = 1; i < path.Length - 1; i++)
+            {
+                writer.WriteLine("namespace " + path[i]);
+                writer.WriteLine("{");
+            }
+
+            string clsName = path[path.Length - 1];
+
+            if (numGenericParameters > 0)
+            {
+                writer.Write("\ttemplate< ");
+                WriteTemplateParamCluster(false, numGenericParameters, "class T", writer);
+                writer.WriteLine(" >");
+            }
+
+            writer.WriteLine("\tstruct " + clsName + ";");
+
+            for (int i = 1; i < path.Length - 1; i++)
+                writer.WriteLine("}");
+            writer.WriteLine();
+        }
+
         private void ExportClassPrototypes(CppClass cls)
         {
             string protoPath = cls.GeneratePrototypePath();
@@ -219,41 +257,19 @@ namespace AssemblyImporter.CppExport
                 writer.WriteLine();
                 writer.WriteLine("#include \"ClarityCore.h\"");
 
-                string classCppName = cls.GenerateCppClassName();
-                string[] path = classCppName.Split(new string[] { "::" }, StringSplitOptions.None);
-                for (int i = 1; i < path.Length - 1; i++)
-                {
-                    writer.WriteLine("namespace " + path[i]);
-                    writer.WriteLine("{");
-                }
+                string cppClassName = cls.GenerateCppClassName();
+                ExportSimpleClassPrototype(writer, cls.NumGenericParameters, cppClassName);
+                if (cls.HaveNewStaticFields)
+                    ExportSimpleClassPrototype(writer, cls.NumGenericParameters, cls.GenerateStaticCppClassName());
 
-                string clsName = path[path.Length - 1];
-
-                if (cls.NumGenericParameters > 0)
-                {
-                    writer.Write("\ttemplate<");
-                    for (int i = 0; i < cls.NumGenericParameters; i++)
-                    {
-                        if (i != 0)
-                            writer.Write(", ");
-                        writer.Write("class T" + i.ToString());
-                    }
-                    writer.WriteLine(">");
-                }
-
-                writer.WriteLine("\tstruct " + clsName + ";");
-
-                for (int i = 1; i < path.Length - 1; i++)
-                    writer.WriteLine("}");
-                writer.WriteLine();
                 writer.WriteLine("namespace CLRTI");
                 writer.WriteLine("{");
-                writer.Write("\ttemplate<");
+                writer.Write("\ttemplate< ");
                 WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
 
-                writer.WriteLine(">");
+                writer.WriteLine(" >");
                 writer.Write("\tstruct TypeProtoTraits< ");
-                writer.Write(classCppName);
+                writer.Write(cppClassName);
                 WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
 
                 writer.WriteLine(" >");
@@ -271,6 +287,7 @@ namespace AssemblyImporter.CppExport
                 writer.WriteLine("\t\t};");
                 writer.WriteLine("\t};");
                 writer.WriteLine("}");
+                writer.WriteLine();
 
                 writer.WriteLine("#endif");
             }
@@ -812,7 +829,7 @@ namespace AssemblyImporter.CppExport
                 {
                     writer.Write("\t\t\treturn ::CLRUtil::DelegateVarianceConverter< ");
                     writer.Write(SpecToAmbiguousStorage(sig.RetType));
-                    writer.Write(", PR>::Convert(dgreturnValue);");
+                    writer.WriteLine(", PR>::Convert(dgreturnValue);");
                 }
 
                 writer.WriteLine("\t\t}");
@@ -839,6 +856,45 @@ namespace AssemblyImporter.CppExport
             return m_assemblies.InternTypeDefOrRefOrSpec(tableRow);
         }
 
+        public CppMethodSpec ResolveMethodDefOrRef(CLRTableRow tableRow)
+        {
+            if (tableRow is CLRMethodDefRow)
+            {
+                CLRMethodDefRow methodDef = (CLRMethodDefRow)tableRow;
+
+                return new CppMethodSpec(new CppMethod(this.Assemblies, methodDef.Owner, methodDef));
+            }
+            if (tableRow is CLRMemberRefRow)
+            {
+                CLRMemberRefRow memberRef = (CLRMemberRefRow)tableRow;
+                CLRTypeSpec declaredIn = this.ResolveTypeDefOrRefOrSpec(memberRef.Class);
+
+                if (declaredIn is CLRTypeSpecComplexArray)
+                    throw new NotImplementedException();
+
+                CppClass cachedClass = this.GetCachedClass(declaredIn);
+
+                CLRMethodSignatureInstance sig = new CLRMethodSignatureInstance(this.Assemblies, memberRef.MethodSig);
+
+                foreach (CppMethod method in cachedClass.Methods)
+                {
+                    if (method.Name == memberRef.Name && method.DeclaredMethodSignature.Equals(sig))
+                        return new CppMethodSpec(method);
+                }
+                throw new ParseFailedException("Unresolved method reference");
+            }
+            if (tableRow is CLRMethodSpecRow)
+            {
+                CLRMethodSpecRow methodSpec = (CLRMethodSpecRow)tableRow;
+                CppMethod method = ResolveMethodDefOrRef(methodSpec.Method).CppMethod;
+                List<CLRTypeSpec> types = new List<CLRTypeSpec>();
+                foreach (CLRSigType type in methodSpec.Instantiation.Types)
+                    types.Add(this.Assemblies.InternVagueType(type));
+                return new CppMethodSpec(method, types.ToArray());
+            }
+            throw new ArgumentException();
+        }
+
         public CppVtableSlot ResolveMethodImplReference(CLRTableRow methodDecl)
         {
             if (methodDecl is CLRMethodDefRow)
@@ -847,7 +903,7 @@ namespace AssemblyImporter.CppExport
 
                 CppClass cls = GetCachedClass(CreateInstanceTypeSpec(m_assemblies, mdef.Owner));
                 CLRMethodSignatureInstance sig = new CLRMethodSignatureInstance(m_assemblies, mdef.Signature);
-                
+
                 foreach (CppMethod method in cls.Methods)
                 {
                     if (method.MethodDef == mdef)
@@ -1192,7 +1248,9 @@ namespace AssemblyImporter.CppExport
                 writer.Write("::");
             }
             writer.Write(vfuncName);
-            if (!proto)
+            if (proto)
+                depSet.AddMethodSigDependencies(slotSig, CppDependencySet.LevelEnum.Proto);
+            else
             {
                 writer.Write(")");
                 depSet.AddMethodSigDependencies(slotSig, CppDependencySet.LevelEnum.Def);
@@ -1555,6 +1613,21 @@ namespace AssemblyImporter.CppExport
 
             string inlineCodePath = cls.GenerateInlineCodePath();
 
+            bool staticNeedStaticInit;
+            bool instanceNeedStaticInit;
+
+            if (cls.TypeDef.IsBeforeFieldInit)
+            {
+                staticNeedStaticInit = instanceNeedStaticInit = false;
+            }
+            else
+            {
+                // For non-BFI classes, static constructor timing is dictated by I.8.9.5
+                // Under those, any method calls (including constructors) triggers init
+                staticNeedStaticInit = cls.HaveNewStaticFields;
+                instanceNeedStaticInit = (staticNeedStaticInit && cls.IsValueType);
+            }
+
             byte[] bodyContents;
             using (MemoryStream bodyMS = new MemoryStream())
             {
@@ -1570,6 +1643,8 @@ namespace AssemblyImporter.CppExport
                         {
                             if (!method.Abstract)
                             {
+                                bool needStaticInit = method.Static ? staticNeedStaticInit : instanceNeedStaticInit;
+
                                 string methodName = method.GenerateBaseName();
 
                                 depSet.AddMethodSigDependencies(method.MethodSignature, CppDependencySet.LevelEnum.Def);
@@ -1590,6 +1665,25 @@ namespace AssemblyImporter.CppExport
                                 WriteMethodParameters(writer, null, inlineThisType, method.MethodSignature, MethodParameterMapping.ClassImpl);
                                 writer.WriteLine();
                                 writer.WriteLine("\t{");
+
+                                if (needStaticInit)
+                                {
+                                    CLRTypeSpec staticClassSpec = CreateInstanceTypeSpec(m_assemblies, cls.TypeDef);
+                                    CppClass staticClass = cls;
+                                    while (!staticClass.HaveNewStaticFields)
+                                    {
+                                        staticClassSpec = cls.ParentTypeSpec;
+                                        staticClass = GetCachedClass(staticClassSpec);
+                                    }
+
+                                    // For the static constructor, only allocate, since InitStatics will call the cctor again
+                                    if (method.Name == ".cctor")
+                                        writer.Write("\t\t::CLRVM::AllocStatics< ");
+                                    else
+                                        writer.Write("\t\t::CLRVM::InitStatics< ");
+                                    writer.Write(SpecToAmbiguousStorage(staticClassSpec));
+                                    writer.WriteLine("\t\t >(frame);");
+                                }
 
                                 bool returnsAnything = true;
                                 if (TypeSpecIsVoid(method.MethodSignature.RetType))
@@ -1640,6 +1734,83 @@ namespace AssemblyImporter.CppExport
                         WriteInterfaceImplementations(cls, writer, InterfaceConstraintMappingType.ClassImpl, false, exportInline);
                     }
 
+                    // Export field visitor
+                    bool visitorShouldBeInline = (cls.NumGenericParameters > 0);
+
+                    if (visitorShouldBeInline == exportInline)
+                    {
+                        if (cls.IsValueType || (cls.TypeDef.Semantics != CLRTypeDefRow.TypeSemantics.Interface && ClassHasNewTraceableFields(cls)))
+                        {
+                            writer.WriteLine("// field visitor");
+
+                            if (cls.NumGenericParameters > 0)
+                            {
+                                writer.Write("template< ");
+                                WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
+                                writer.WriteLine(" >");
+                            }
+
+                            if (exportInline)
+                                writer.Write("inline ");
+
+                            writer.Write("void ");
+                            writer.Write(cls.GenerateCppClassName());
+                            WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                            writer.WriteLine("::VisitReferences(::CLRExec::IRefVisitor &visitor)");
+                            writer.WriteLine("{");
+                            if (!cls.IsValueType && cls.ParentTypeSpec != null)
+                            {
+                                writer.Write("\t");
+                                writer.Write(SpecToAmbiguousStorage(cls.ParentTypeSpec));
+                                WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                                writer.WriteLine("::VisitReferences(visitor);");
+                            }
+
+                            foreach (CppField fld in cls.Fields)
+                            {
+                                if (fld.Field.Static)
+                                    continue;
+
+                                writer.Write("\tthis->f");
+                                writer.Write(LegalizeName(fld.Name, true));
+                                writer.WriteLine(".VisitReferences(visitor);");
+                            }
+                            writer.WriteLine("}");
+                        }
+
+                        if (cls.HaveNewStaticFields)
+                        {
+                            writer.WriteLine("// static field visitor");
+
+                            if (cls.NumGenericParameters > 0)
+                            {
+                                writer.Write("template< ");
+                                WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
+                                writer.WriteLine(" >");
+                            }
+
+                            if (exportInline)
+                                writer.Write("inline ");
+
+                            writer.Write("void ");
+                            writer.Write(cls.GenerateStaticCppClassName());
+                            WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                            writer.WriteLine("::VisitReferences(::CLRExec::IRefVisitor &visitor)");
+                            writer.WriteLine("{");
+
+                            foreach (CppField fld in cls.Fields)
+                            {
+                                if (!fld.Field.Static || fld.Field.Literal)
+                                    continue;
+
+                                writer.Write("\tthis->f");
+                                writer.Write(LegalizeName(fld.Name, true));
+                                writer.WriteLine(".VisitReferences(visitor);");
+                            }
+                            writer.WriteLine("}");
+                        }
+                    }
+
                     // Export converted IL
                     foreach (CppMethod method in cls.Methods)
                     {
@@ -1657,6 +1828,7 @@ namespace AssemblyImporter.CppExport
             {
                 using (StreamWriter writer = new StreamWriter(tempMS, System.Text.Encoding.ASCII))
                 {
+                    writer.WriteLine("#include \"ClarityCodeSupport.h\"");
                     depSet.WriteCodeDeps(writer);
                     writer.WriteLine();
                     writer.Flush();
@@ -1683,6 +1855,92 @@ namespace AssemblyImporter.CppExport
             return false;
         }
 
+        private void ExportClassStatics(CppClass cls)
+        {
+            if (!cls.HaveNewStaticFields)
+                return;
+
+            string staticsPath = cls.GenerateStaticDefPath();
+            CreateDirectoriesForFile(m_exportPath + staticsPath);
+
+            CppDependencySet depSet = new CppDependencySet();
+
+            byte[] bodyContents;
+            using (MemoryStream bodyMS = new MemoryStream())
+            {
+                using (StreamWriter writer = new StreamWriter(bodyMS, System.Text.Encoding.ASCII))
+                {
+                    string classCppName = cls.GenerateStaticCppClassName();
+
+                    string[] path = classCppName.Split(new string[] { "::" }, StringSplitOptions.None);
+                    for (int i = 1; i < path.Length - 1; i++)
+                    {
+                        writer.WriteLine("namespace " + path[i]);
+                        writer.WriteLine("{");
+                    }
+
+                    writer.Write("struct ");
+                    writer.Write(path[path.Length - 1]);
+                    writer.WriteLine(" CLARITY_FINAL : public ::CLRCore::StaticFieldContainer");
+
+                    writer.WriteLine("{");
+                    writer.WriteLine("\t// root location reimplementation");
+                    writer.WriteLine("\tvirtual void VisitReferences(::CLRExec::IRefVisitor &visitor) CLARITY_OVERRIDE;");
+                    writer.WriteLine();
+
+                    foreach (CppField field in cls.Fields)
+                    {
+                        if (field.Field.Static && !field.Field.Literal)
+                        {
+                            depSet.AddTypeSpecDependencies(field.Type, true);
+                            writer.Write("\t::CLRVM::Field< ");
+                            writer.Write(SpecToAmbiguousStorage(field.Type));
+                            writer.Write(" > f");
+                            writer.Write(LegalizeName(field.Name, true));
+                            writer.WriteLine(";");
+                        }
+                    }
+                    writer.WriteLine("};");
+
+                    for (int i = 1; i < path.Length - 1; i++)
+                        writer.WriteLine("}");
+
+                    writer.Flush();
+
+                    bodyContents = bodyMS.ToArray();
+                }
+            }
+
+
+            CppMangleBuilder builder = new CppMangleBuilder();
+            builder.Add(staticsPath);
+            string headerId = builder.Finish();
+
+            // Export def header
+            using (FileStream fs = new FileStream(m_exportPath + staticsPath, FileMode.Create))
+            {
+                using (StreamWriter writer = new StreamWriter(fs, System.Text.Encoding.ASCII))
+                {
+                    writer.WriteLine("#pragma once");
+                    writer.WriteLine("#ifndef __CLARITY_CPPEXPORT_STATICS_" + headerId + "__");
+                    writer.WriteLine("#define __CLARITY_CPPEXPORT_STATICS_" + headerId + "__");
+                    writer.WriteLine();
+
+                    writer.WriteLine("#include \"ClarityCore.h\"");
+
+                    depSet.WriteAll(writer);
+                    writer.WriteLine();
+
+                    writer.Flush();
+
+                    fs.Write(bodyContents, 0, bodyContents.Length);
+
+                    writer.WriteLine();
+                    writer.WriteLine("#endif");
+                }
+            }
+        }
+
         private void ExportClassDefinitions(CppClass cls)
         {
             string defPath = cls.GenerateDefinitionPath();
@@ -1692,9 +1950,6 @@ namespace AssemblyImporter.CppExport
             CreateDirectoriesForFile(m_exportPath + defPath);
 
             CppDependencySet depSet = new CppDependencySet();
-
-            bool staticNeedStaticInit = cls.HaveStaticFields;
-            bool instanceNeedStaticInit = (cls.HaveStaticFields && cls.IsValueType);
 
             byte[] bodyContents;
             using (MemoryStream bodyMS = new MemoryStream())
@@ -1712,15 +1967,9 @@ namespace AssemblyImporter.CppExport
 
                     if (cls.NumGenericParameters > 0)
                     {
-                        writer.Write("\ttemplate<");
-                        for (int i = 0; i < cls.NumGenericParameters; i++)
-                        {
-                            if (i != 0)
-                                writer.Write(",");
-                            writer.Write("class T" + i.ToString());
-                        }
-                        writer.Write(">");
-                        writer.WriteLine();
+                        writer.Write("\ttemplate< ");
+                        WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
+                        writer.WriteLine("> ");
                     }
 
                     writer.WriteLine("\tstruct " + clsName);
@@ -1742,7 +1991,10 @@ namespace AssemblyImporter.CppExport
                             if (cls.FullName == "System.Object")
                                 writer.WriteLine("\t\t: public ::CLRCore::GCObject");
                             else
-                                writer.WriteLine("\t\t: public ::CLRCore::RefTarget");
+                            {
+                                if (cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Interface)
+                                    writer.WriteLine("\t\t: public ::CLRCore::InterfaceTarget");
+                            }
                         }
                     }
                     writer.WriteLine("\t{");
@@ -1769,7 +2021,7 @@ namespace AssemblyImporter.CppExport
                     {
                         writer.WriteLine("\t\t// root location reimplementation");
                         writer.WriteLine("\t\tinline virtual ::CLRX::NtSystem::tObject *GetRootObject() CLARITY_OVERRIDE { return this; }");
-                        writer.WriteLine("\t\tinline virtual ::CLRCore::GCObject *GetRootRefTarget() CLARITY_OVERRIDE { return this; }");
+                        writer.WriteLine("\t\tinline virtual ::CLRCore::GCObject *GetRootGCObject() CLARITY_OVERRIDE { return this; }");
                         writer.WriteLine();
                     }
 
@@ -1795,8 +2047,6 @@ namespace AssemblyImporter.CppExport
                             string methodName = "mcall_" + methodBaseName;
 
                             methodNames[method] = methodName;
-
-                            bool needStaticInit = method.Static ? staticNeedStaticInit : instanceNeedStaticInit;
 
                             // Write new methods
                             writer.Write("\t\t");
@@ -1843,9 +2093,9 @@ namespace AssemblyImporter.CppExport
                             }
                             else
                             {
-                                writer.Write("\t\t");
-                                writer.Write(SpecToValueType(field.Type));
-                                writer.Write(" f");
+                                writer.Write("\t\t::CLRVM::Field< ");
+                                writer.Write(SpecToAmbiguousStorage(field.Type));
+                                writer.Write(" > f");
                                 writer.Write(LegalizeName(field.Name, true));
                                 writer.WriteLine(";");
 
@@ -1873,6 +2123,17 @@ namespace AssemblyImporter.CppExport
                         if (cls.TypeDef.Semantics != CLRTypeDefRow.TypeSemantics.Interface && ClassHasNewTraceableFields(cls))
                             writer.WriteLine("\t\tvirtual void VisitReferences(::CLRExec::IRefVisitor &visitor) CLARITY_OVERRIDE;");
                     }
+
+                    if (cls.HaveNewStaticFields)
+                    {
+                        writer.WriteLine();
+                        writer.WriteLine("\t\t// static field token");
+                        writer.WriteLine("\t\tstatic CLRCore::StaticCacheLocator bStaticCacheLocator;");
+                    }
+
+                    writer.WriteLine();
+                    writer.WriteLine("\t\t// rtti");
+                    writer.WriteLine("\t\tstatic void RttiQuery(::CLRCore::TypeInfo &typeInfo);");
 
                     writer.WriteLine("\t};");
 
@@ -1902,10 +2163,10 @@ namespace AssemblyImporter.CppExport
                     {
                         writer.WriteLine("namespace CLRTI");
                         writer.WriteLine("{");
-                        writer.Write("\ttemplate<");
+                        writer.Write("\ttemplate< ");
                         WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
 
-                        writer.WriteLine(">");
+                        writer.WriteLine(" >");
                         writer.Write("\tstruct TypeTraits< ");
                         writer.Write(classCppName);
                         WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
@@ -1956,9 +2217,51 @@ namespace AssemblyImporter.CppExport
 
                         writer.WriteLine("\t\t};");
 
+                        if (cls.HaveNewStaticFields)
+                        {
+                            writer.Write("\t\t\ttypedef ");
+                            writer.Write(cls.GenerateStaticCppClassName());
+                            WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                            writer.WriteLine(" StaticType;");
+                        }
+
                         writer.WriteLine("\t};");
+
+                        // Write compatible ref assignments
+                        List<CLRTypeSpec> compatibleSpecs = new List<CLRTypeSpec>();
+                        CLRTypeSpec thisClassSpec = CreateInstanceTypeSpec(m_assemblies, cls.TypeDef);
+                        CLRTypeSpec currentSpec = thisClassSpec;
+                        while (currentSpec != null)
+                        {
+                            compatibleSpecs.Add(currentSpec);
+                            currentSpec = GetCachedClass(currentSpec).ParentTypeSpec;
+                        }
+
+                        compatibleSpecs.AddRange(cls.NewlyImplementedInterfaces);
+                        compatibleSpecs.AddRange(cls.InheritedImplementedInterfaces);
+
+                        string thisClassSpecString = SpecToAmbiguousStorage(thisClassSpec);
+                        foreach (CLRTypeSpec compatibleSpec in compatibleSpecs)
+                        {
+                            depSet.AddTypeSpecDependencies(compatibleSpec, false);
+                            writer.Write("\ttemplate< ");
+                            WriteTemplateParamCluster(false, cls.NumGenericParameters, "T", writer);
+                            writer.WriteLine(" >");
+                            writer.Write("\tstruct TypeRefCompatibility< ");
+                            writer.Write(thisClassSpecString);
+                            writer.Write(", ");
+                            writer.Write(SpecToAmbiguousStorage(compatibleSpec));
+                            writer.WriteLine(" >");
+                            writer.WriteLine("\t{");
+                            writer.WriteLine("\t\tenum");
+                            writer.WriteLine("\t\t{");
+                            writer.WriteLine("\t\t\tIsRefAssignable = 1,");
+                            writer.WriteLine("\t\t};");
+                            writer.WriteLine("\t};");
+                        }
                         writer.WriteLine("}");
                         writer.WriteLine();
+
                     }
                 }
 
@@ -2007,6 +2310,14 @@ namespace AssemblyImporter.CppExport
                     writer.Write("#include \"");
                     writer.Write(cls.GenerateDefinitionPath());
                     writer.WriteLine("\"");
+
+                    if (cls.HaveNewStaticFields)
+                    {
+                        writer.Write("#include \"");
+                        writer.Write(cls.GenerateStaticDefPath());
+                        writer.WriteLine("\"");
+                    }
+
                     writer.WriteLine();
                     writer.Flush();
 
@@ -2030,14 +2341,7 @@ namespace AssemblyImporter.CppExport
             // Export non-inline code
             using (FileStream fs = new FileStream(m_exportPath + cls.GenerateInstanceCodePath(), FileMode.Create))
             {
-                using (StreamWriter writer = new StreamWriter(fs, System.Text.Encoding.ASCII))
-                {
-                    writer.WriteLine("#include \"ClarityCore.h\"");
-                    writer.WriteLine();
-                    writer.Flush();
-
-                    ExportClassCode(cls, false, fs);
-                }
+                ExportClassCode(cls, false, fs);
             }
         }
 
@@ -2052,8 +2356,10 @@ namespace AssemblyImporter.CppExport
             CppClass cls = GetCachedClass(new CLRTypeSpecClass(typeDef));
             ExportClassPrototypes(cls);
             ExportClassCodeFile(cls);
+            ExportClassStatics(cls);
             ExportClassDefinitions(cls);
             ExportClassBox(cls);
+            ExportClassStubs(cls);
         }
 
         public static string LegalizeName(string str, bool makeUnique)

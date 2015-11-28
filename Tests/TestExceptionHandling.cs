@@ -51,7 +51,6 @@ namespace Tests
                 }
                 TestApi.WriteLine("Done with finally handler 2");
             }
-
             TestApi.WriteLine("Finished OK");
         }
     }

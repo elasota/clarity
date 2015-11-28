@@ -3,3 +3,4 @@ List of places where .NET diverges from the specification:
 - TypeSpec signatures can legally contain VAR and MVAR tokens in .NET, but the standard forbids them.
 - I.8.6.1.5 specifies that the "this" pointer of a virtual method in a value type is the boxed type, but it's really a managed pointer.
 - III.4 specifies that cgt.un is valid on references, but III.3.23 does not specify a behavior for reference comparisons.
+- III.8 specifies that floats "truncate to zero," but does not specify a behavior for converting floats that are too large to represent in the target type.

@@ -79,6 +79,9 @@ namespace AssemblyImporter.CppExport
                             haveAnyTraced = true;
                     }
 
+                    if (m_regAllocator.NumStaticTokens > 0)
+                        haveAnyTraced = true;
+
                     // Emit traced regs
                     if (haveAnyTraced)
                     {
@@ -153,6 +156,23 @@ namespace AssemblyImporter.CppExport
                             }
                         }
 
+                        if (m_regAllocator.NumStaticTokens > 0)
+                        {
+                            compileTimeEvaluateTrace = false;
+
+                            // Emit static tokens
+                            for (int i = 0; i < m_regAllocator.NumStaticTokens; i++)
+                            {
+                                CLR.CLRTypeSpec staticTokenSpec = m_regAllocator.GetStaticToken(i);
+
+                                localClusterWriter.Write("\t\t::CLRVM::TStaticTokenLocal< ");
+                                localClusterWriter.Write(m_builder.SpecToAmbiguousStorage(staticTokenSpec));
+                                localClusterWriter.Write(" >::Type bStatic");
+                                localClusterWriter.Write(i);
+                                localClusterWriter.WriteLine(";");
+                            }
+                        }
+
                         // Emit tracing flag
                         localClusterWriter.WriteLine("\t\tenum");
                         localClusterWriter.WriteLine("\t\t{");
@@ -178,10 +198,10 @@ namespace AssemblyImporter.CppExport
                                     localClusterWriter.WriteLine(")");
                                 }
                             }
-                            localClusterWriter.WriteLine("\t\t\t) ? 1 : 0;");
+                            localClusterWriter.WriteLine("\t\t\t) ? 1 : 0,");
                         }
                         else
-                            localClusterWriter.WriteLine("1");
+                            localClusterWriter.WriteLine("1,");
                         localClusterWriter.WriteLine("\t\t};");
 
                         // Emit visitor callback
@@ -231,6 +251,18 @@ namespace AssemblyImporter.CppExport
                             }
                         }
 
+                        // Emit static tokens
+                        for (int i = 0; i < m_regAllocator.NumStaticTokens; i++)
+                        {
+                            CLR.CLRTypeSpec staticTokenSpec = m_regAllocator.GetStaticToken(i);
+
+                            localClusterWriter.Write("\t\t\t::CLRVM::TraceStaticToken< ");
+                            localClusterWriter.Write(m_builder.SpecToAmbiguousStorage(staticTokenSpec));
+                            localClusterWriter.Write(" >(visitor, this->bStatic");
+                            localClusterWriter.Write(i);
+                            localClusterWriter.WriteLine(");");
+                        }
+
                         localClusterWriter.WriteLine("\t\t}");
                         localClusterWriter.WriteLine("\t};");
                         localClusterWriter.WriteLine("}");
@@ -241,6 +273,13 @@ namespace AssemblyImporter.CppExport
                         localsWriter.Write(localClusterMangle);
                         CppBuilder.WriteTemplateDualParamCluster(true, m_cls.NumGenericParameters, m_method.NumGenericParameters, "T", "M", localsWriter);
                         localsWriter.WriteLine(" bTracedLocals;");
+
+                        for (int i = 0; i < m_regAllocator.NumStaticTokens; i++)
+                        {
+                            localsWriter.Write("\tbool bStaticInit");
+                            localsWriter.Write(i);
+                            localsWriter.WriteLine(" = false;");
+                        }
 
                         if (compileTimeEvaluateTrace)
                         {

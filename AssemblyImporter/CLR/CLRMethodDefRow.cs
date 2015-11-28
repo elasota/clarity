@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.26
-    public class CLRMethodDefRow : CLRTableRow, ICLROwnedBy<CLRTypeDefRow>
+    public class CLRMethodDefRow : CLRTableRow, ICLROwnedBy<CLRTypeDefRow>, ICLRHasCustomAttributes
     {
         public enum MethodMemberAccess
         {
@@ -71,6 +71,9 @@ namespace AssemblyImporter.CLR
         public CLRTypeDefRow Owner { get; set; }
 
         private uint m_firstParam;
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

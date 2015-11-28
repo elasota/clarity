@@ -12,4 +12,6 @@
 
 #define CLARITY_CPP11 0
 
+#define CLARITY_INCREMENTAL_GC 0
+
 #endif

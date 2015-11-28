@@ -6,7 +6,7 @@
 
 namespace CLRUtil
 {
-    template<class T> struct TRef;
+    template<class T> struct TSimpleRef;
     template<class T> struct Boxed;
     template<class T> struct TValueThisParameter;
     template<class T> struct TAnchoredManagedPtr;
@@ -17,6 +17,7 @@ namespace CLRExec
     template<class T> class TracingLocalFrame;
     class Frame;
     struct IRefVisitor;
+	struct ReadWriteMutex;
 }
 
 namespace CLRCore
@@ -57,6 +58,7 @@ namespace CLRExec
         explicit Frame(::CLRCore::IObjectManager *objm);
 
         virtual void TouchReferences(::CLRExec::IRefVisitor &refVisitor) const CLARITY_PURE;
+		virtual ::CLRExec::ReadWriteMutex *GetReadWriteMutex() const;
         ::CLRCore::IObjectManager *GetObjectManager() const;
 
     private:

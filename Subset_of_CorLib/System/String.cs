@@ -24,9 +24,12 @@ namespace System
      * @version
      */
     [Serializable]
+    [Clarity.ExportStub("System_String.cpp")]
     public sealed class String : IComparable
     {
         public static readonly String Empty = "";
+        private char[] m_chars;
+
         public override bool Equals(object obj)
         {
             String s = obj as String;

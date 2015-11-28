@@ -4,7 +4,7 @@ namespace AssemblyImporter.CLR
 {
     // II.22.5
     // II.23.1.2
-    public class CLRAssemblyRefRow : CLRTableRow, ICLRResolvable
+    public class CLRAssemblyRefRow : CLRTableRow, ICLRResolvable, ICLRHasCustomAttributes
     {
         public ushort MajorVersion { get; private set; }
         public ushort MinorVersion { get; private set; }
@@ -22,6 +22,9 @@ namespace AssemblyImporter.CLR
 
         public CLRAssembly Resolution { get; private set; }
         public bool IsResolved { get { return this.Resolution != null; } }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

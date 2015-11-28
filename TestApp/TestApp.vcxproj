@@ -66,7 +66,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\ClarityCorLibExported\tSystem\tObject.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyBase.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyDerived.Code.cpp" />
@@ -76,6 +75,9 @@
     <ClCompile Include="TestApp.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ClarityCore\ClarityCore.vcxproj">
+      <Project>{c28af17c-f497-4d52-852d-120cd041e521}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\ClarityCorLibNative\ClarityCorLibNative.vcxproj">
       <Project>{093ab855-56a2-4aec-a760-b533390b3f0d}</Project>
     </ProjectReference>

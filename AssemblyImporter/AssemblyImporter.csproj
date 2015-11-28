@@ -146,7 +146,9 @@
     <Compile Include="CLR\CLRTypeSpecSZArray.cs" />
     <Compile Include="CLR\CLRTypeSpecVarOrMVar.cs" />
     <Compile Include="CLR\CLRTypeSpecVoid.cs" />
+    <Compile Include="CLR\CustomAttributeCollection.cs" />
     <Compile Include="CLR\ICLRHasConstant.cs" />
+    <Compile Include="CLR\ICLRHasCustomAttributes.cs" />
     <Compile Include="CLR\ICLROwnedBy.cs" />
     <Compile Include="CLR\ICLRResolvable.cs" />
     <Compile Include="CLR\ICLRTable.cs" />

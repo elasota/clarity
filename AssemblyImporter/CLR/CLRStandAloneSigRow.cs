@@ -3,9 +3,12 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.36
-    public class CLRStandAloneSigRow : CLRTableRow
+    public class CLRStandAloneSigRow : CLRTableRow, ICLRHasCustomAttributes
     {
         public ArraySegment<byte> Signature { get; private set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

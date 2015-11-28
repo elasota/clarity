@@ -31,7 +31,8 @@ namespace AssemblyImporter.CppExport
         public IEnumerable<CLRTypeSpec> GenericParameters { get { return m_genericParameters; } }
 
         public CLRMethodSignatureInstance DelegateSignature { get; private set; }
-        public bool HaveStaticFields { get; private set; }
+        public bool HaveNewStaticFields { get; private set; }
+        public bool HaveInheritedStaticFields { get; private set; }
 
         private List<CppMethod> m_methods;
         private List<CppVtableSlot> m_allVtableSlots;       // All slots
@@ -130,7 +131,8 @@ namespace AssemblyImporter.CppExport
             IsValueType = baseInstance.IsValueType;
             if (DelegateSignature != null)
                 DelegateSignature = baseInstance.DelegateSignature.Instantiate(typeParams, methodParams);
-            HaveStaticFields = baseInstance.HaveStaticFields;
+            HaveNewStaticFields = baseInstance.HaveNewStaticFields;
+            HaveInheritedStaticFields = baseInstance.HaveInheritedStaticFields;
         }
 
         public CppClass Instantiate(CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)
@@ -141,7 +143,7 @@ namespace AssemblyImporter.CppExport
         public void AddField(CLRAssemblyCollection assemblies, CLRFieldRow field)
         {
             if (field.Static && !field.Literal)
-                HaveStaticFields = true;
+                HaveNewStaticFields = true;
             m_fields.Add(new CppField(assemblies, field));
         }
 
@@ -312,7 +314,7 @@ namespace AssemblyImporter.CppExport
 
                 IsMulticastDelegate = (parentClass.FullName == "System.MulticastDelegate");
                 IsDelegate = IsMulticastDelegate || (parentClass.FullName == "System.Delegate" && this.FullName != "System.MulticastDelegate");
-                HaveStaticFields = (HaveStaticFields || parentClass.HaveStaticFields);
+                HaveInheritedStaticFields = (parentClass.HaveInheritedStaticFields || parentClass.HaveNewStaticFields);
 
                 if (IsDelegate)
                 {
@@ -330,6 +332,29 @@ namespace AssemblyImporter.CppExport
                         throw new ParseFailedException("Malformed delegate");
                 }
             }
+        }
+
+        public CLRTypeSpec GetEnumUnderlyingType()
+        {
+            if (!IsEnum)
+                throw new ArgumentException();
+
+            CppField valueField = null;
+            foreach (CppField fld in m_fields)
+            {
+                if (!fld.Field.Static)
+                {
+                    if (valueField == null)
+                        valueField = fld;
+                    else
+                        throw new Exception("Enum has multiple underlying types?");
+                }
+            }
+
+            if (valueField == null)
+                throw new Exception("Enum has no underlying types");
+
+            return valueField.Type;
         }
 
         public static string GeneratePathForFullName(string fullName, string suffix)
@@ -377,6 +402,16 @@ namespace AssemblyImporter.CppExport
             return GenerateDefinitionPathForFullName(FullName);
         }
 
+        public static string GenerateStaticDefPathForFullName(string fullName)
+        {
+            return GeneratePathForFullName(fullName, ".Statics.h");
+        }
+
+        public string GenerateStaticDefPath()
+        {
+            return GenerateStaticDefPathForFullName(FullName);
+        }
+
         public static string GenerateMainHeaderForFullName(string fullName)
         {
             return GeneratePathForFullName(fullName, ".h");
@@ -407,11 +442,11 @@ namespace AssemblyImporter.CppExport
             return GeneratePathForFullName(FullName, ".ExportedCode.cpp");
         }
 
-        public static string GenerateCppClassNameFromFullName(string fullName)
+        public static string GenerateCppClassNameFromFullName(string prefix, string fullName)
         {
             string[] fullClassPath = fullName.Split('.');
 
-            string cn = "::CLRX";
+            string cn = prefix;
             for (int i = 0; i < fullClassPath.Length - 1; i++)
                 cn += "::N" + CppBuilder.LegalizeName(fullClassPath[i], true);
             cn += "::" + CppBuilder.LegalizeName(fullClassPath[fullClassPath.Length - 1], true);
@@ -420,7 +455,12 @@ namespace AssemblyImporter.CppExport
 
         public string GenerateCppClassName()
         {
-            return GenerateCppClassNameFromFullName(this.FullName);
+            return GenerateCppClassNameFromFullName("::CLRX", this.FullName);
+        }
+
+        public string GenerateStaticCppClassName()
+        {
+            return GenerateCppClassNameFromFullName("::CLRX::Statics", this.FullName);
         }
 
         public static string GenerateFullPath(CLRTypeDefRow typeDef)

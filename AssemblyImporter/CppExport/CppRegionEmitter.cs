@@ -25,6 +25,15 @@ namespace AssemblyImporter.CppExport
             }
         }
 
+        private enum NumericStackType
+        {
+            Int32,
+            Int64,
+            NativeInt,
+            Float32,
+            Float64
+        }
+
         private CppRegisterAllocator m_regAllocator;
         private CppBuilder m_builder;
         private ExceptionHandlingRegion m_region;
@@ -271,6 +280,174 @@ namespace AssemblyImporter.CppExport
                 return vReg.SlotName;
         }
 
+        private CLR.CLRTypeSpec TypeSpecForArrayIndex(CLR.CLRTypeSpec indexBaseSpec)
+        {
+            NumericStackType indexNst = StackTypeForTypeSpec(indexBaseSpec);
+            CLR.CLRSigType.ElementType indexElementType;
+
+            if (indexNst == NumericStackType.Int32)
+                indexElementType = CLR.CLRSigType.ElementType.I4;
+            else if (indexNst == NumericStackType.NativeInt)
+                indexElementType = CLR.CLRSigType.ElementType.I;    // CLARITYTODO: Test UIntPtr
+            else
+                throw new ArgumentException("Unusual array index type");
+
+            return m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(indexElementType));
+        }
+
+        private NumericStackType StackTypeForTypeSpec(CLR.CLRTypeSpec typeSpec)
+        {
+            if (typeSpec is CLR.CLRTypeSpecClass)
+            {
+                CLR.CLRTypeSpecClass asClass = (CLR.CLRTypeSpecClass)typeSpec;
+                if (asClass.TypeDef.ContainerClass == null && asClass.TypeDef.TypeNamespace == "System")
+                {
+                    string typeName = asClass.TypeDef.TypeName;
+                    if (typeName == "Char" ||
+                        typeName == "Boolean" ||
+                        typeName == "Byte" ||
+                        typeName == "SByte" ||
+                        typeName == "Int16" ||
+                        typeName == "UInt16" ||
+                        typeName == "Int32" ||
+                        typeName == "UInt32")
+                        return NumericStackType.Int32;
+                    if (typeName == "Int64" || typeName == "UInt64")
+                        return NumericStackType.Int64;
+                    if (typeName == "IntPtr" || typeName == "UIntPtr")
+                        return NumericStackType.NativeInt;
+                    if (typeName == "Single")
+                        return NumericStackType.Float32;
+                    if (typeName == "Double")
+                        return NumericStackType.Float64;
+                }
+
+                CppClass typeClass = m_builder.GetCachedClass(typeSpec);
+                if (typeClass.IsEnum)
+                    return StackTypeForTypeSpec(typeClass.GetEnumUnderlyingType());
+            }
+            throw new Exception("Unrecognized numeric type spec");
+        }
+
+        private CLR.CLRTypeSpec TypeSpecForNumericBinaryOp(SsaRegister regA, SsaRegister regB, bool isUnsigned)
+        {
+            return TypeSpecForNumericStackType(NumericStackTypeForNumericBinaryOp(regA, regB), isUnsigned);
+        }
+
+        private CLR.CLRTypeSpec TypeSpecForNumericStackType(NumericStackType combinedType, bool isUnsigned)
+        {
+
+            CLR.CLRSigType.ElementType elementType;
+            switch (combinedType)
+            {
+                case NumericStackType.Int32:
+                    elementType = isUnsigned ? CLR.CLRSigType.ElementType.U4 : CLR.CLRSigType.ElementType.I4;
+                    break;
+                case NumericStackType.Int64:
+                    elementType = isUnsigned ? CLR.CLRSigType.ElementType.U8 : CLR.CLRSigType.ElementType.I8;
+                    break;
+                case NumericStackType.NativeInt:
+                    elementType = isUnsigned ? CLR.CLRSigType.ElementType.U : CLR.CLRSigType.ElementType.I;
+                    break;
+                case NumericStackType.Float32:
+                    if (isUnsigned)
+                        throw new ArgumentException();
+                    elementType = CLR.CLRSigType.ElementType.R4;
+                    break;
+                case NumericStackType.Float64:
+                    if (isUnsigned)
+                        throw new ArgumentException();
+                    elementType = CLR.CLRSigType.ElementType.R8;
+                    break;
+                default:
+                    throw new Exception("Unexpected operand type in comparison");
+            };
+
+            return m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(elementType));
+        }
+
+        private NumericStackType NumericStackTypeForNumericBinaryOp(SsaRegister regA, SsaRegister regB)
+        {
+            // III.1.5 table III.4
+            NumericStackType stackTypeA = StackTypeForTypeSpec(regA.VType.TypeSpec);
+            NumericStackType stackTypeB = StackTypeForTypeSpec(regB.VType.TypeSpec);
+            NumericStackType combinedType;
+
+            if (stackTypeA == NumericStackType.Int32)
+            {
+                if (stackTypeB == NumericStackType.NativeInt)
+                    combinedType = NumericStackType.NativeInt;
+                else if (stackTypeB == NumericStackType.Int32)
+                    combinedType = NumericStackType.Int32;
+                else
+                    throw new Exception("Unexpected binary numeric operation operands");
+            }
+            else if (stackTypeA == NumericStackType.Int64)
+            {
+                if (stackTypeB == NumericStackType.Int64)
+                    combinedType = NumericStackType.Int64;
+                else
+                    throw new Exception("Unexpected binary numeric operation operands");
+            }
+            else if (stackTypeA == NumericStackType.NativeInt)
+            {
+                if (stackTypeB == NumericStackType.NativeInt
+                    || stackTypeB == NumericStackType.Int32)
+                    combinedType = NumericStackType.NativeInt;
+                else
+                    throw new Exception("Unexpected binary numeric operation operands");
+            }
+            else if (stackTypeB == NumericStackType.Float32)
+            {
+                if (stackTypeB == NumericStackType.Float32)
+                    combinedType = NumericStackType.Float32;
+                else if (stackTypeB == NumericStackType.Float64)
+                    combinedType = NumericStackType.Float32;
+                else
+                    throw new Exception("Unexpected binary numeric operation operands");
+            }
+            else if (stackTypeA == NumericStackType.Float64)
+            {
+                if (stackTypeB == NumericStackType.Float32
+                    || stackTypeB == NumericStackType.Float64)
+                    combinedType = NumericStackType.Float64;
+                else
+                    throw new Exception("Unexpected binary numeric operation operands");
+            }
+            else
+                throw new Exception("Unexpected binary numeric operation operands");
+
+            return combinedType;
+        }
+
+        private CLR.CLRTypeSpec StackTypeSpecForSsaReg(SsaRegister regA, bool isUnsigned)
+        {
+            NumericStackType stackTypeA = StackTypeForTypeSpec(regA.VType.TypeSpec);
+
+            CLR.CLRSigType.ElementType elementType;
+            switch (stackTypeA)
+            {
+                case NumericStackType.Float32:
+                    elementType = CLR.CLRSigType.ElementType.R4;
+                    break;
+                case NumericStackType.Float64:
+                    elementType = CLR.CLRSigType.ElementType.R8;
+                    break;
+                case NumericStackType.Int32:
+                    elementType = isUnsigned ? CLR.CLRSigType.ElementType.U4 : CLR.CLRSigType.ElementType.I4;
+                    break;
+                case NumericStackType.Int64:
+                    elementType = isUnsigned ? CLR.CLRSigType.ElementType.U8 : CLR.CLRSigType.ElementType.I8;
+                    break;
+                case NumericStackType.NativeInt:
+                    elementType = isUnsigned ? CLR.CLRSigType.ElementType.U : CLR.CLRSigType.ElementType.I;
+                    break;
+                default:
+                    throw new ArgumentException();
+            }
+            return m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(elementType));
+        }
+
         private string StorageLocForSsaReg(SsaRegister ssaReg, bool forWrite, bool zombify)
         {
             if (forWrite && zombify)
@@ -350,20 +527,104 @@ namespace AssemblyImporter.CppExport
             return result;
         }
 
+        private static void GenerateCppStringConstant(string inStr, out string outEncodedStr, out int outHash, out bool outIsPacked)
+        {
+            // Clarity string constant encoding isn't UTF-8, but rather, a packed encoding that converts
+            // into UTF-16 code points directly.
+            // "?" is escaped to avoid trigraph conversion
+            List<char> resultChars = new List<char>();
+            string constStrs = " !#$%&()*+,-./0123456789:l<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz~";
+            bool isPacked = false;
+
+            foreach (char inChar in inStr)
+            {
+                if (constStrs.IndexOf(inChar) >= 0)
+                    resultChars.Add(inChar);
+                else
+                {
+                    int codePoint = ((int)inChar) & 0xffff;
+                    bool first = true;
+
+                    while (codePoint != 0 || first)
+                    {
+                        first = false;
+
+                        int codedFragment = codePoint & 0x7f;
+                        codePoint >>= 7;
+                        resultChars.Add('\\');
+
+                        if (codePoint != 0)
+                        {
+                            codedFragment |= 0x80;
+                            isPacked = true;
+                        }
+
+                        for (int octalDigitIndex = 0; octalDigitIndex < 3; octalDigitIndex++)
+                        {
+                            int octalDigit = ((codedFragment >> ((2 - octalDigitIndex) * 3)) & 0x7);
+                            resultChars.Add((char)('0' + octalDigit));
+                        }
+                    }
+                }
+            }
+
+            string encodedStr = new string(resultChars.ToArray());
+            byte[] asciiBytes = System.Text.Encoding.ASCII.GetBytes(encodedStr);
+            byte[] longHash = System.Security.Cryptography.SHA256Managed.Create().ComputeHash(asciiBytes);
+
+            int hash = 0;
+            for (int i = 0; i < 4; i++)
+                hash = ((hash << 8) | longHash[i]);
+
+            outEncodedStr = encodedStr;
+            outHash = hash;
+            outIsPacked = isPacked;
+        }
+
+        private string PassiveConvertValueToNumeric(VType vType, string valStr)
+        {
+            CppClass cls = m_builder.GetCachedClass(vType.TypeSpec);
+            if (cls.IsEnum)
+                return PassiveConvertValue(vType, cls.GetEnumUnderlyingType(), valStr);
+            return valStr;
+        }
+
         private string PassiveConvertValue(VType sourceVType, CLR.CLRTypeSpec targetTypeSpec, string valStr)
         {
-
             switch (sourceVType.ValType)
             {
                 case VType.ValTypeEnum.Null:
                     return "::CLRUtil::NullReference< " + m_builder.SpecToAmbiguousStorage(targetTypeSpec) + " >()";
                 case VType.ValTypeEnum.ConstantReference:
-                    return "FIXME_PLACEHOLDER_CONSTREFERENCE";
+                    {
+                        CLR.CLRTypeSpecClass targetClassSpec = ((CLR.CLRTypeSpecClass)targetTypeSpec);
+                        string targetName = targetClassSpec.TypeDef.TypeName;
+                        string sourceName = ((CLR.CLRTypeSpecClass)sourceVType.TypeSpec).TypeDef.TypeName;
+                        if (sourceName == "String")
+                        {
+                            string strConstant = (string)sourceVType.ConstantValue;
+                            string encodedStr;
+                            int hash;
+                            bool isPacked;
+                            GenerateCppStringConstant(strConstant, out encodedStr, out hash, out isPacked);
+
+                            return "::CLRVM::StringConstant< "
+                                + m_builder.SpecToAmbiguousStorage(targetClassSpec)
+                                + " >(" + m_frameVarName
+                                + ", " + (isPacked ? "true" : "false")
+                                + ", " + strConstant.Length.ToString()
+                                + ", " + hash.ToString()
+                                + ", \"" + encodedStr + "\")";
+                        }
+                        else
+                            throw new Exception("Unexpected constant reference type");
+                    }
                 case VType.ValTypeEnum.ConstantValue:
                     {
                         string instanceMacro;
                         CLR.CLRTypeSpecClass targetClassSpec = ((CLR.CLRTypeSpecClass)targetTypeSpec);
                         string targetName = targetClassSpec.TypeDef.TypeName;
+
                         if (targetName == "Int16")
                             instanceMacro = "CLARITY_INT16CONSTANT";
                         else if (targetName == "UInt16")
@@ -388,6 +649,8 @@ namespace AssemblyImporter.CppExport
                             instanceMacro = "CLARITY_FLOAT64CONSTANT";
                         else if (targetName == "Char")
                             instanceMacro = "CLARITY_CHARCONSTANT";
+                        else if (targetName == "IntPtr")
+                            instanceMacro = "CLARITY_INTPTRCONSTANT";
                         else
                         {
                             CppClass targetClass = m_builder.GetCachedClass(targetClassSpec);
@@ -718,6 +981,8 @@ namespace AssemblyImporter.CppExport
                     case MidInstruction.OpcodeEnum.LivenReg:
                         {
                             SsaRegister reg = midInstr.RegArg;
+                            if (reg.VType.TypeSpec != null)
+                                m_depSet.AddTypeSpecDependencies(reg.VType.TypeSpec, true);
                             reg.SsaID = m_regAllocator.NewSsaID();
 
                             if (reg.IsSpilled)
@@ -764,54 +1029,89 @@ namespace AssemblyImporter.CppExport
                         writer.WriteLine(";");
                         break;
                     case MidInstruction.OpcodeEnum.beq_ref:
+                        // UNIMPLEMENTED
                         writer.WriteLine("beq_ref Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.beq_val:
+                        // UNIMPLEMENTED
                         writer.WriteLine("beq_val Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.bne_ref:
+                        // UNIMPLEMENTED
                         writer.WriteLine("bne_ref Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.bne_val:
+                        // UNIMPLEMENTED
                         writer.WriteLine("bne_val Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.bge:
+                        // UNIMPLEMENTED
                         writer.WriteLine("bge Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.bgt:
+                        // UNIMPLEMENTED
                         writer.WriteLine("bgt Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.ble:
+                        // UNIMPLEMENTED
                         writer.WriteLine("ble Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.blt:
+                        // UNIMPLEMENTED
                         writer.WriteLine("blt Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
                         SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.clt:
-                        writer.WriteLine("clt Output SSA: " + midInstr.RegArg.SsaID + "  Value 1 SSA: " + midInstr.RegArg2.SsaID + "  Value 2 SSA: " + midInstr.RegArg3.SsaID);
-                        break;
                     case MidInstruction.OpcodeEnum.cgt:
-                        writer.WriteLine("cgt Output SSA: " + midInstr.RegArg.SsaID + "  Value 1 SSA: " + midInstr.RegArg2.SsaID + "  Value 2 SSA: " + midInstr.RegArg3.SsaID);
+                    case MidInstruction.OpcodeEnum.ceq_numeric:
+                        {
+                            bool isUnsigned = midInstr.FlagArg;
+                            CLR.CLRTypeSpec comparisonSpec = this.TypeSpecForNumericBinaryOp(midInstr.RegArg2, midInstr.RegArg3, isUnsigned);
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
+                            writer.Write(" = ((");
+
+                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, comparisonSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
+                            writer.Write(") ");
+
+                            switch (midInstr.Opcode)
+                            {
+                                case MidInstruction.OpcodeEnum.clt:
+                                    writer.Write("<");
+                                    break;
+                                case MidInstruction.OpcodeEnum.cgt:
+                                    writer.Write("<");
+                                    break;
+                                case MidInstruction.OpcodeEnum.ceq_numeric:
+                                    writer.Write("==");
+                                    break;
+                                default:
+                                    throw new ArgumentException();
+                            }
+
+                            writer.Write(" (");
+                            writer.Write(PassiveConvertValue(midInstr.RegArg3.VType, comparisonSpec, StorageLocForSsaReg(midInstr.RegArg3, false, false)));
+                            writer.WriteLine("));");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.cne_ref:
                     case MidInstruction.OpcodeEnum.ceq_ref:
-                    case MidInstruction.OpcodeEnum.ceq_val:
                         writer.Write(scopeStack.Indent);
                         writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
                         writer.Write(" = ");
@@ -819,8 +1119,6 @@ namespace AssemblyImporter.CppExport
                             writer.Write("(::CLRVM::ReferenceEqualityComparer< ");
                         else if (midInstr.Opcode == MidInstruction.OpcodeEnum.cne_ref)
                             writer.Write("(!::CLRVM::ReferenceEqualityComparer< ");
-                        else if (midInstr.Opcode == MidInstruction.OpcodeEnum.ceq_val)
-                            writer.Write("(::CLRVM::ValueEqualityComparer< ");
                         else
                             throw new ArgumentException();
                         writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg2.VType.TypeSpec));
@@ -830,26 +1128,61 @@ namespace AssemblyImporter.CppExport
                         writer.Write(StorageLocForSsaReg(midInstr.RegArg2, false, false));
                         writer.Write(", ");
                         writer.Write(StorageLocForSsaReg(midInstr.RegArg3, false, false));
-                        writer.WriteLine(")) ? CLARITY_INT32CONSTANT(1) : CLARITY_INT32CONSTANT(0);");
+                        writer.WriteLine("));");
                         break;
                     case MidInstruction.OpcodeEnum.LoadArgA_Value:
                         writer.WriteLine("LoadArgA_Value SSA: " + midInstr.RegArg.SsaID + "  VReg: " + midInstr.VRegArg.SlotName);
                         break;
                     case MidInstruction.OpcodeEnum.brzero:
+                    case MidInstruction.OpcodeEnum.brnotzero:
                         writer.Write(scopeStack.Indent);
                         writer.Write("if (");
 
+                        if (midInstr.Opcode == MidInstruction.OpcodeEnum.brnotzero)
+                            writer.Write("!");
+                        else if (midInstr.Opcode != MidInstruction.OpcodeEnum.brzero)
+                            throw new ArgumentException();
+
                         switch(midInstr.RegArg.VType.ValType)
+                        {
+                            case VType.ValTypeEnum.ConstantValue:
+                            case VType.ValTypeEnum.ValueValue:
+                                break;
+                            default:
+                                throw new ArgumentException();
+                        }
+
+                        writer.Write("::CLRVM::IsNumberZero(::CLRTypes::DetagNumber(");
+                        writer.Write(PassiveConvertValueToNumeric(midInstr.RegArg.VType, StorageLocForSsaReg(midInstr.RegArg, false, false)));
+                        writer.WriteLine(")))");
+                        writer.Write(scopeStack.Indent);
+                        writer.WriteLine("{");
+                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
+                        writer.Write(scopeStack.Indent);
+                        writer.Write("\tgoto bLabel_");
+                        writer.Write(m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
+                        writer.WriteLine(";");
+                        writer.Write(scopeStack.Indent);
+                        writer.WriteLine("}");
+                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
+                        break;
+                    case MidInstruction.OpcodeEnum.brnull:
+                    case MidInstruction.OpcodeEnum.brnotnull:
+                        writer.Write(scopeStack.Indent);
+                        writer.Write("if (");
+
+                        if (midInstr.Opcode == MidInstruction.OpcodeEnum.brnotnull)
+                            writer.Write("!");
+                        else if (midInstr.Opcode != MidInstruction.OpcodeEnum.brnull)
+                            throw new ArgumentException();
+
+                        switch (midInstr.RegArg.VType.ValType)
                         {
                             case VType.ValTypeEnum.NotNullReferenceValue:
                             case VType.ValTypeEnum.NullableReferenceValue:
                             case VType.ValTypeEnum.Null:
                             case VType.ValTypeEnum.ConstantReference:
                                 writer.Write("::CLRVM::IsNull");
-                                break;
-                            case VType.ValTypeEnum.ConstantValue:
-                            case VType.ValTypeEnum.ValueValue:
-                                writer.Write("::CLRVM::IsZero");
                                 break;
                             default:
                                 throw new ArgumentException();
@@ -869,21 +1202,6 @@ namespace AssemblyImporter.CppExport
                         writer.WriteLine(";");
                         writer.Write(scopeStack.Indent);
                         writer.WriteLine("}");
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
-                    case MidInstruction.OpcodeEnum.brnotzero:
-                        writer.WriteLine("brzero SSA: " + midInstr.RegArg.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
-                    case MidInstruction.OpcodeEnum.brnull:
-                        writer.WriteLine("brnull SSA: " + midInstr.RegArg.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
-                    case MidInstruction.OpcodeEnum.brnotnull:
-                        writer.WriteLine("brnotnull SSA: " + midInstr.RegArg.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
                         AddNode(midInstr.CfgEdgeArg.SuccessorNode);
                         break;
                     case MidInstruction.OpcodeEnum.LeakReg:
@@ -935,26 +1253,71 @@ namespace AssemblyImporter.CppExport
                         }
                         break;
                     case MidInstruction.OpcodeEnum.Throw:
-                        writer.WriteLine("Throw SSA: " + midInstr.RegArg.SsaID);
-                        regionIsTerminated = true;
+                        {
+                            CLR.CLRTypeSpec objSpec = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.OBJECT));
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("::CLRVM::Throw(");
+                            writer.Write(m_frameVarName);
+                            writer.Write(", ");
+                            writer.Write(PassiveConvertValue(midInstr.RegArg.VType, objSpec, StorageLocForSsaReg(midInstr.RegArg, false, false)));
+                            writer.WriteLine(");");
+
+                            regionIsTerminated = true;
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.NewSZArray:
-                        writer.WriteLine("NewSZArray Result SSA: " + midInstr.RegArg.SsaID + "  NumElems SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            NumericStackType indexNst = StackTypeForTypeSpec(midInstr.RegArg2.VType.TypeSpec);
+                            CLR.CLRSigType.ElementType indexElementType;
+
+                            if (indexNst == NumericStackType.Int32)
+                                indexElementType = CLR.CLRSigType.ElementType.I4;
+                            else if (indexNst == NumericStackType.NativeInt)
+                                indexElementType = CLR.CLRSigType.ElementType.I;    // CLARITYTODO: Test UIntPtr
+                            else
+                                throw new ArgumentException("Unusual array subscript type");
+
+                            CLR.CLRTypeSpec indexSpec = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(indexElementType));
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
+                            writer.Write(" = CLRVM::ArrayCreator< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
+                            writer.Write(" >::Create(");
+                            writer.Write(m_frameVarName);
+                            writer.Write(", ");
+                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, indexSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
+                            writer.WriteLine(");");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadField_ManagedPtr:
-                        writer.WriteLine("LoadField_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Field: " + midInstr.StrArg);
+                        // UNIMPLEMENTED
+                        writer.WriteLine("LoadField_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
                         break;
                     case MidInstruction.OpcodeEnum.LoadFieldA_ManagedPtr:
-                        writer.WriteLine("LoadFieldA_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Field: " + midInstr.StrArg);
+                        // UNIMPLEMENTED
+                        writer.WriteLine("LoadFieldA_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
                         break;
                     case MidInstruction.OpcodeEnum.LoadField_Object:
-                        writer.WriteLine("LoadField_Object Object SSA: " + midInstr.RegArg.SsaID + "  Field: " + midInstr.StrArg);
+                        // CLARITYTODO: Null ref check
+                        {
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
+                            writer.Write(" = ");
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
+                            writer.Write("->f");
+                            writer.Write(CppBuilder.LegalizeName(midInstr.StrArg, true));
+                            writer.WriteLine(".Value();");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadFieldA_Object:
-                        writer.WriteLine("LoadFieldA_Object Object SSA: " + midInstr.RegArg.SsaID + "  Field: " + midInstr.StrArg);
+                        // UNIMPLEMENTED
+                        writer.WriteLine("LoadFieldA_Object Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
                         break;
                     case MidInstruction.OpcodeEnum.LoadField_Value:
-                        writer.WriteLine("LoadField_Value Object SSA: " + midInstr.RegArg.SsaID + "  Field: " + midInstr.StrArg);
+                        // UNIMPLEMENTED
+                        writer.WriteLine("LoadField_Value Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
                         break;
                     case MidInstruction.OpcodeEnum.LoadRegA:
                         {
@@ -974,10 +1337,36 @@ namespace AssemblyImporter.CppExport
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadArrayElem:
-                        writer.WriteLine("LoadArrayElem Array SSA: " + midInstr.RegArg.SsaID + "  Index SSA: " + midInstr.RegArg2.SsaID + "  Contents SSA: " + midInstr.RegArg3.SsaID);
-                        break;
                     case MidInstruction.OpcodeEnum.LoadArrayElemAddr:
-                        writer.WriteLine("LoadArrayElemAddr Array SSA: " + midInstr.RegArg.SsaID + "  Index SSA: " + midInstr.RegArg2.SsaID + "  Addr SSA: " + midInstr.RegArg3.SsaID);
+                        {
+                            CLR.CLRTypeSpec szArraySpec = midInstr.RegArg.VType.TypeSpec;
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg3, true, false));
+                            writer.Write(" = ");
+
+                            switch (midInstr.Opcode)
+                            {
+                                case MidInstruction.OpcodeEnum.LoadArrayElem:
+                                    writer.Write("::CLRVM::SZArrayLoader< ");
+                                    break;
+                                case MidInstruction.OpcodeEnum.LoadArrayElemAddr:
+                                    writer.Write("::CLRVM::SZArrayAddrLoader< ");
+                                    break;
+                                default:
+                                    throw new ArgumentException();
+                            }
+                            writer.Write(m_builder.SpecToAmbiguousStorage(szArraySpec));
+                            writer.Write(" >::Load(");
+                            writer.Write(m_frameVarName);
+                            writer.Write(", ");
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
+                            writer.Write(", ");
+
+                            CLR.CLRTypeSpec indexSpec = TypeSpecForArrayIndex(midInstr.RegArg2.VType.TypeSpec);
+
+                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, indexSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
+                            writer.WriteLine(");");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.StoreField_ManagedPtr:
                         writer.WriteLine("StoreField_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Value SSA: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
@@ -990,16 +1379,110 @@ namespace AssemblyImporter.CppExport
                     case MidInstruction.OpcodeEnum.and:
                     case MidInstruction.OpcodeEnum.or:
                     case MidInstruction.OpcodeEnum.xor:
+                        {
+                            bool isUnsigned = (midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Un) != 0;
+                            bool isOvf = (midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Ovf) != 0;
+                            bool divsMayThrow;
+                            NumericStackType nst = NumericStackTypeForNumericBinaryOp(midInstr.RegArg, midInstr.RegArg2);
+
+                            switch(nst)
+                            {
+                                case NumericStackType.Float32:
+                                case NumericStackType.Float64:
+                                    divsMayThrow = false;
+                                    break;
+                                case NumericStackType.Int32:
+                                case NumericStackType.Int64:
+                                case NumericStackType.NativeInt:
+                                    divsMayThrow = true;
+                                    break;
+                                default:
+                                    throw new ArgumentException();
+                            }
+
+                            CLR.CLRTypeSpec opSpec = TypeSpecForNumericStackType(nst, isUnsigned);
+
+                            string arithOp;
+                            bool canThrow = isOvf;
+                            switch (midInstr.Opcode)
+                            {
+                                case MidInstruction.OpcodeEnum.add:
+                                    arithOp = "Add";
+                                    break;
+                                case MidInstruction.OpcodeEnum.sub:
+                                    arithOp = "Subtract";
+                                    break;
+                                case MidInstruction.OpcodeEnum.mul:
+                                    arithOp = "Multiply";
+                                    break;
+                                case MidInstruction.OpcodeEnum.div:
+                                    arithOp = "Divide";
+                                    if (divsMayThrow)
+                                        canThrow = true;
+                                    break;
+                                case MidInstruction.OpcodeEnum.rem:
+                                    arithOp = "Modulo";
+                                    if (divsMayThrow)
+                                        canThrow = true;
+                                    break;
+                                case MidInstruction.OpcodeEnum.and:
+                                    arithOp = "BitwiseAnd";
+                                    break;
+                                case MidInstruction.OpcodeEnum.or:
+                                    arithOp = "BitwiseOr";
+                                    break;
+                                case MidInstruction.OpcodeEnum.xor:
+                                    arithOp = "BitwiseXor";
+                                    break;
+                                default:
+                                    throw new ArgumentException();
+                            }
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg3, true, false));
+                            writer.Write(" = CLRVM::ArithOps< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(opSpec));
+                            writer.Write(" >::");
+                            writer.Write(arithOp);
+                            if (isOvf)
+                                writer.Write("Ovf");
+
+                            writer.Write("(");
+                            if (canThrow)
+                            {
+                                writer.Write(m_frameVarName);
+                                writer.Write(", ");
+                            }
+
+                            writer.Write(PassiveConvertValue(midInstr.RegArg.VType, opSpec, StorageLocForSsaReg(midInstr.RegArg, false, false)));
+                            writer.Write(", ");
+                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, opSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
+                            writer.WriteLine(");");
+                        }
+                        break;
                     case MidInstruction.OpcodeEnum.shl:
-                    case MidInstruction.OpcodeEnum.shr:
-                        writer.WriteLine("BinaryArith " + midInstr.Opcode.ToString() + "  Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Result SSA: " + midInstr.RegArg3.SsaID + "  Arith mode " + (int)midInstr.ArithArg);
+                    case MidInstruction.OpcodeEnum.shr: // [.un]
+                        writer.WriteLine("ShiftOp " + midInstr.Opcode.ToString() + "  Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Result SSA: " + midInstr.RegArg3.SsaID + "  Arith mode " + (int)midInstr.ArithArg);
                         break;
                     case MidInstruction.OpcodeEnum.neg:
                     case MidInstruction.OpcodeEnum.not:
                         writer.WriteLine("UnaryArith " + midInstr.Opcode.ToString() + "  Value SSA: " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID + "  Arith mode " + (int)midInstr.ArithArg);
                         break;
                     case MidInstruction.OpcodeEnum.TryConvertObj:
-                        writer.WriteLine("TryConvertObj Value SSA: " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            CLR.CLRTypeSpec sourceSpec = midInstr.RegArg.VType.TypeSpec;
+                            CLR.CLRTypeSpec destSpec = midInstr.RegArg2.VType.TypeSpec;
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
+                            writer.Write(" = ::CLRVM::DynamicCaster< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(sourceSpec));
+                            writer.Write(", ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(destSpec));
+                            writer.Write(" >::Cast(");
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
+                            writer.WriteLine(");");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.Leave:
                         writer.WriteLine("Leave Esc " + midInstr.UIntArg);
@@ -1008,7 +1491,44 @@ namespace AssemblyImporter.CppExport
                         writer.WriteLine("DuplicateReg SSA: " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID);
                         break;
                     case MidInstruction.OpcodeEnum.StoreStaticField:
-                        writer.WriteLine("StoreStaticField SSA: " + midInstr.RegArg.SsaID + "  Class: " + midInstr.TypeSpecArg + "  Field: " + midInstr.StrArg);
+
+                        {
+                            int staticInitID = m_regAllocator.AllocStaticToken(midInstr.TypeSpecArg);
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("if (!bStaticInit");
+                            writer.Write(staticInitID);
+                            writer.WriteLine(")");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.WriteLine("{");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("\t::CLRVM::InitStaticToken< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.TypeSpecArg));
+                            writer.Write(" >(");
+                            writer.Write(m_frameVarName);
+                            writer.Write(", bTracedLocals.bStatic");
+                            writer.Write(staticInitID);
+                            writer.WriteLine(".m_value);");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("\tbStaticInit");
+                            writer.Write(staticInitID);
+                            writer.WriteLine(" = true;");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.WriteLine("}");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("bTracedLocals.bStatic");
+                            writer.Write(staticInitID);
+                            writer.Write(".m_value->f");
+                            writer.Write(CppBuilder.LegalizeName(midInstr.StrArg, true));
+                            writer.Write(".Set(");
+
+                            writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.TypeSpecArg2, StorageLocForSsaReg(midInstr.RegArg, true, false)));
+                            writer.WriteLine(");");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadIndirect:
                         {
@@ -1039,7 +1559,42 @@ namespace AssemblyImporter.CppExport
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadStaticField:
-                        writer.WriteLine("LoadStaticField SSA: " + midInstr.RegArg.SsaID + "  Class: " + midInstr.TypeSpecArg + "  Field: " + midInstr.StrArg);
+                        {
+                            int staticInitID = m_regAllocator.AllocStaticToken(midInstr.TypeSpecArg);
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("if (!bStaticInit");
+                            writer.Write(staticInitID);
+                            writer.WriteLine(")");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.WriteLine("{");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("\t::CLRVM::InitStaticToken< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.TypeSpecArg));
+                            writer.Write(" >(");
+                            writer.Write(m_frameVarName);
+                            writer.Write(", bTracedLocals.bStatic");
+                            writer.Write(staticInitID);
+                            writer.WriteLine(".m_value);");
+                            
+                            writer.Write(scopeStack.Indent);
+                            writer.Write("\tbStaticInit");
+                            writer.Write(staticInitID);
+                            writer.WriteLine(" = true;");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.WriteLine("}");
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
+                            writer.Write(" = ");
+                            writer.Write("bTracedLocals.bStatic");
+                            writer.Write(staticInitID);
+                            writer.Write(".m_value->f");
+                            writer.Write(CppBuilder.LegalizeName(midInstr.StrArg, true));
+                            writer.WriteLine(".Value();");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.Box:
                         {
@@ -1060,19 +1615,75 @@ namespace AssemblyImporter.CppExport
                         }
                         break;
                     case MidInstruction.OpcodeEnum.ConvertNumber:
-                        writer.WriteLine("ConvertNumber SSA " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            bool isOvf = ((midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Ovf) != 0);
+                            bool isUn = ((midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Un) != 0);
+
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
+                            writer.Write(" = ::CLRVM::ClrSemanticNumberConverter< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
+                            writer.Write(", ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg2.VType.TypeSpec));
+
+                            writer.Write(isOvf ? ", 1" : ", 0");
+                            writer.Write(isUn ? ", 1" : ", 0");
+
+                            if (isOvf)
+                            {
+                                writer.Write(" >::CheckedConvert(");
+                                writer.Write(m_frameVarName);
+                                writer.Write(", ");
+                            }
+                            else
+                                writer.Write(" >::Convert(");
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
+                            writer.WriteLine(");");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadArrayLength:
-                        writer.WriteLine("LoadArrayLength SSA " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            writer.Write(scopeStack.Indent);
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
+                            writer.Write(" = ::CLRVM::ArrayLengthReader< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
+                            writer.Write(" >::Read(");
+                            writer.Write(m_frameVarName);
+                            writer.Write(", ");
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
+                            writer.WriteLine(");");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadTypeInfoHandle:
+                        // UNIMPLEMENTED
                         writer.WriteLine("LoadTypeInfoHandle SSA " + midInstr.RegArg.SsaID + "  Type: " + midInstr.TypeSpecArg);
                         break;
                     case MidInstruction.OpcodeEnum.ConvertObj:
+                        // UNIMPLEMENTED
                         writer.WriteLine("ConvertObj SSA " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID);
                         break;
                     case MidInstruction.OpcodeEnum.StoreArrayElem:
-                        writer.WriteLine("StoreArrayElem SSA " + midInstr.RegArg.SsaID + "  Index SSA: " + midInstr.RegArg2.SsaID + "  Value SSA: " + midInstr.RegArg3.SsaID);
+                        {
+                            CLR.CLRTypeSpec szArraySpec = midInstr.RegArg.VType.TypeSpec;
+                            CLR.CLRTypeSpec subscriptType = ((CLR.CLRTypeSpecSZArray)szArraySpec).SubType;
+                            writer.Write(scopeStack.Indent);
+
+                            writer.Write("::CLRVM::SZArrayStorer< ");
+                            writer.Write(m_builder.SpecToAmbiguousStorage(szArraySpec));
+                            writer.Write(" >::Store(");
+                            writer.Write(m_frameVarName);
+                            writer.Write(", ");
+                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
+                            writer.Write(", ");
+
+                            CLR.CLRTypeSpec indexSpec = TypeSpecForArrayIndex(midInstr.RegArg2.VType.TypeSpec);
+
+                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, indexSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
+                            writer.Write(", ");
+                            writer.Write(PassiveConvertValue(midInstr.RegArg3.VType, subscriptType, StorageLocForSsaReg(midInstr.RegArg3, false, false)));
+
+                            writer.WriteLine(");");
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.Switch:
                         {

@@ -1,0 +1,8 @@
+Clarity is mostly very strict about type conversion and handling it in a way that adheres to .NET semantics.
+
+One of the important things to dealing with Clarity values is that you should always use ::CLRVM::TValValue and ::CLRVM::TRefValue to properly resolve the actual value type.  Many things can cause the manner of the resolution to vary:
+- Array types can either resolve into a RefArrayReference or a reference to an ArrayContainer
+- Integer types will usually resolve as actual native integer types.
+- Reference types can resolve into either pointers or StrictRefs.
+
+Using StrictRefs is generally recommended for development as they enforce more behavior at compile time.  However, when compiling for most non-Windows platforms, StrictRefs are less efficient as they can not be passed in registers.

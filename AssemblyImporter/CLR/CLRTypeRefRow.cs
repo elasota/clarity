@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.38
-    public class CLRTypeRefRow : CLRTableRow, ICLRResolvable
+    public class CLRTypeRefRow : CLRTableRow, ICLRResolvable, ICLRHasCustomAttributes
     {
         public CLRTableRow ResolutionScope { get; private set; }
         public string TypeName { get; private set; }
@@ -12,6 +12,9 @@ namespace AssemblyImporter.CLR
         public CLRTypeDefRow Resolution { get; private set; }
 
         public bool IsResolved { get { return Resolution != null; } }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

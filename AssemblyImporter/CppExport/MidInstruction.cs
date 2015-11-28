@@ -46,7 +46,7 @@ namespace AssemblyImporter.CppExport
             clt,
             cgt,
             cne_ref,
-            ceq_val,
+            ceq_numeric,
             ceq_ref,
             LoadArgA_Value,
             CallVirtualMethod,
@@ -105,6 +105,7 @@ namespace AssemblyImporter.CppExport
 
         public OpcodeEnum Opcode { get; private set; }
         public CLRTypeSpec TypeSpecArg { get; private set; }
+        public CLRTypeSpec TypeSpecArg2 { get; private set; }
         public SsaRegister RegArg { get; private set; }
         public SsaRegister RegArg2 { get; private set; }
         public SsaRegister RegArg3 { get; private set; }
@@ -211,6 +212,15 @@ namespace AssemblyImporter.CppExport
             Opcode = opcode;
             RegArg = regArg;
             TypeSpecArg = typeSpec;
+            StrArg = strArg;
+        }
+
+        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CLRTypeSpec typeSpec, CLRTypeSpec typeSpec2, string strArg)
+        {
+            Opcode = opcode;
+            RegArg = regArg;
+            TypeSpecArg = typeSpec;
+            TypeSpecArg2 = typeSpec2;
             StrArg = strArg;
         }
 

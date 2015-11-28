@@ -3,32 +3,28 @@
 #include "ClarityCore.h"
 #include "tSystem\tObject.Def.h"
 
-void ::CLRX::NtSystem::tObject::mcode_it_d_ctor(const ::CLRExec::Frame &frame, ::CLRVM::TRefValue< ::CLRX::NtSystem::tObject >::Type bThis0)
+
+::CLRVM::TValValue< ::CLRX::NtSystem::tBoolean >::Type (::CLRX::NtSystem::tObject::mcode_itEquals)(const ::CLRExec::Frame &frame, ::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type bThis0, ::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type param0)
 {
+	CLARITY_NOTIMPLEMENTED;
 }
 
-/*
-::CLRUtil::Ref<::CLRX::NtSystem::tString >::Type (::CLRX::NtSystem::tObject::mcode_tToString)(const ::CLRExec::Frame &frame)
+::CLRVM::TValValue< ::CLRX::NtSystem::tBoolean >::Type (::CLRX::NtSystem::tObject::mcode_stReferenceEquals)(const ::CLRExec::Frame &frame, ::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type param0, ::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type param1)
 {
-    return ::CLRUtil::Ref<::CLRX::NtSystem::tString>::Null();
+	CLARITY_NOTIMPLEMENTED;
 }
 
-::CLRX::NtSystem::tBoolean (::CLRX::NtSystem::tObject::mcode_tEquals)(const ::CLRExec::Frame &frame, ::CLRUtil::Ref<::CLRX::NtSystem::tObject >::Type param0)
+::CLRVM::TValValue< ::CLRX::NtSystem::tInt32 >::Type (::CLRX::NtSystem::tObject::mcode_itGetHashCode)(const ::CLRExec::Frame &frame, ::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type bThis0)
 {
-    ::CLRX::NtSystem::tBoolean b;
-    memset(&b, 0, sizeof(b));
-    return b;
+	CLARITY_NOTIMPLEMENTED;
 }
 
-::CLRX::NtSystem::tInt32 (::CLRX::NtSystem::tObject::mcode_tGetHashCode)(const ::CLRExec::Frame &frame)
+::CLRVM::TValValue< ::CLRX::NtSystem::tType >::Type (::CLRX::NtSystem::tObject::mcode_itGetType)(const ::CLRExec::Frame &frame, ::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type bThis0)
 {
-    ::CLRX::NtSystem::tInt32 i;
-    memset(&i, 0, sizeof(i));
-    return i;
+	CLARITY_NOTIMPLEMENTED;
 }
 
-void (::CLRX::NtSystem::tObject::mcode_tFinalize)(const ::CLRExec::Frame &frame)
+::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type (::CLRX::NtSystem::tObject::mcode_itMemberwiseClone)(const ::CLRExec::Frame &frame, ::CLRVM::TValValue< ::CLRX::NtSystem::tObject >::Type bThis0)
 {
+	CLARITY_NOTIMPLEMENTED;
 }
-
-*/

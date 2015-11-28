@@ -95,6 +95,18 @@ namespace AssemblyImporter.CLR
             }
         }
 
+        public void ResolveCustomAttributes()
+        {
+            ICLRTable table = MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.CustomAttribute);
+            for (uint i = 0; i < table.NumRows; i++)
+            {
+                CLRCustomAttributeRow ca = (CLRCustomAttributeRow)table.GetRow(i);
+                ICLRHasCustomAttributes hasCA = (ICLRHasCustomAttributes)ca.Parent;
+
+                hasCA.CustomAttributes.Add(ca);
+            }
+        }
+
         public void ResolveGenericParameters()
         {
             ICLRTable gpTable = MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.GenericParam);

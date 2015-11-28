@@ -11,23 +11,33 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\CLR\Core\Core.vcxproj">
-      <Project>{4ef44de0-9270-4e41-bd66-450ff66f9d18}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\Support\Support.vcxproj">
-      <Project>{2e4127a6-f2ee-4302-a567-5a28f70cdddd}</Project>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
+    <ClInclude Include="ClarityCodeSupport.h" />
     <ClInclude Include="ClarityCompilerDefs.h" />
     <ClInclude Include="ClarityConfig.h" />
     <ClInclude Include="ClarityCore.h" />
+    <ClInclude Include="ClarityCppHelpers.h" />
+    <ClInclude Include="ClarityEqualityCompareFunc.h" />
     <ClInclude Include="ClarityExec.h" />
     <ClInclude Include="ClarityExec_Defs.h" />
     <ClInclude Include="ClarityInternalSupport.h" />
+    <ClInclude Include="ClarityNumberConversions.h" />
+    <ClInclude Include="ClarityObjectManager.h" />
+    <ClInclude Include="ClarityProjects.h" />
+    <ClInclude Include="ClarityHashMap.h" />
     <ClInclude Include="ClarityTypes.h" />
     <ClInclude Include="ClarityUtil.h" />
     <ClInclude Include="ClarityVM.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ClarityObjectManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ClarityCorLibNative\ClarityCorLibNative.vcxproj">
+      <Project>{093ab855-56a2-4aec-a760-b533390b3f0d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\ClarityCorLib\ClarityCorLib.vcxproj">
+      <Project>{30e48393-fd2d-4f0e-9039-bfcf481064a3}</Project>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{C28AF17C-F497-4D52-852D-120CD041E521}</ProjectGuid>
@@ -52,9 +62,13 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\ClarityNativeCode.props" />
+    <Import Project="ClarityCoreProject.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\ClarityNativeCode.props" />
+    <Import Project="ClarityCoreProject.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup />

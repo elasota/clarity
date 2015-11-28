@@ -30,21 +30,17 @@ namespace Tests
         {
             public override void Test()
             {
+                TestApi.WriteLine("Called Test");
             }
 
             void MyInterfaceC.Test()
             {
+                TestApi.WriteLine("Called MyInterfaceC.Test");
             }
-        }
-
-        public struct MyContainsRef<T>
-        {
-            public T a;
         }
 
         public void Run()
         {
-            MyContainsRef<MyDerived> r;
             MyDerived d = new MyDerived();
             d.Test();
             ((MyInterfaceA<int>)d).Test();

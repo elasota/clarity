@@ -36,8 +36,5 @@
     <ClCompile Include="..\ClarityCorLibExported\tTests\tTestInterfaceOverrideCollision\tMyInterfaceC.Code.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\ClarityCorLibExported\tSystem\tObject.Code.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>

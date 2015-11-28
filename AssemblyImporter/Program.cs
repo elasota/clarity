@@ -10,8 +10,9 @@ namespace AssemblyImporter
             CLR.CLRAssemblyCollection assemblies = new CLR.CLRAssemblyCollection();
 
             string exportDir = args[0];
+            string stubDir = args[1];
 
-            for (int assmIndex = 1; assmIndex < args.Length; assmIndex++)
+            for (int assmIndex = 2; assmIndex < args.Length; assmIndex++)
             {
                 string path = args[assmIndex];
                 Console.WriteLine("Loading assembly " + path);
@@ -27,7 +28,7 @@ namespace AssemblyImporter
             assemblies.ResolveAll();
 
             Console.WriteLine("Exporting...");
-            CppExport.CppBuilder builder = new CppExport.CppBuilder(exportDir + "\\", assemblies);
+            CppExport.CppBuilder builder = new CppExport.CppBuilder(exportDir + "\\", stubDir + "\\", assemblies);
             Console.WriteLine("Done");
 
             /*

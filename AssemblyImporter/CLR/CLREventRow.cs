@@ -2,7 +2,9 @@
 
 namespace AssemblyImporter.CLR
 {
-    public class CLREventRow : CLRTableRow
+    public class CLREventRow : CLRTableRow, ICLRHasCustomAttributes
     {
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
     }
 }

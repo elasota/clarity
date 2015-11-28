@@ -5,7 +5,7 @@ namespace AssemblyImporter.CLR
 {
     // II.22.20
     // II.23.1.7
-    public class CLRGenericParamRow : CLRTableRow
+    public class CLRGenericParamRow : CLRTableRow, ICLRHasCustomAttributes
     {
         public enum VarianceEnum
         {
@@ -24,6 +24,9 @@ namespace AssemblyImporter.CLR
         public bool DefaultConstructorConstraint { get; private set; }
 
         public IList<CLRGenericParamConstraintRow> Constraints { get; private set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

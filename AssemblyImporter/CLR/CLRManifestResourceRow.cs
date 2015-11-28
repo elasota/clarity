@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.24
-    public class CLRManifestResourceRow : CLRTableRow
+    public class CLRManifestResourceRow : CLRTableRow, ICLRHasCustomAttributes
     {
         public enum ManifestResourceVisibility
         {
@@ -15,6 +15,9 @@ namespace AssemblyImporter.CLR
         public string Name { get; private set; }
         public CLRTableRow Implementation { get; private set; }
         public ManifestResourceVisibility Visibility { get; private set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

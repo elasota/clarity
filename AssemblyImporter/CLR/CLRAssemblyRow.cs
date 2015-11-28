@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.2
-    public class CLRAssemblyRow : CLRTableRow
+    public class CLRAssemblyRow : CLRTableRow, ICLRHasCustomAttributes
     {
         public enum AssemblyHashAlgorithm
         {
@@ -25,6 +25,9 @@ namespace AssemblyImporter.CLR
         public bool Retargetable { get; private set; }
         public bool DisableJITcompileOptimizer { get; private set; }
         public bool EnableJITcompileTracking { get; private set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.34
-    public class CLRPropertyRow : CLRTableRow, ICLROwnedBy<CLRPropertyMapRow>, ICLRHasConstant
+    public class CLRPropertyRow : CLRTableRow, ICLROwnedBy<CLRPropertyMapRow>, ICLRHasConstant, ICLRHasCustomAttributes
     {
         public string Name { get; private set; }
         public CLRSigPropertySig Signature { get; private set; }
@@ -13,6 +13,9 @@ namespace AssemblyImporter.CLR
         public CLRConstantRow[] AttachedConstants { get; set; }
 
         public CLRPropertyMapRow Owner { get; set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

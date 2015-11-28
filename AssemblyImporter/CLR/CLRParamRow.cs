@@ -3,7 +3,7 @@
 namespace AssemblyImporter.CLR
 {
     // II.22.33
-    public class CLRParamRow : CLRTableRow, ICLROwnedBy<CLRMethodDefRow>, ICLRHasConstant
+    public class CLRParamRow : CLRTableRow, ICLROwnedBy<CLRMethodDefRow>, ICLRHasConstant, ICLRHasCustomAttributes
     {
         public bool In { get; private set; }
         public bool Out { get; private set; }
@@ -16,6 +16,9 @@ namespace AssemblyImporter.CLR
         public string Name { get; private set; }
 
         public CLRMethodDefRow Owner { get; set; }
+
+        private CustomAttributeCollection m_customAttributes;
+        public CustomAttributeCollection CustomAttributes { get { return CustomAttributeCollection.LazyCreate(ref m_customAttributes); } }
 
         public override void Parse(CLRMetaDataParser parser)
         {

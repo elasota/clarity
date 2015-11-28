@@ -4,3 +4,4 @@ Known issues that would need to be resolved to make it work with untrusted code:
 - Manglings are compacted to 64-bit hashes, which are easy to intentionally collide.
 - Assembly validation is currently extremely minimal.
 - Some constructs that are valid in .NET and export valid C++ will still fail to compile (i.e. lazy-instantiated generics).
+- Macros from system headers can potentially cause tokens from emitted Clarity code to become other tokens, with unpredictable results.

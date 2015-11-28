@@ -25,6 +25,10 @@ CLARITY_FORCEINLINE ::CLRCore::IObjectManager *::CLRExec::Frame::GetObjectManage
     return m_objm;
 }
 
+inline ::CLRExec::ReadWriteMutex *::CLRExec::Frame::GetReadWriteMutex() const
+{
+	return CLARITY_NULLPTR;
+}
 
 template<class T>
 CLARITY_FORCEINLINE ::CLRExec::TracingLocalFrame<T> (::CLRPrivate::TMaybeTracingLocalFrame_Disambiguation<0, T>::Disambiguate)(const ::CLRExec::Frame &frame, T& tracedLocals)
