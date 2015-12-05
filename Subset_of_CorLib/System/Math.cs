@@ -6,6 +6,8 @@ namespace System
     //This class contains only static members and doesn't require serialization.
     using System;
     using System.Runtime.CompilerServices;
+
+    [Clarity.ExportStub("System_Math.cpp")]
     public static class Math
     {
         // Public Constants

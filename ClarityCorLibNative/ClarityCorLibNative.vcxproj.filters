@@ -21,5 +21,8 @@
     <ClCompile Include="System_String.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="System_Exception.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

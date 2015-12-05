@@ -7,6 +7,8 @@ namespace System.Threading
     using System;
     using System.Threading;
     using System.Runtime.CompilerServices;
+
+    [Clarity.ExportStub("System_Threading_ManualResetEvent.cpp")]
     public static class Monitor
     {
         [MethodImplAttribute(MethodImplOptions.InternalCall)]

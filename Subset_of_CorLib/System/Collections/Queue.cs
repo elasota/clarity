@@ -12,6 +12,7 @@ namespace System.Collections
     /// </summary>
     [DebuggerDisplay("Count = {Count}")]
     [Serializable()]
+    [Clarity.ExportStub("System_Collections_Queue.cpp")]
     public class Queue : ICollection, ICloneable
     {
         private Object[] _array;

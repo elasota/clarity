@@ -9,6 +9,7 @@ namespace System
     using System.Runtime.CompilerServices;
 
     [Serializable()]
+    [Clarity.ExportStub("System_Type.cpp")]
     public abstract class Type : MemberInfo, IReflect
     {
 

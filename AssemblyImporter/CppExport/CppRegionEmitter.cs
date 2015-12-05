@@ -527,7 +527,7 @@ namespace AssemblyImporter.CppExport
             return result;
         }
 
-        private static void GenerateCppStringConstant(string inStr, out string outEncodedStr, out int outHash, out bool outIsPacked)
+        public static void GenerateCppStringConstant(string inStr, out string outEncodedStr, out int outHash, out bool outIsPacked)
         {
             // Clarity string constant encoding isn't UTF-8, but rather, a packed encoding that converts
             // into UTF-16 code points directly.
@@ -707,7 +707,6 @@ namespace AssemblyImporter.CppExport
         private void EmitCfgNode(int indentLevel, CfgNode cfgNode, StreamWriter writer, bool enterIsContinuous, bool exitIsContinuous)
         {
             List<SsaRegister> leakedRegs = new List<SsaRegister>();
-            Console.WriteLine("Starting CFG edge");
             CppScopeStack scopeStack = new CppScopeStack(indentLevel);
 
             Queue<SsaRegister> continuedRegs = null;
@@ -1382,19 +1381,19 @@ namespace AssemblyImporter.CppExport
                         {
                             bool isUnsigned = (midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Un) != 0;
                             bool isOvf = (midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Ovf) != 0;
-                            bool divsMayThrow;
+                            bool isInteger;
                             NumericStackType nst = NumericStackTypeForNumericBinaryOp(midInstr.RegArg, midInstr.RegArg2);
 
                             switch(nst)
                             {
                                 case NumericStackType.Float32:
                                 case NumericStackType.Float64:
-                                    divsMayThrow = false;
+                                    isInteger = false;
                                     break;
                                 case NumericStackType.Int32:
                                 case NumericStackType.Int64:
                                 case NumericStackType.NativeInt:
-                                    divsMayThrow = true;
+                                    isInteger = true;
                                     break;
                                 default:
                                     throw new ArgumentException();
@@ -1416,14 +1415,28 @@ namespace AssemblyImporter.CppExport
                                     arithOp = "Multiply";
                                     break;
                                 case MidInstruction.OpcodeEnum.div:
-                                    arithOp = "Divide";
-                                    if (divsMayThrow)
+                                    if (isInteger)
+                                    {
+                                        arithOp = "DivideInteger";
                                         canThrow = true;
+                                    }
+                                    else
+                                    {
+                                        arithOp = "Divide";
+                                        canThrow = false;
+                                    }
                                     break;
                                 case MidInstruction.OpcodeEnum.rem:
-                                    arithOp = "Modulo";
-                                    if (divsMayThrow)
+                                    if (isInteger)
+                                    {
+                                        arithOp = "ModuloInteger";
                                         canThrow = true;
+                                    }
+                                    else
+                                    {
+                                        arithOp = "Modulo";
+                                        canThrow = false;
+                                    }
                                     break;
                                 case MidInstruction.OpcodeEnum.and:
                                     arithOp = "BitwiseAnd";

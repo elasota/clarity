@@ -10,6 +10,7 @@ namespace System.Reflection
     //This class is marked serializable, but it's really the subclasses that
     //are responsible for handling the actual work of serialization if they need it.
     [Serializable()]
+    [Clarity.ExportStub("System_Reflection_ConstructorInfo.cpp")]
     abstract public class ConstructorInfo : MethodBase
     {
         public override MemberTypes MemberType

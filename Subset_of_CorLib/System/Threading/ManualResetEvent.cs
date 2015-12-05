@@ -6,6 +6,8 @@ namespace System.Threading
 
     using System;
     using System.Runtime.CompilerServices;
+
+    [Clarity.ExportStub("System_Threading_ManualResetEvent.cpp")]
     public sealed class ManualResetEvent : WaitHandle
     {
         [MethodImplAttribute(MethodImplOptions.InternalCall)]

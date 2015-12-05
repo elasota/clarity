@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 
 namespace System
 {
-
+    [Clarity.ExportStub("System_AppDomain.cpp")]
     public sealed class AppDomain : MarshalByRefObject
     {
         [System.Reflection.FieldNoReflection]

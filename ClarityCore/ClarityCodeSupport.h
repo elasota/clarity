@@ -33,7 +33,7 @@ namespace CLRVM
 		: public ::ClarityInternal::NoCreate
 	{
 	public:
-		static typename ::CLRVM::TValValue< ::CLRX::NtSystem::tUIntPtr >::Type Read(const ::CLRExec::Frame& frame, const typename ::CLRVM::TRefValue<T>::Type& arrayRef);
+		static typename ::CLRVM::TValValue< ::CLRX::NtSystem::tUIntPtr >::Type Read(const ::CLRExec::Frame& frame, const typename ::CLRVM::TRefValue<T>::Type& arrayRef) { CLARITY_NOTIMPLEMENTED; }
 	};
 }
 

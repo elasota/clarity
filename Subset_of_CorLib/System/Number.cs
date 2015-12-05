@@ -277,6 +277,7 @@ namespace System
     // NaNs or Infinities.
     //
     //This class contains only static members and does not need to be serializable
+    [Clarity.ExportStub("System_Number.cpp")]
     internal static class Number
     {
         public static String Format(Object value, bool isInteger, String format, NumberFormatInfo info)

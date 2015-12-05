@@ -7,6 +7,7 @@ namespace System.Reflection
     using System.Runtime.CompilerServices;
 
     [Serializable()]
+    [Clarity.ExportStub("System_Reflection_PropertyInfo.cpp")]
     abstract public class PropertyInfo : MemberInfo
     {
         public abstract Type PropertyType

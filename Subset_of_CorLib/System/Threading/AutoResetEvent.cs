@@ -6,6 +6,8 @@ namespace System.Threading
 
     using System;
     using System.Runtime.CompilerServices;
+
+    [Clarity.ExportStub("System_Threading_AutoResetEvent.cpp")]
     public sealed class AutoResetEvent : WaitHandle
     {
 

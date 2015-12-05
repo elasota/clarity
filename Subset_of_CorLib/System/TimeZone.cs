@@ -8,6 +8,7 @@ namespace System
     using System.Globalization;
 
     [Serializable]
+    [Clarity.ExportStub("System_TimeZone.cpp")]
     public abstract class TimeZone
     {
         internal int m_id;

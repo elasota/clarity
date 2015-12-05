@@ -47,10 +47,44 @@ namespace CLRCore
 {
     class GCObject;
 	class ObjectManager;
-	struct TypeInfo;
-	struct StaticCacheLocator;
+	struct RefTarget;
+	struct RttiInterfaceImplInfo;
+	struct RttiTypeInfo;
+	struct ClassToken;
 
-	typedef void (*TypeInfoQueryFunc)(TypeInfo &typeInfo);
+	typedef ::CLRCore::RefTarget *(*ReferenceConversionFunc)(::CLRCore::RefTarget *storedTarget);
+
+	struct RttiQueries
+	{
+		typedef void (*FQueryTypeInfo)(RttiTypeInfo &typeInfo);
+
+		typedef CLRTypes::S32 (*FQueryIndexedSignedNumber)(CLRTypes::U32 index);
+		typedef void (*FQueryIndexedType)(CLRTypes::U32 index, ClassToken*& classToken, RttiQueries::FQueryTypeInfo &typeInfo);
+		typedef void (*FQueryInterfaceImplInfo)(CLRTypes::U32 index, RttiInterfaceImplInfo &interfaceImplInfo);
+		typedef void (*FConstructInPlace)(void *target);
+	};
+
+	template<class T, class TMore>
+	struct RttiTypeList
+	{
+		static RttiQueries::FQueryTypeInfo Query(CLRTypes::U32 index);
+	};
+
+	struct RttiTypeListEnd
+	{
+		static RttiQueries::FQueryTypeInfo Query(CLRTypes::U32 index);
+	};
+
+	template<CLRTypes::S32 V, class TMore>
+	struct RttiIntList
+	{
+		static CLRTypes::S32 Query(CLRTypes::U32 index);
+	};
+
+	struct RttiIntListEnd
+	{
+		static CLRTypes::S32 Query(CLRTypes::U32 index);
+	};
 
 	//////////////////////////////////////////////////////////////////////
 	// RefTarget
@@ -119,6 +153,17 @@ namespace CLRCore
 		static ::CLRTypes::SizeT ComputeSize(const ::CLRExec::Frame &frame);
 	};
 
+	enum EGenericParamType
+	{
+		EGPT_TypeVar,
+		EGPT_MethodVar,
+	};
+
+	template<int TGenericParamType, int TIndex>
+	struct GenericParam
+	{
+	};
+
 	//////////////////////////////////////////////////////////////////////
 	// IObjectManager
 	// Interface to a CLR object manager.
@@ -128,19 +173,105 @@ namespace CLRCore
 		virtual void MemFree(void *ptr) CLARITY_PURE;
         virtual void AddObject(GCObject *obj) CLARITY_PURE;
 		virtual GCObject *GetStringConstant(const ::CLRExec::Frame &frame, bool isPacked, ::CLRTypes::SizeT length, ::CLRTypes::S32 hash, const char *value) CLARITY_PURE;
-		virtual GCObject *GetStaticClass(const ::CLRExec::Frame &frame, StaticCacheLocator &cacheLocator, TypeInfoQueryFunc rttiQuery) CLARITY_PURE;
+		virtual GCObject *GetStaticClass(const ::CLRExec::Frame &frame, ClassToken &classToken, RttiQueries::FQueryTypeInfo rttiQuery) CLARITY_PURE;
 
         template<class T>
         T *AllocObject(const ::CLRExec::Frame &frame);
     };
 
 	//////////////////////////////////////////////////////////////////////
-	// StaticCacheLocator
-	// Global variable type used to store a set-once lookup into the object manager's static cache.
-	struct StaticCacheLocator
+	// ClassToken
+	// Global variable type used to store a set-once lookup into the object manager's static cache,
+	// and also join type queries to a single address
+	struct ClassToken
 	{
 		::CLRTypes::U32 m_cacheHash;
 		::CLRTypes::AtomicCapableInt m_cacheID;
+	};
+
+	// Type info
+	enum TypeOfType
+	{
+		TOT_Class,
+		TOT_ComplexArray,
+		TOT_SZArray,
+		TOT_GenericInstantiation,
+		TOT_Void,
+		TOT_GenericParameter,
+	};
+
+	struct TI_Class
+	{
+		RttiQueries::FQueryTypeInfo containingType;
+		const char *name;
+		const char *ns;
+
+		RttiQueries::FQueryTypeInfo extends;
+		CLRTypes::U32 numNewInterfaces;
+		RttiQueries::FQueryInterfaceImplInfo newInterfaces;
+		CLRTypes::U32 numGenericParameters;
+	};
+
+	struct TI_GenericInstantiation
+	{
+		RttiQueries::FQueryTypeInfo baseType;
+		RttiQueries::FQueryIndexedType genericParameters;
+
+		RttiQueries::FQueryTypeInfo extends;
+		CLRTypes::U32 numNewInterfaces;
+		RttiQueries::FQueryInterfaceImplInfo newInterfaces;
+		CLRTypes::U32 numGenericParameters;
+	};
+
+	struct TI_GenericParameter
+	{
+		const EGenericParamType genericParamType;
+		const CLRTypes::U32 index;
+	};
+
+	struct TI_ComplexArray
+	{
+		RttiQueries::FQueryTypeInfo elementType;
+		const CLRTypes::U32 rank;
+		RttiQueries::FQueryIndexedSignedNumber lowBounds;
+	};
+
+	struct TI_SZArray
+	{
+		RttiQueries::FQueryTypeInfo elementType;
+	};
+
+	struct RttiTypeInfo
+	{
+		TypeOfType typeOfType;
+		ClassToken *classToken;
+
+		union
+		{
+			TI_Class classInfo;
+			TI_GenericInstantiation genericInstInfo;
+			TI_ComplexArray complexArrayInfo;
+			TI_SZArray szArrayInfo;
+			TI_GenericParameter genericParamInfo;
+		};
+	};
+
+	struct RttiInterfaceImplInfo
+	{
+		RttiQueries::FQueryTypeInfo typeInfo;
+		ReferenceConversionFunc convertRefFunc;
+	};
+
+	template<class TSource, class TDest>
+	struct RttiC2IConverter
+	{
+		static RefTarget *Convert(RefTarget *src) { CLARITY_NOTIMPLEMENTED; }
+	};
+
+	template<class TSource, class TDest>
+	struct RttiI2IConverter
+	{
+		static RefTarget *Convert(RefTarget *src) { CLARITY_NOTIMPLEMENTED; }
 	};
 
 	CLARITY_COREDLL ::CLRCore::IObjectManager *CreateObjectManager();
@@ -159,7 +290,8 @@ namespace CLRTI
 			IsDelegate = 0,
 			IsMulticastDelegate = 0,
 			IsEnum = 0,
-			IsReferenceArray = (::CLRTI::TypeProtoTraits<T>::IsValueType == 0) ? 1 : 0,
+			IsReferenceArray = ((::CLRTI::TypeProtoTraits<T>::IsValueType == 0) ? 1 : 0),
+			IsTypePlaceholder = 0,
 		};
 	};
 
@@ -169,6 +301,15 @@ namespace CLRTI
 		enum
 		{
 			IsValueTraceable = 1,
+		};
+	};
+
+	template<int TGenericParamType, int TIndex>
+	struct TypeProtoTraits< ::CLRCore::GenericParam<TGenericParamType, TIndex> >
+	{
+		enum
+		{
+			IsTypePlaceholder = 1,
 		};
 	};
 }
@@ -430,8 +571,6 @@ namespace CLRUtil
 	T *RefToPtr(T *ref);
 #endif
 
-	typedef ::CLRCore::RefTarget *(*ReferenceConversionFunc)(::CLRCore::RefTarget *storedTarget);
-
 	template<class T>
 	class RefArrayReference
 	{
@@ -439,7 +578,7 @@ namespace CLRUtil
 		typedef T TSubscriptType;
 	private:
 		::CLRCore::ArrayInfoBlock *m_array;
-		ReferenceConversionFunc m_convFunc;
+		CLRCore::ReferenceConversionFunc m_convFunc;
 	};
 
 	template<class TSource, class TDest>
@@ -1366,7 +1505,7 @@ namespace CLRVM
 	class DynamicCaster
 	{
 	public:
-		static typename ::CLRVM::TRefValue<TDest>::Type Cast(const typename ::CLRVM::TRefValue<TSource>::Type &src);
+		static typename ::CLRVM::TRefValue<TDest>::Type Cast(const typename ::CLRVM::TRefValue<TSource>::Type &src) { CLARITY_NOTIMPLEMENTED; }
 	};
 
 	template<class T>
@@ -1395,8 +1534,8 @@ namespace CLRVM
 		: public ClarityInternal::NoCreate
 	{
 	public:
-		static void Store(const CLRExec::Frame &frame, const typename CLRVM::TValValue<T>::Type &arrayRef, CLRVM::TValValue<CLRX::NtSystem::tIntPtr>::Type index, const typename CLRVM::TValValue<typename T::TSubscriptType>::Type &value);
-		static void Store(const CLRExec::Frame &frame, const typename CLRVM::TValValue<T>::Type &arrayRef, CLRTypes::S32 index, const typename CLRVM::TValValue<typename T::TSubscriptType>::Type &value);
+		static void Store(const CLRExec::Frame &frame, const typename CLRVM::TValValue<T>::Type &arrayRef, CLRVM::TValValue<CLRX::NtSystem::tIntPtr>::Type index, const typename CLRVM::TValValue<typename T::TSubscriptType>::Type &value) { CLARITY_NOTIMPLEMENTED; }
+		static void Store(const CLRExec::Frame &frame, const typename CLRVM::TValValue<T>::Type &arrayRef, CLRTypes::S32 index, const typename CLRVM::TValValue<typename T::TSubscriptType>::Type &value) { CLARITY_NOTIMPLEMENTED; }
 	};
 
 	template<class T>
@@ -1407,23 +1546,27 @@ namespace CLRVM
 		typedef typename CLRVM::TValValue<T>::Type TValueType;
 
 	public:
-		static TValueType Add(const TValueType &a, const TValueType &b);
-		static TValueType Subtract(const TValueType &a, const TValueType &b);
-		static TValueType Multiply(const TValueType &a, const TValueType &b);
-		static TValueType Divide(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b);
-		static TValueType Modulo(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b);
-		static TValueType BitwiseAnd(const TValueType &a, const TValueType &b);
-		static TValueType BitwiseOr(const TValueType &a, const TValueType &b);
-		static TValueType BitwiseXor(const TValueType &a, const TValueType &b);
+		static TValueType Add(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType Subtract(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType Multiply(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType Divide(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType DivideInteger(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType Modulo(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType ModuloInteger(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType BitwiseAnd(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType BitwiseOr(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType BitwiseXor(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
 
-		static TValueType AddOvf(const TValueType &a, const TValueType &b);
-		static TValueType AddOvfUn(const TValueType &a, const TValueType &b);
-		static TValueType SubtractOvf(const TValueType &a, const TValueType &b);
-		static TValueType SubtractOvfUn(const TValueType &a, const TValueType &b);
-		static TValueType MultiplyOvf(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b);
-		static TValueType MultiplyOvfUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b);
-		static TValueType DivideUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b);
-		static TValueType ModuloUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b);
+		static TValueType AddOvf(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType AddOvfUn(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType SubtractOvf(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType SubtractOvfUn(const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType MultiplyOvf(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType MultiplyOvfUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType DivideUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType DivideIntegerUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType ModuloUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
+		static TValueType ModuloIntegerUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
 	};
 }
 
@@ -1782,7 +1925,7 @@ inline void CLRVM::InitStaticToken(const CLRExec::Frame &frame, typename CLRUtil
 {
 	::CLRCore::IObjectManager *objManager = frame.GetObjectManager();
 
-	::CLRCore::GCObject *staticInstance = objManager->GetStaticClass(frame, T::bStaticCacheLocator, T::RttiQuery);
+	::CLRCore::GCObject *staticInstance = objManager->GetStaticClass(frame, T::bClassToken, T::RttiQuery);
 	typename ::CLRTI::TypeTraits<T>::StaticType *staticContainer = static_cast<typename ::CLRTI::TypeTraits<T>::StaticType*>(staticInstance);
 	staticToken = typename ::CLRUtil::TSimpleRef< typename ::CLRTI::TypeTraits<T>::StaticType >::Type(staticContainer);
 }
@@ -2124,4 +2267,32 @@ CLARITY_FORCEINLINE T *::CLRUtil::SimpleRefToPtr(T *ref)
 
 #endif
 
+template<class T, class TMore>
+inline CLRCore::RttiQueries::FQueryTypeInfo CLRCore::RttiTypeList<T, TMore>::Query(CLRTypes::U32 index)
+{
+	if (index == 0)
+		return T::RttiQuery;
+	return TMore::Query(index - 1);
+}
+
+inline CLRCore::RttiQueries::FQueryTypeInfo CLRCore::RttiTypeListEnd::Query(CLRTypes::U32 index)
+{
+	return CLARITY_NULLPTR;
+}
+
+template<CLRTypes::S32 V, class TMore>
+inline CLRTypes::S32 CLRCore::RttiIntList<V, TMore>::Query(CLRTypes::U32 index)
+{
+	if (index == 0)
+		return V;
+	return TMore::Query(index - 1);
+}
+
+inline CLRTypes::S32 CLRCore::RttiIntListEnd::Query(CLRTypes::U32 index)
+{
+	return 0;
+}
+
+
 #endif
+

@@ -8,6 +8,7 @@ namespace System.Reflection
     using System.Runtime.CompilerServices;
 
     [Serializable()]
+    [Clarity.ExportStub("System_Reflection_RuntimeFieldInfo.cpp")]
     internal sealed class RuntimeFieldInfo : FieldInfo
     {
         public extern override String Name

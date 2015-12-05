@@ -9,6 +9,7 @@ namespace System
     using System.Threading;
     using System.Runtime.CompilerServices;
     [Serializable()]
+    [Clarity.ExportStub("System_Delegate.cpp")]
     public abstract class Delegate
     {
 

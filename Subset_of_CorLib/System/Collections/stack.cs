@@ -12,6 +12,7 @@ namespace System.Collections
     /// </summary>
     [Serializable()]
     [DebuggerDisplay("Count = {Count}")]
+    [Clarity.ExportStub("System_Collections_Stack.cpp")]
     public class Stack : ICollection, ICloneable
     {
         private Object[] _array;     // Storage for stack elements

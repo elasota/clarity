@@ -8,6 +8,7 @@ namespace System
     using System.Runtime.CompilerServices;
 
     [Serializable()]
+    [Clarity.ExportStub("System_MulticastDelegate.cpp")]
     public abstract class MulticastDelegate : Delegate
     {
 

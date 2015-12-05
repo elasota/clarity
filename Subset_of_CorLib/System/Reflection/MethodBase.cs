@@ -12,6 +12,7 @@ namespace System.Reflection
     ////////////////////////////////////////////////////////////////////////////////
     using System;
     [Serializable()]
+    [Clarity.ExportStub("System_Reflection_MethodBase.cpp")]
     public abstract class MethodBase : MemberInfo
     {
         public extern bool IsPublic

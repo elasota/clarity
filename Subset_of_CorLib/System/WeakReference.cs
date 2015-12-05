@@ -8,6 +8,7 @@ namespace System
     using System.Runtime.CompilerServices;
     using System.Threading;
     [Serializable()]
+    [Clarity.ExportStub("System_WeakReference.cpp")]
     public class WeakReference
     {
 

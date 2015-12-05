@@ -21,5 +21,7 @@ namespace AssemblyImporter.CLR
         {
             return this.Equals((object)typeSpec);
         }
+
+        public abstract override string ToString();
     }
 }

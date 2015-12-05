@@ -29,6 +29,7 @@ namespace System.Text
     // (0xFEFF) written in UTF-8 (0xEF 0xBB 0xBF).  The byte order mark is
     // used mostly to distinguish UTF-8 text from other encodings, and doesn't
     // switch the byte orderings.
+    [Clarity.ExportStub("System_Text_UTF8Encoding.cpp")]
     public class UTF8Encoding : Encoding
     {
         /*

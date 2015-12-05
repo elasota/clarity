@@ -115,6 +115,7 @@ namespace System.Globalization
     */
 
     //This class contains only static members and does not require the serializable attribute.
+    [Clarity.ExportStub("System_Globalization_DateTimeFormat.cpp")]
     internal static
     class DateTimeFormat
     {

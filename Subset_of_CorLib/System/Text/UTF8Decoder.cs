@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace System.Text
 {
+    [Clarity.ExportStub("System_Text_UTF8Decoder.cpp")]
     internal class UTF8Decoder : Decoder
     {
         [MethodImplAttribute(MethodImplOptions.InternalCall)]

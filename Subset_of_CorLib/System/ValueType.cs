@@ -8,6 +8,7 @@ namespace System
     using System.Runtime.CompilerServices;
 
     [Serializable]
+    [Clarity.ExportStub("System_ValueType.cpp")]
     public abstract class ValueType
     {
 

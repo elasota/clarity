@@ -8,6 +8,7 @@ namespace System
     using System.Reflection;
 
     [Serializable()]
+    [Clarity.ExportStub("System_Exception.cpp")]
     public class Exception
     {
         private string _message;

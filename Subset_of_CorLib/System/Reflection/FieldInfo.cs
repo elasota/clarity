@@ -7,6 +7,7 @@ namespace System.Reflection
     using System.Runtime.CompilerServices;
 
     [Serializable()]
+    [Clarity.ExportStub("System_Reflection_FieldInfo.cpp")]
     abstract public class FieldInfo : MemberInfo
     {
 

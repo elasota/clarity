@@ -6,6 +6,8 @@ namespace System.Threading
     using System.Threading;
     using System.Runtime.CompilerServices;
     using System;
+
+    [Clarity.ExportStub("System_Threading_WaitHandle.cpp")]
     public abstract class WaitHandle : MarshalByRefObject
     {
         public const int WaitTimeout = 0x102;

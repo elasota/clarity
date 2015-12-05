@@ -6,7 +6,8 @@ using System.Runtime.CompilerServices;
 
 namespace System
 {
-	public static class BitConverter
+    [Clarity.ExportStub("System_BitConverter.cpp")]
+    public static class BitConverter
 	{
 		/// <summary>
 		/// Indicates the byte order ("endianess") in which data is stored in this computer architecture.

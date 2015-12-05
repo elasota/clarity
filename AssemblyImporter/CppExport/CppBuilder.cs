@@ -174,14 +174,26 @@ namespace AssemblyImporter.CppExport
             Directory.CreateDirectory(dirPath);
         }
 
-        private void ExportClassStubs(CppClass cls)
+        public IEnumerable<CLRSigCustomAttribute> CustomAttribsOfType(ICLRHasCustomAttributes hasCA, string ns, string name)
         {
-            foreach (CLRCustomAttributeRow caRow in cls.TypeDef.CustomAttributes)
+            List<CLRSigCustomAttribute> attribs = new List<CLRSigCustomAttribute>();
+
+            foreach (CLRCustomAttributeRow caRow in hasCA.CustomAttributes)
             {
                 CLRSigCustomAttribute ca = caRow.CustomAttribute;
                 CppMethodSpec ctorSpec = ResolveMethodDefOrRef(ca.Constructor);
-                
+
+                CLRTypeDefRow declClass = ctorSpec.CppMethod.DeclaredInClass;
+                if (declClass.ContainerClass == null && declClass.TypeNamespace == ns && declClass.TypeName == name)
+                    attribs.Add(ca);
             }
+
+            return attribs;
+        }
+
+        private void ExportClassStubs(CppClass cls)
+        {
+            CppStubExporter.ExportStub(this, m_stubDir, cls);
         }
 
         private void ExportClassBox(CppClass cls)
@@ -284,6 +296,7 @@ namespace AssemblyImporter.CppExport
                 writer.WriteLine("\t\t\tIsEnum = " + (cls.IsEnum ? "1" : "0") + ",");
                 writer.WriteLine("\t\t\tIsArray = 0,");
                 writer.WriteLine("\t\t\tIsReferenceArray = 0,");
+                writer.WriteLine("\t\t\tIsTypePlaceholder = 0,");
                 writer.WriteLine("\t\t};");
                 writer.WriteLine("\t};");
                 writer.WriteLine("}");
@@ -1811,6 +1824,174 @@ namespace AssemblyImporter.CppExport
                         }
                     }
 
+                    bool classTokenImplShouldBeInline = (cls.NumGenericParameters > 0);
+
+                    // Export class token
+                    if (classTokenImplShouldBeInline == exportInline)
+                    {
+                        depSet.AddTypeSpecDependencies(CreateInstanceTypeSpec(m_assemblies, cls.TypeDef), true);
+
+                        writer.WriteLine("// class token implementation");
+
+                        if (cls.NumGenericParameters > 0)
+                        {
+                            writer.Write("template< ");
+                            WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
+                            writer.WriteLine(" >");
+                        }
+
+                        writer.Write("CLRCore::ClassToken (");
+                        writer.Write(cls.GenerateCppClassName());
+                        WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                        writer.WriteLine("::bClassToken);");
+                    }
+
+                    bool rttiQueryShouldBeInline = (cls.NumGenericParameters > 0);
+
+                    if (rttiQueryShouldBeInline == exportInline)
+                    {
+                        writer.WriteLine("// rtti query implementation");
+                        string instLocPrefix;
+                        if (cls.NumGenericParameters > 0)
+                        {
+                            writer.Write("template< ");
+                            WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
+                            writer.WriteLine(" >");
+                            instLocPrefix = "\ttypeInfo.genericInstInfo.";
+                        }
+                        else
+                            instLocPrefix = "\ttypeInfo.classInfo.";
+
+                        writer.Write("void (");
+                        writer.Write(cls.GenerateCppClassName());
+                        WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                        writer.WriteLine("::RttiQuery)(::CLRCore::RttiTypeInfo &typeInfo)");
+                        writer.WriteLine("{");
+
+                        if (cls.NumGenericParameters > 0)
+                        {
+                            writer.WriteLine("\ttypeInfo.typeOfType = CLRCore::TOT_GenericInstantiation;");
+                            writer.WriteLine("\ttypeInfo.genericInstInfo.baseType = bTGenericBase::RttiQuery;");
+                            writer.Write("\ttypeInfo.genericInstInfo.genericParameters = ");
+                            for (int i = 0; i < cls.NumGenericParameters; i++)
+                            {
+                                writer.Write("CLRCore::RttiTypeList< T");
+                                writer.Write(i);
+                                writer.Write(", ");
+                            }
+                            writer.Write("RttiTypeListEnd");
+                            for (int i = 0; i < cls.NumGenericParameters; i++)
+                                writer.Write(" >");
+                            writer.WriteLine("::Query;");
+                        }
+                        else
+                        {
+                            int hash;
+                            bool isPacked;
+                            string encodedName;
+                            string encodedNamespace;
+                            CppRegionEmitter.GenerateCppStringConstant(cls.TypeDef.TypeName, out encodedName, out hash, out isPacked);
+                            CppRegionEmitter.GenerateCppStringConstant(cls.TypeDef.TypeNamespace, out encodedNamespace, out hash, out isPacked);
+
+                            writer.WriteLine("\ttypeInfo.typeOfType = CLRCore::TOT_Class;");
+                            writer.Write("\ttypeInfo.classInfo.containingType = ");
+                            if (cls.TypeDef.ContainerClass == null)
+                                writer.WriteLine("CLARITY_NULLPTR;");
+                            else
+                            {
+                                writer.Write(OpenGenericTypeName(cls.TypeDef.ContainerClass));
+                                writer.Write("::RttiQuery;");
+                            }
+
+                            writer.Write("\ttypeInfo.classInfo.name = \"");
+                            writer.Write(encodedName);
+                            writer.WriteLine("\";");
+
+                            writer.Write("\ttypeInfo.classInfo.ns = \"");
+                            writer.Write(encodedNamespace);
+                            writer.WriteLine("\";");
+                        }
+
+                        writer.WriteLine("\ttypeInfo.classToken = &bClassToken;");
+                        writer.Write(instLocPrefix);
+                        writer.Write("extends = ");
+
+                        if (cls.ParentTypeSpec == null)
+                            writer.Write("CLARITY_NULLPTR");
+                        else
+                        {
+                            writer.Write(SpecToAmbiguousStorage(cls.ParentTypeSpec));
+                            writer.Write("::RttiQuery");
+                        }
+                        writer.WriteLine(";");
+                        writer.Write(instLocPrefix);
+                        writer.Write("numNewInterfaces = ");
+                        writer.Write(cls.NumNewlyImplementedInterfaces.ToString());
+                        writer.WriteLine(";");
+
+                        writer.Write(instLocPrefix);
+                        writer.Write("newInterfaces = ");
+                        if (cls.NumNewlyImplementedInterfaces > 0)
+                            writer.WriteLine("RttiQueryInterfaces;");
+                        else
+                            writer.WriteLine("CLARITY_NULLPTR;");
+
+                        writer.Write(instLocPrefix);
+                        writer.Write("numGenericParameters = ");
+                        writer.Write(cls.NumGenericParameters);
+                        writer.WriteLine(";");
+
+                        writer.WriteLine("}");
+
+                        if (cls.NumNewlyImplementedInterfaces > 0)
+                        {
+                            if (cls.NumGenericParameters > 0)
+                            {
+                                writer.Write("template< ");
+                                WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
+                                writer.WriteLine(" >");
+                            }
+                            writer.Write("void (");
+                            writer.Write(cls.GenerateCppClassName());
+                            WriteTemplateParamCluster(true, cls.NumGenericParameters, "T", writer);
+                            writer.WriteLine("::RttiQueryInterfaces)(CLRTypes::U32 index, CLRCore::RttiInterfaceImplInfo &interfaceImplInfo)");
+                            writer.WriteLine("{");
+                            writer.WriteLine("\tswitch(index)");
+                            writer.WriteLine("\t{");
+
+                            int ifcNum = 0;
+                            foreach (CLRTypeSpec ifc in cls.NewlyImplementedInterfaces)
+                            {
+                                writer.Write("\tcase ");
+                                writer.Write(ifcNum);
+                                writer.WriteLine(":");
+
+                                writer.Write("\t\tinterfaceImplInfo.typeInfo = ");
+                                writer.Write(SpecToAmbiguousStorage(ifc));
+                                writer.WriteLine("::RttiQuery;");
+
+                                writer.Write("\t\tinterfaceImplInfo.convertRefFunc = ");
+                                if (cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Class)
+                                    writer.Write("CLRCore::RttiC2IConverter< ");
+                                else if (cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Interface)
+                                    writer.Write("CLRCore::RttiI2IConverter< ");
+                                else
+                                    throw new Exception("Unexpected type semantics");
+
+                                writer.Write(SpecToAmbiguousStorage(CreateInstanceTypeSpec(m_assemblies, cls.TypeDef)));
+                                writer.Write(", ");
+                                writer.Write(SpecToAmbiguousStorage(ifc));
+                                writer.WriteLine(" >::Convert;");
+                                writer.WriteLine("\t\tbreak;");
+
+                                ifcNum++;
+                            }
+                            writer.WriteLine("\t};");
+
+                            writer.WriteLine("}");
+                        }
+                    }
+
                     // Export converted IL
                     foreach (CppMethod method in cls.Methods)
                     {
@@ -1838,6 +2019,12 @@ namespace AssemblyImporter.CppExport
                     tempMS.WriteTo(outStream);
                 }
             }
+        }
+
+        private string OpenGenericTypeName(CLRTypeDefRow typeDef)
+        {
+            CppClass cls = GetCachedClass(new CLRTypeSpecClass(typeDef));
+            return cls.GenerateCppGenericBaseClassName();
         }
 
         private bool ClassHasNewTraceableFields(CppClass cls)
@@ -1967,6 +2154,15 @@ namespace AssemblyImporter.CppExport
 
                     if (cls.NumGenericParameters > 0)
                     {
+                        writer.WriteLine("\tstruct bGenericBase_" + clsName);
+                        writer.WriteLine("\t{");
+                        writer.WriteLine("\t\t// generic base rtti");
+                        writer.WriteLine("\t\tstatic void RttiQuery(::CLRCore::RttiTypeInfo &typeInfo);");
+                        if (cls.NumNewlyImplementedInterfaces > 0)
+                            writer.WriteLine("\t\tstatic void RttiQueryInterfaces(CLRTypes::U32 index, CLRCore::RttiInterfaceImplInfo & interfaceImplInfo);");
+                        writer.WriteLine("\t};");
+                        writer.WriteLine();
+
                         writer.Write("\ttemplate< ");
                         WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
                         writer.WriteLine("> ");
@@ -1999,6 +2195,13 @@ namespace AssemblyImporter.CppExport
                     }
                     writer.WriteLine("\t{");
 
+                    if (cls.NumGenericParameters > 0)
+                    {
+                        writer.WriteLine("\t// generic base");
+                        writer.WriteLine("\ttypedef bGenericBase_" + clsName + " bTGenericBase;");
+                        writer.WriteLine();
+                    }
+
                     if (cls.IsDelegate)
                     {
                         CLRMethodSignatureInstance delegateSig = cls.DelegateSignature;
@@ -2017,7 +2220,7 @@ namespace AssemblyImporter.CppExport
                         writer.WriteLine();
                     }
 
-                    if (cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Class && (cls.TypeDef.Extends == null || cls.HaveAnyNewlyImplementedInterfaces))
+                    if (cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Class && (cls.TypeDef.Extends == null || cls.NumNewlyImplementedInterfaces > 0))
                     {
                         writer.WriteLine("\t\t// root location reimplementation");
                         writer.WriteLine("\t\tinline virtual ::CLRX::NtSystem::tObject *GetRootObject() CLARITY_OVERRIDE { return this; }");
@@ -2124,16 +2327,15 @@ namespace AssemblyImporter.CppExport
                             writer.WriteLine("\t\tvirtual void VisitReferences(::CLRExec::IRefVisitor &visitor) CLARITY_OVERRIDE;");
                     }
 
-                    if (cls.HaveNewStaticFields)
-                    {
-                        writer.WriteLine();
-                        writer.WriteLine("\t\t// static field token");
-                        writer.WriteLine("\t\tstatic CLRCore::StaticCacheLocator bStaticCacheLocator;");
-                    }
+                    writer.WriteLine();
+                    writer.WriteLine("\t\t// class token");
+                    writer.WriteLine("\t\tstatic CLRCore::ClassToken bClassToken;");
 
                     writer.WriteLine();
-                    writer.WriteLine("\t\t// rtti");
-                    writer.WriteLine("\t\tstatic void RttiQuery(::CLRCore::TypeInfo &typeInfo);");
+                    writer.WriteLine("\t\t// rtti query");
+                    writer.WriteLine("\t\tstatic void RttiQuery(::CLRCore::RttiTypeInfo &typeInfo);");
+                    if (cls.NumNewlyImplementedInterfaces > 0)
+                        writer.WriteLine("\t\tstatic void RttiQueryInterfaces(CLRTypes::U32 index, CLRCore::RttiInterfaceImplInfo &interfaceImplInfo);");
 
                     writer.WriteLine("\t};");
 
@@ -2245,7 +2447,7 @@ namespace AssemblyImporter.CppExport
                         {
                             depSet.AddTypeSpecDependencies(compatibleSpec, false);
                             writer.Write("\ttemplate< ");
-                            WriteTemplateParamCluster(false, cls.NumGenericParameters, "T", writer);
+                            WriteTemplateParamCluster(false, cls.NumGenericParameters, "class T", writer);
                             writer.WriteLine(" >");
                             writer.Write("\tstruct TypeRefCompatibility< ");
                             writer.Write(thisClassSpecString);

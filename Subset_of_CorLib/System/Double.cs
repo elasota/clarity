@@ -9,6 +9,7 @@ namespace System
     using System.Runtime.CompilerServices;
 
     [Serializable]
+    [Clarity.ExportStub("System_Double.cpp")]
     public struct Double
     {
         // Public Constants

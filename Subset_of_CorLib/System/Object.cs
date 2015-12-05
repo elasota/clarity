@@ -15,6 +15,7 @@ namespace System
      */
     //This class contains no data and does not need to be serializable
     [Serializable()]
+    [Clarity.ExportStub("System_Object.cpp")]
     public class Object
     {
         [Diagnostics.DebuggerHidden]

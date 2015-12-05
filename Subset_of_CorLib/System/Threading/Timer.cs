@@ -9,6 +9,7 @@ namespace System.Threading
 
     public delegate void TimerCallback(Object state);
 
+    [Clarity.ExportStub("System_Threading_Timer.cpp")]
     public sealed class Timer : MarshalByRefObject, IDisposable
     {
         [System.Reflection.FieldNoReflection]

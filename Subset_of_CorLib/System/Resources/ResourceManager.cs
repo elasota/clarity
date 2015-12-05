@@ -12,6 +12,7 @@ using System.Globalization;
 
 namespace System.Resources
 {
+    [Clarity.ExportStub("System_Resources_ResourceManager.cpp")]
     public class ResourceManager
     {
         internal const string s_fileExtension = ".tinyresources";

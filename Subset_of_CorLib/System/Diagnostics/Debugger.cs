@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace System.Diagnostics
 {
+    [Clarity.ExportStub("System_Diagnostics_Debugger.cpp")]
     public static class Debugger
     {
         public static extern bool IsAttached

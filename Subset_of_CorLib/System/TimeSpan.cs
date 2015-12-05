@@ -21,6 +21,7 @@ namespace System
      * @see System.DateTime
      */
     [Serializable]
+    [Clarity.ExportStub("System_TimeSpan.cpp")]
     public struct TimeSpan
     {
         internal long m_ticks;

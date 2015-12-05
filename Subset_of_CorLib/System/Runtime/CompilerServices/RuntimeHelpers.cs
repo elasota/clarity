@@ -6,7 +6,9 @@ namespace System.Runtime.CompilerServices
 
     using System;
     using System.Runtime.CompilerServices;
+
     [Serializable]
+    [Clarity.ExportStub("System_Runtime_CompilerServices_RuntimeHelpers.cpp")]
     public static class RuntimeHelpers
     {
         [MethodImplAttribute(MethodImplOptions.InternalCall)]

@@ -10,6 +10,7 @@ namespace System.Reflection
     // This is defined to support VarArgs
     //typedef ArgIterator  va_list;
     [Serializable()]
+    [Clarity.ExportStub("System_Reflection_RuntimeMethodInfo.cpp")]
     internal sealed class RuntimeMethodInfo : MethodInfo
     {
         public extern override Type ReturnType

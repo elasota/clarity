@@ -8,6 +8,7 @@ namespace System
     using System.Runtime.CompilerServices;
 
     [Serializable]
+    [Clarity.ExportStub("System_Enum.cpp")]
     public abstract class Enum : ValueType
     {
         public override String ToString()

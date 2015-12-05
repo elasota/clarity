@@ -52,10 +52,12 @@
     <Compile Include="TestConvertUintToF64.cs" />
     <Compile Include="TestExceptionHandling.cs" />
     <Compile Include="TestExceptions.cs" />
+    <Compile Include="TestGenericChildReflection.cs" />
     <Compile Include="TestGenericConstructor.cs" />
     <Compile Include="TestGenericInternalCollision.cs" />
     <Compile Include="TestGenericLocalTraces.cs" />
     <Compile Include="TestInheritedReimpl.cs" />
+    <Compile Include="TestLdToken.cs" />
     <Compile Include="TestLongArray.cs" />
     <Compile Include="TestMulticastDelegate.cs" />
     <Compile Include="TestMultidimensionalArray.cs" />
@@ -81,6 +83,7 @@
     <Compile Include="TestValueTypeCalls.cs" />
     <Compile Include="TestVirtualDelegate.cs" />
     <Compile Include="TestVirtualStructBoxing.cs" />
+    <Compile Include="TestTypeOf.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="TestImplementNonVirtual.cs" />

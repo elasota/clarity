@@ -7,7 +7,7 @@ namespace System.Reflection
     using System;
     using CultureInfo = System.Globalization.CultureInfo;
     using System.Runtime.CompilerServices;
-
+   
     public sealed class AssemblyName
     {
         private Assembly _assembly;
@@ -49,6 +49,7 @@ namespace System.Reflection
     }
 
     [Serializable()]
+    [Clarity.ExportStub("System_Reflection_Assembly.cpp")]
     public class Assembly
     {
         public extern virtual String FullName

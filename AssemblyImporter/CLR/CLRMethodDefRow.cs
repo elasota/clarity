@@ -102,11 +102,6 @@ namespace AssemblyImporter.CLR
 
             Name = parser.ReadString();
 
-            if (Name == "TestGenericMethod")
-            {
-                int bp = 0;
-            }
-
             Signature = new CLRSigMethodDefOrRefSig(new CLRSignatureParser(parser.ReadBlob(), parser.Tables), CLRSigMethodDefOrRefSig.Kind.Def);
 
             CodeType = (MethodCodeType)(implFlags & 0x3);

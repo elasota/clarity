@@ -9,6 +9,7 @@ namespace System.Collections
 {
     [Serializable()]
     [DebuggerDisplay("Count = {Count}")]
+    [Clarity.ExportStub("System_Collections_ArrayList.cpp")]
     public class ArrayList : IList, ICloneable
     {
         private Object[] _items;

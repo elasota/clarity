@@ -13,7 +13,7 @@ namespace CLRCore
 		virtual void MemFree(void *ptr) CLARITY_OVERRIDE;
 		virtual void AddObject(GCObject *obj) CLARITY_OVERRIDE;
 		virtual ::CLRCore::GCObject *GetStringConstant(const ::CLRExec::Frame &frame, bool isPacked, ::CLRTypes::SizeT length, ::CLRTypes::S32 hash, const char *value) CLARITY_OVERRIDE;
-		virtual GCObject *GetStaticClass(const ::CLRExec::Frame &frame, StaticCacheLocator &cacheLocator, TypeInfoQueryFunc rttiQuery) CLARITY_OVERRIDE { CLARITY_NOTIMPLEMENTED; }
+		virtual GCObject *GetStaticClass(const ::CLRExec::Frame &frame, ClassToken &cacheLocator, RttiQueries::FQueryTypeInfo rttiQuery) CLARITY_OVERRIDE { CLARITY_NOTIMPLEMENTED; }
 	};
 }
 

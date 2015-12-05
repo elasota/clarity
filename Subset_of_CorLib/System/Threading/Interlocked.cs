@@ -10,6 +10,7 @@ namespace System.Threading
     // codegen for the yield keyword, and arguably they didn't protect much.
     // Instead, they penalized people (and compilers) for writing threadsafe
     // code.
+    [Clarity.ExportStub("System_Threading_Interlocked.cpp")]
     public static class Interlocked
     {
         /******************************

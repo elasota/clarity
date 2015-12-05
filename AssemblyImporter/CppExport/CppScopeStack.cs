@@ -68,7 +68,6 @@ namespace AssemblyImporter.CppExport
 
         public void KillReg(SsaRegister reg, StreamWriter writer)
         {
-            Console.WriteLine("Kill reg: " + reg.SsaID);
             if (!IsRegScopable(reg))
                 return;
 

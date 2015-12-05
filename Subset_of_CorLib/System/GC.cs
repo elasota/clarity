@@ -8,9 +8,9 @@ namespace System
     using System;
     using System.Runtime.CompilerServices;
 
+    [Clarity.ExportStub("System_GC.cpp")]
     public static class GC
     {
-
         [MethodImplAttribute(MethodImplOptions.InternalCall)]
         private static extern bool AnyPendingFinalizers();
 

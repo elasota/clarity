@@ -9,6 +9,7 @@ namespace System.Threading
     using System.Runtime.CompilerServices;
 
     // deliberately not [serializable]
+    [Clarity.ExportStub("System_Threading_ManualResetEvent.cpp")]
     public sealed class Thread
     {
         private Delegate m_Delegate;

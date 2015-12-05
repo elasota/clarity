@@ -162,6 +162,7 @@
     <Compile Include="CppExport\CppRegionEmitter.cs" />
     <Compile Include="CppExport\CppRegisterAllocator.cs" />
     <Compile Include="CppExport\CppScopeStack.cs" />
+    <Compile Include="CppExport\CppStubExporter.cs" />
     <Compile Include="CppExport\CppTraceabilityEnum.cs" />
     <Compile Include="CppExport\CppVtableSlotOverrideImpl.cs" />
     <Compile Include="CppExport\ExceptionHandlingCluster.cs" />

@@ -158,8 +158,6 @@ namespace AssemblyImporter.CppExport
                 }
             }
 
-            Console.WriteLine("Method " + cls.FullName + "::" + method.Name);
-
             foreach (VReg vReg in locals)
             {
                 vReg.Liven();

@@ -18,7 +18,7 @@ namespace AssemblyImporter.CppExport
         public IEnumerable<CppField> InheritedFields { get { return m_inheritedFields; } }
         public CLRTypeSpec ParentTypeSpec { get; private set; }
         public int NumGenericParameters { get; private set; }
-        public bool HaveAnyNewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces.Count > 0; } }
+        public int NumNewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces.Count; } }
         public IEnumerable<CLRTypeSpec> NewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces; } }
         public IEnumerable<CLRTypeSpec> ReimplementedInterfaces { get { return m_reimplementedInterfaces; } }
         public IEnumerable<CLRTypeSpec> InheritedImplementedInterfaces { get { return m_inheritedImplementedInterfaces; } }
@@ -33,6 +33,7 @@ namespace AssemblyImporter.CppExport
         public CLRMethodSignatureInstance DelegateSignature { get; private set; }
         public bool HaveNewStaticFields { get; private set; }
         public bool HaveInheritedStaticFields { get; private set; }
+        public string StubPath { get; private set; }
 
         private List<CppMethod> m_methods;
         private List<CppVtableSlot> m_allVtableSlots;       // All slots
@@ -133,6 +134,7 @@ namespace AssemblyImporter.CppExport
                 DelegateSignature = baseInstance.DelegateSignature.Instantiate(typeParams, methodParams);
             HaveNewStaticFields = baseInstance.HaveNewStaticFields;
             HaveInheritedStaticFields = baseInstance.HaveInheritedStaticFields;
+            StubPath = null;
         }
 
         public CppClass Instantiate(CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)
@@ -457,6 +459,26 @@ namespace AssemblyImporter.CppExport
         {
             return GenerateCppClassNameFromFullName("::CLRX", this.FullName);
         }
+
+        public static string GenerateCppGenericBaseClassNameFromFullName(string prefix, string fullName)
+        {
+            string[] fullClassPath = fullName.Split('.');
+
+            string cn = prefix;
+            for (int i = 0; i < fullClassPath.Length - 1; i++)
+                cn += "::N" + CppBuilder.LegalizeName(fullClassPath[i], true);
+            cn += "::bGenericBase_" + CppBuilder.LegalizeName(fullClassPath[fullClassPath.Length - 1], true);
+            return cn;
+        }
+
+        public string GenerateCppGenericBaseClassName()
+        {
+            if (this.NumGenericParameters > 0)
+                return GenerateCppClassName();
+            return GenerateCppGenericBaseClassNameFromFullName("::CLRX", this.FullName);
+
+        }
+
 
         public string GenerateStaticCppClassName()
         {

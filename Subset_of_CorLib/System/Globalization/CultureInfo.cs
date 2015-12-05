@@ -10,6 +10,8 @@ namespace System.Globalization
     using System.Runtime.CompilerServices;
     using System.Reflection;
     using System.Resources;
+
+    [Clarity.ExportStub("System_Globalization_CultureInfo.cpp")]
     public class CultureInfo /*: ICloneable , IFormatProvider*/ {
         internal NumberFormatInfo numInfo = null;
         internal DateTimeFormatInfo dateTimeInfo = null;

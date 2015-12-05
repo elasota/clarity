@@ -66,6 +66,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="System_Exception.cpp" />
     <ClCompile Include="System_Object.cpp" />
     <ClCompile Include="System_String.cpp" />
   </ItemGroup>

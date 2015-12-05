@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 namespace System
 {
     [Serializable]
+    [Clarity.ExportStub("System_AppDomain.cpp")]
     public abstract class Array : ICloneable, IList
     {
         [MethodImplAttribute(MethodImplOptions.InternalCall)]

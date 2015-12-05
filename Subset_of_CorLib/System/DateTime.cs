@@ -54,6 +54,7 @@ namespace System
      *
      */
     [Serializable()]
+    [Clarity.ExportStub("System_DateTime.cpp")]
     public struct DateTime
     {
         // Number of 100ns ticks per time unit

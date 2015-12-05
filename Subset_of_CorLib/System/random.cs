@@ -11,6 +11,7 @@ namespace System
     /// sequence of numbers that meet certain statistical requirements for
     /// randomness.
     /// </summary>
+    [Clarity.ExportStub("System_Random.cpp")]
     public class Random
     {
         private object _random;
