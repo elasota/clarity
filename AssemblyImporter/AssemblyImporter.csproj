@@ -158,8 +158,10 @@
     <Compile Include="CppExport\CfgNodeCompiler.cs" />
     <Compile Include="CppExport\CfgOutboundEdge.cs" />
     <Compile Include="CppExport\CfgOutboundEdgePrototype.cs" />
+    <Compile Include="CppExport\CppTranslatedOutboundEdge.cs" />
     <Compile Include="CppExport\CppMidCompiler.cs" />
     <Compile Include="CppExport\CppRegionEmitter.cs" />
+    <Compile Include="CppExport\CppCfgNodeOutline.cs" />
     <Compile Include="CppExport\CppRegisterAllocator.cs" />
     <Compile Include="CppExport\CppScopeStack.cs" />
     <Compile Include="CppExport\CppStubExporter.cs" />
@@ -171,7 +173,6 @@
     <Compile Include="CppExport\CppBuilder.cs" />
     <Compile Include="CppExport\CppCilExporter.cs" />
     <Compile Include="CppExport\CppClass.cs" />
-    <Compile Include="CppExport\CppDependencySet.cs" />
     <Compile Include="CppExport\CppField.cs" />
     <Compile Include="CppExport\CppInterfaceImpl.cs" />
     <Compile Include="CppExport\CppMangleBuilder.cs" />
@@ -180,6 +181,8 @@
     <Compile Include="CppExport\CppMethodSpec.cs" />
     <Compile Include="CppExport\CppVtableSlot.cs" />
     <Compile Include="CppExport\EvalStackTracker.cs" />
+    <Compile Include="CppExport\MangleSignature.cs" />
+    <Compile Include="CppExport\RpaTagFactory.cs" />
     <Compile Include="CppExport\MidInstruction.cs" />
     <Compile Include="CppExport\SsaRegister.cs" />
     <Compile Include="CppExport\VReg.cs" />
@@ -201,6 +204,16 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CLR\CLRGuid.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Clarity.Pdb\Clarity.Pdb.csproj">
+      <Project>{befeee03-c663-4347-889e-2bdfa27d9310}</Project>
+      <Name>Clarity.Pdb</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Clarity.Rpa\Clarity.Rpa.csproj">
+      <Project>{2f2d5d92-7043-49ab-8e8e-2c608d9319f5}</Project>
+      <Name>Clarity.Rpa</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

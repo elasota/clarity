@@ -16,7 +16,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
+    <Optimize>true</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
@@ -40,6 +40,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Clarity\ExportStubAttribute.cs" />
+    <Compile Include="Clarity\ForceInterfaceRefsToObjectRefsAttribute.cs" />
+    <Compile Include="Clarity\NullableSZArray.cs" />
+    <Compile Include="Clarity\RefSZArray.cs" />
+    <Compile Include="Clarity\SZArrayEnumerator.cs" />
+    <Compile Include="Clarity\Tools.cs" />
+    <Compile Include="Clarity\ValueSZArray.cs" />
     <Compile Include="System\Activator.cs" />
     <Compile Include="System\AppDomain.cs" />
     <Compile Include="System\AppDomainUnloadedException.cs" />
@@ -61,6 +67,11 @@
     <Compile Include="System\CLSCompliantAttribute.cs" />
     <Compile Include="System\Collections\ArrayList.cs" />
     <Compile Include="System\Collections\DictionaryEntry.cs" />
+    <Compile Include="System\Collections\Generic\ICollection.cs" />
+    <Compile Include="System\Collections\Generic\IEnumerable.cs" />
+    <Compile Include="System\Collections\Generic\IEnumerator.cs" />
+    <Compile Include="System\Collections\Generic\IEquatable.cs" />
+    <Compile Include="System\Collections\Generic\IList.cs" />
     <Compile Include="System\Collections\HashTable.cs" />
     <Compile Include="System\Collections\ICollection.cs" />
     <Compile Include="System\Collections\IComparer.cs" />
@@ -117,6 +128,7 @@
     <Compile Include="System\NonSerializedAttribute.cs" />
     <Compile Include="System\NotImplementedException.cs" />
     <Compile Include="System\NotSupportedException.cs" />
+    <Compile Include="System\Nullable.cs" />
     <Compile Include="System\NullReferenceException.cs" />
     <Compile Include="System\Number.cs" />
     <Compile Include="System\Object.cs" />
@@ -155,6 +167,7 @@
     <Compile Include="System\Runtime\CompilerServices\AssemblyAttributesGoHere.cs" />
     <Compile Include="System\Runtime\CompilerServices\CallingConvention.cs" />
     <Compile Include="System\Runtime\CompilerServices\CompilationRelaxations.cs" />
+    <Compile Include="System\Runtime\CompilerServices\CompilerGeneratedAttribute.cs" />
     <Compile Include="System\Runtime\CompilerServices\CompilerGlobalScopeAttribute.cs" />
     <Compile Include="System\Runtime\CompilerServices\CustomConstantAttribute.cs" />
     <Compile Include="System\Runtime\CompilerServices\DateTimeConstantAttribute.cs" />

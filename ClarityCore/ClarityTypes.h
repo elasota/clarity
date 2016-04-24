@@ -74,6 +74,7 @@ namespace CLRTypes
 	typename CLRTypes::NumberDetagger<T>::TDetaggedNumber DetagNumber(const T& v);
 }
 
+#define CLARITY_CHARCONSTANT(n)     (CLRTypes::TypeTaggedNumber< ::CLRX::NtSystem::tChar, ::CLRTypes::U16 >(n))
 #define CLARITY_BOOLCONSTANT(n)     ((n) != 0)
 #define CLARITY_INT8CONSTANT(n)     (static_cast< ::CLRTypes::S8 >(n))
 #define CLARITY_UINT8CONSTANT(n)    (static_cast< ::CLRTypes::U8 >(n))
@@ -83,6 +84,9 @@ namespace CLRTypes
 #define CLARITY_UINT32CONSTANT(n)   (static_cast< ::CLRTypes::U32 >(n))
 #define CLARITY_INT64CONSTANT(n)    (static_cast< ::CLRTypes::S64 >(n##LL))
 #define CLARITY_UINT64CONSTANT(n)   (static_cast< ::CLRTypes::U64 >(n##LL))	// LL instead of ULL because the source is signed
+#define CLARITY_FLOAT32CONSTANT(n)  (static_cast< ::CLRTypes::F32 >(n))
+#define CLARITY_FLOAT64CONSTANT(n)  (static_cast< ::CLRTypes::F64 >(n))
+
 
 ///////////////////////////////////////////////////////////////////////////////
 template<class TTag, class TValue>

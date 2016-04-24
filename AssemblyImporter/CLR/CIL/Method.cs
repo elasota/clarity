@@ -96,5 +96,10 @@ namespace AssemblyImporter.CLR.CIL
 
             Instructions = instructions.ToArray();
         }
+
+        public uint OffsetForInstruction(int instr)
+        {
+            return m_instructionToOffset[instr];
+        }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using AssemblyImporter.CLR;
+using Clarity.Rpa;
 
 namespace AssemblyImporter.CppExport
 {
@@ -67,6 +68,7 @@ namespace AssemblyImporter.CppExport
             LoadArrayElem,
             LoadArrayElemAddr,
             StoreField_ManagedPtr,
+            StoreField_Object,
             add,
             sub,
             mul,
@@ -85,6 +87,7 @@ namespace AssemblyImporter.CppExport
             StoreStaticField,
             LoadIndirect,
             LoadStaticField,
+            LoadStaticFieldAddr,
             Box,
             ConvertNumber,
             LoadArrayLength,
@@ -101,9 +104,11 @@ namespace AssemblyImporter.CppExport
             ExitFinally,
             ConstrainedCallVirtualMethod,
             ConstrainedCallMethod,
+            BindDelegate,
         }
 
         public OpcodeEnum Opcode { get; private set; }
+        public CodeLocationTag CodeLocation { get; private set; }
         public CLRTypeSpec TypeSpecArg { get; private set; }
         public CLRTypeSpec TypeSpecArg2 { get; private set; }
         public SsaRegister RegArg { get; private set; }
@@ -122,187 +127,222 @@ namespace AssemblyImporter.CppExport
         public CppMethodSpec MethodSpecArg { get; private set; }
         public ExceptionHandlingCluster EhClusterArg { get; private set; }
 
-        public MidInstruction(OpcodeEnum opcode)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
         }
 
-        public MidInstruction(OpcodeEnum opcode, bool flagArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, bool flagArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             FlagArg = flagArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, uint uintArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, uint uintArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             UIntArg = uintArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, ExceptionHandlingCluster ehClusterArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, ExceptionHandlingCluster ehClusterArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             EhClusterArg = ehClusterArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, CfgOutboundEdge cfgEdgeArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, CfgOutboundEdge cfgEdgeArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             CfgEdgeArg = cfgEdgeArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgOutboundEdge cfgEdgeArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CfgOutboundEdge cfgEdgeArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             CfgEdgeArg = cfgEdgeArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgOutboundEdge[] cfgEdgesArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CfgOutboundEdge[] cfgEdgesArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             CfgEdgesArg = cfgEdgesArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, string strArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, string strArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             StrArg = strArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, uint uintArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, string strArg, CLRTypeSpec typeSpecArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
+            RegArg = regArg;
+            RegArg2 = regArg2;
+            StrArg = strArg;
+            TypeSpecArg = typeSpecArg;
+        }
+
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, uint uintArg)
+        {
+            Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             UIntArg = uintArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, VReg vRegArg, SsaRegister regArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, VReg vRegArg, SsaRegister regArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             VRegArg = vRegArg;
             RegArg = regArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CLRTypeSpec typeSpec)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CLRTypeSpec typeSpec)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             TypeSpecArg = typeSpec;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CLRTypeSpec typeSpec, string strArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CLRTypeSpec typeSpec, string strArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             TypeSpecArg = typeSpec;
             StrArg = strArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CLRTypeSpec typeSpec, CLRTypeSpec typeSpec2, string strArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CLRTypeSpec typeSpec, CLRTypeSpec typeSpec2, string strArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             TypeSpecArg = typeSpec;
             TypeSpecArg2 = typeSpec2;
             StrArg = strArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister[] regArgs)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister[] regArgs)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArgs = regArgs;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, SsaRegister[] regArgs)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, SsaRegister[] regArgs)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             RegArgs = regArgs;
         }
 
-        public MidInstruction(OpcodeEnum opcode, CppMethodSpec methodSpecArg, SsaRegister regArg, SsaRegister[] regArgs)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, CppMethodSpec methodSpecArg, SsaRegister regArg, SsaRegister[] regArgs)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             MethodSpecArg = methodSpecArg;
             RegArg = regArg;
             RegArgs = regArgs;
         }
 
-        public MidInstruction(OpcodeEnum opcode, CppMethodSpec methodSpecArg, CLRTypeSpec typeSpecArg, SsaRegister regArg, SsaRegister regArg2, SsaRegister[] regArgs)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, CppMethodSpec methodSpecArg, CLRTypeSpec typeSpecArg, SsaRegister regArg, SsaRegister regArg2, SsaRegister[] regArgs)
         {
+            Opcode = opcode;
+            CodeLocation = codeLocation;
             TypeSpecArg = typeSpecArg;
-            Opcode = opcode;
             MethodSpecArg = methodSpecArg;
             RegArg = regArg;
             RegArg2 = regArg2;
             RegArgs = regArgs;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, CfgOutboundEdge cfgEdgeArg, bool flagArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, CfgOutboundEdge cfgEdgeArg, bool flagArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             CfgEdgeArg = cfgEdgeArg;
-            FlagArg = FlagArg;
+            FlagArg = flagArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, SsaRegister regArg3, bool flagArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, SsaRegister regArg3, bool flagArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             RegArg3 = regArg3;
             FlagArg = FlagArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, SsaRegister regArg3, ArithEnum arithArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, SsaRegister regArg3, ArithEnum arithArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             RegArg3 = regArg3;
             ArithArg = arithArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, ArithEnum arithArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, ArithEnum arithArg)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             ArithArg = arithArg;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, SsaRegister regArg2, SsaRegister regArg3)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, SsaRegister regArg3)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             RegArg3 = regArg3;
         }
 
-        public MidInstruction(OpcodeEnum opcode, SsaRegister regArg, CfgOutboundEdge cfgEdgeArg, CfgOutboundEdge cfgEdgeArg2)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CfgOutboundEdge cfgEdgeArg, CfgOutboundEdge cfgEdgeArg2)
         {
             Opcode = opcode;
+            CodeLocation = codeLocation;
             RegArg = regArg;
             CfgEdgeArg = cfgEdgeArg;
             CfgEdgeArg2 = cfgEdgeArg2;

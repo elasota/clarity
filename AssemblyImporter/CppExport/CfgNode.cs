@@ -57,8 +57,10 @@ namespace AssemblyImporter.CppExport
             m_entryTypes = entryTypes;
         }
 
-        public void UpdateEntryTypes(CfgNodeCompiler nodeCompiler, VType[] newEntryTypes, out bool outNeedsReparse)
+        public void UpdateEntryEdge(CfgNodeCompiler nodeCompiler, VType[] newEntryTypes, out bool outNeedsReparse)
         {
+            bool needReparse = false;
+
             int numVTypes = newEntryTypes.Length;
             if (numVTypes != m_entryTypes.Length)
                 throw new ArgumentException("Mismatched CFG edge");
@@ -73,17 +75,17 @@ namespace AssemblyImporter.CppExport
                 }
             }
 
-            if (!anyDifferent)
-                outNeedsReparse = false;
-            else
+            if (anyDifferent)
             {
-                outNeedsReparse = true;
+                needReparse = true;
 
                 VType[] newTypes = new VType[m_entryTypes.Length];
                 for (int i = 0; i < numVTypes; i++)
                     newTypes[i] = ConvergeVTypes(nodeCompiler, m_entryTypes[i], newEntryTypes[i]);
                 m_entryTypes = newTypes;
             }
+
+            outNeedsReparse = needReparse;
         }
 
         private class ValTypeConvergence
@@ -116,16 +118,10 @@ namespace AssemblyImporter.CppExport
         private static ValTypeConvergence[] InitConvergences()
         {
             List<ValTypeConvergence> convergences = new List<ValTypeConvergence>();
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NotNullReferenceValue, false));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NotNullReferenceValue, VType.ValTypeEnum.NotNullReferenceValue, false));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.NullableReferenceValue, VType.ValTypeEnum.NullableReferenceValue, false));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.ReferenceValue, false));
+            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantReference, VType.ValTypeEnum.ReferenceValue, VType.ValTypeEnum.ReferenceValue, false));
             convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ValueValue, false));
             convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.ConstantValue, VType.ValTypeEnum.ValueValue, VType.ValTypeEnum.ValueValue, false));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.NotNullReferenceValue, VType.ValTypeEnum.NullableReferenceValue, VType.ValTypeEnum.NullableReferenceValue, false));
-
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.AnchoredManagedPtr, VType.ValTypeEnum.MaybeAnchoredManagedPtr, VType.ValTypeEnum.AnchoredManagedPtr, true));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.LocalManagedPtr, VType.ValTypeEnum.MaybeAnchoredManagedPtr, VType.ValTypeEnum.MaybeAnchoredManagedPtr, true));
-            convergences.Add(new ValTypeConvergence(VType.ValTypeEnum.LocalManagedPtr, VType.ValTypeEnum.AnchoredManagedPtr, VType.ValTypeEnum.AnchoredManagedPtr, true));
             return convergences.ToArray();
         }
 
@@ -151,16 +147,16 @@ namespace AssemblyImporter.CppExport
 
             if (vType1.ValType == VType.ValTypeEnum.Null)
             {
-                if (vType2.ValType == VType.ValTypeEnum.NotNullReferenceValue || vType2.ValType == VType.ValTypeEnum.NullableReferenceValue || vType2.ValType == VType.ValTypeEnum.ConstantReference)
-                    return new VType(VType.ValTypeEnum.NullableReferenceValue, vType1.TypeSpec);
+                if (vType2.ValType == VType.ValTypeEnum.ReferenceValue || vType2.ValType == VType.ValTypeEnum.ConstantReference)
+                    return new VType(VType.ValTypeEnum.ReferenceValue, vType1.TypeSpec);
                 else
                     throw new ArgumentException();  // Both null should be equal
             }
 
             if (vType2.ValType == VType.ValTypeEnum.Null)
             {
-                if (vType1.ValType == VType.ValTypeEnum.NotNullReferenceValue || vType1.ValType == VType.ValTypeEnum.NullableReferenceValue || vType1.ValType == VType.ValTypeEnum.ConstantReference)
-                    return new VType(VType.ValTypeEnum.NullableReferenceValue, vType2.TypeSpec);
+                if (vType1.ValType == VType.ValTypeEnum.ReferenceValue || vType1.ValType == VType.ValTypeEnum.ConstantReference)
+                    return new VType(VType.ValTypeEnum.ReferenceValue, vType2.TypeSpec);
                 else
                     throw new ArgumentException();  // Both null should be equal
             }
@@ -172,7 +168,7 @@ namespace AssemblyImporter.CppExport
                 if (convergedValType == VType.ValTypeEnum.ConstantValue)
                     convergedValType = VType.ValTypeEnum.ValueValue;
                 else if (convergedValType == VType.ValTypeEnum.ConstantReference)
-                    convergedValType = VType.ValTypeEnum.NotNullReferenceValue;
+                    convergedValType = VType.ValTypeEnum.ReferenceValue;
             }
             else
             {
@@ -200,7 +196,7 @@ namespace AssemblyImporter.CppExport
                 return new VType(convergedValType, nodeCompiler.ArithConvergeValues(vType1.TypeSpec, vType2.TypeSpec));
             }
 
-            if (convergedValType == VType.ValTypeEnum.NotNullReferenceValue || convergedValType == VType.ValTypeEnum.NullableReferenceValue)
+            if (convergedValType == VType.ValTypeEnum.ReferenceValue)
             {
                 // Both are reference types
                 // The merge rules are (where vType1 is the existing type):

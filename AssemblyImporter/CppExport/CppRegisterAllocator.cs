@@ -42,17 +42,10 @@ namespace AssemblyImporter.CppExport
             VType.ValTypeEnum storageType;
             switch (vType.ValType)
             {
-                // These types have explicit representations in exported C++
                 case VType.ValTypeEnum.ValueValue:
-                case VType.ValTypeEnum.AnchoredManagedPtr:
-                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                case VType.ValTypeEnum.LocalManagedPtr:
-                case VType.ValTypeEnum.NullableReferenceValue:
+                case VType.ValTypeEnum.ManagedPtr:
+                case VType.ValTypeEnum.ReferenceValue:
                     storageType = vType.ValType;
-                    break;
-                // These are only differ from normally spillable types in semantics
-                case VType.ValTypeEnum.NotNullReferenceValue:
-                    storageType = VType.ValTypeEnum.NullableReferenceValue;
                     break;
                 default:
                     throw new ArgumentException("Illegal register allocation");
@@ -106,7 +99,7 @@ namespace AssemblyImporter.CppExport
                 inputType.ValType == VType.ValTypeEnum.DelegateSimpleMethod ||
                 inputType.ValType == VType.ValTypeEnum.DelegateVirtualMethod)
                 return false;
-            return true;
+            return false;
         }
 
         public VReg[] TargetRegsForCfgInput(VType[] inputTypes)

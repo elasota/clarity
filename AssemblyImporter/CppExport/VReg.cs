@@ -37,11 +37,8 @@ namespace AssemblyImporter.CppExport
             m_isAlive = false;
             DetermineTraceability(builder);
 
-            string storagePrefix = "";
-            if (m_traceability != CppTraceabilityEnum.NotTraced)
-                storagePrefix = "bTracedLocals.";
             m_basicName = prefix + slot.ToString();
-            m_slotName = storagePrefix + m_basicName;
+            m_slotName = m_basicName;
         }
 
         public void Liven()
@@ -66,16 +63,9 @@ namespace AssemblyImporter.CppExport
                 case VType.ValTypeEnum.ValueValue:
                     m_traceability = builder.GetCachedTraceability(this.VType.TypeSpec);
                     break;
-                case VType.ValTypeEnum.NotNullReferenceValue:
-                case VType.ValTypeEnum.NullableReferenceValue:
-                case VType.ValTypeEnum.AnchoredManagedPtr:
+                case VType.ValTypeEnum.ReferenceValue:
+                case VType.ValTypeEnum.ManagedPtr:
                     m_traceability = CppTraceabilityEnum.DefinitelyTraced;
-                    break;
-                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                    m_traceability = CppTraceabilityEnum.TracedIfMovingGC;
-                    break;
-                case VType.ValTypeEnum.LocalManagedPtr:
-                    m_traceability = CppTraceabilityEnum.NotTraced;
                     break;
                 default:
                     throw new ArgumentException();

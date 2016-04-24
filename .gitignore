@@ -15,6 +15,8 @@
 *.dll
 *.exe
 *.cmake
+*.rpa
+*.ilk
 CMakeCache.txt
 CMakeFiles/*
 Makefile
@@ -24,4 +26,12 @@ Tests/bin
 Tests/obj
 AssemblyImporter/bin
 AssemblyImporter/obj
+Clarity.Rpa/bin
+Clarity.Rpa/obj
+Clarity.RpaCompiler/bin
+Clarity.RpaCompiler/obj
+Clarity.Pdb/bin
+Clarity.Pdb/obj
+rpac/bin
+rpac/obj
 ClarityCorLibExported

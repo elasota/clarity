@@ -12,6 +12,8 @@ namespace AssemblyImporter
             string exportDir = args[0];
             string stubDir = args[1];
 
+            Dictionary<CLR.CLRAssembly, string> pdbPaths = new Dictionary<CLR.CLRAssembly, string>();
+
             for (int assmIndex = 2; assmIndex < args.Length; assmIndex++)
             {
                 string path = args[assmIndex];
@@ -20,7 +22,13 @@ namespace AssemblyImporter
                 using (System.IO.FileStream fs = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read))
                 {
                     StreamParser parser = new StreamParser(fs, false);
-                    assemblies.Add(new CLR.CLRAssembly(parser));
+                    CLR.CLRAssembly assembly = new CLR.CLRAssembly(parser);
+
+                    string pdbPath = path.Substring(0, path.Length - 3) + "pdb";
+                    if (System.IO.File.Exists(pdbPath))
+                        pdbPaths.Add(assembly, pdbPath);
+
+                    assemblies.Add(assembly);
                 }
             }
 
@@ -28,7 +36,7 @@ namespace AssemblyImporter
             assemblies.ResolveAll();
 
             Console.WriteLine("Exporting...");
-            CppExport.CppBuilder builder = new CppExport.CppBuilder(exportDir + "\\", stubDir + "\\", assemblies);
+            CppExport.CppBuilder builder = new CppExport.CppBuilder(exportDir + "\\", stubDir + "\\", assemblies, pdbPaths);
             Console.WriteLine("Done");
 
             /*

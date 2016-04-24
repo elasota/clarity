@@ -6,12 +6,12 @@ namespace AssemblyImporter.CLR
     public class CLRConstantRow : CLRTableRow
     {
         public CLRTableRow Parent { get; private set; }
-        public byte Type { get; private set; }
+        public CLRSigType.ElementType Type { get; private set; }
         public ArraySegment<byte> Value { get; private set; }
 
         public override void Parse(CLRMetaDataParser parser)
         {
-            Type = parser.ReadU8();
+            Type = (CLRSigType.ElementType)parser.ReadU8();
             if (parser.ReadU8() != 0)
                 throw new ParseFailedException("Pad missing");
 

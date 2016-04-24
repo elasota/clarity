@@ -347,12 +347,12 @@ namespace System
             // Set default precision, if neccessary + check for valid formatCh
             switch (formatCh)
             {
-                case 'G':
+                case 'G': // 71
                     break;
-                case 'X':
-                case 'F':
-                case 'N':
-                case 'D':
+                case 'X': // 88
+                case 'F': // 70
+                case 'N': // 78
+                case 'D': // 68
                     if (formatLen == 1) precision = 2; // if no precision is specified, use the default
                     break;
                 default:

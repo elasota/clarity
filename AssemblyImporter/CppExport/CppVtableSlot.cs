@@ -31,32 +31,32 @@ namespace AssemblyImporter.CppExport
         public CLRMethodSignatureInstance DeclaredSignature { get; private set; }
         public CLRTypeSpec DisambigSpec { get; private set; }
         public string Name { get; private set; }
-        public string VtableMangle { get; private set; }
-        public string InternalName { get; private set; }
+        public Clarity.Rpa.MethodDeclTag VtableSlotTag { get; private set; }
         public bool IsGenericInterface { get; private set; }
+        public bool IsPublic { get; private set; }
 
-        public CppVtableSlot(CLRMethodSignatureInstance sig, CLRTypeSpec disambig, string name, string internalName, string vtableMangle, bool isGenericInterface, CLRMethodDefRow rootMethodDef)
+        public CppVtableSlot(CLRMethodSignatureInstance sig, CLRTypeSpec disambig, string name, Clarity.Rpa.MethodDeclTag vtableSlotTag, bool isGenericInterface, CLRMethodDefRow rootMethodDef)
         {
-            if (name.Contains("."))
+            if (vtableSlotTag == null)
                 throw new ArgumentException();
-            VtableMangle = vtableMangle;
+            VtableSlotTag = vtableSlotTag;
             Name = name;
-            InternalName = internalName;
             Signature = sig;
             DeclaredSignature = sig;
             DisambigSpec = disambig;
             IsGenericInterface = isGenericInterface;
+            IsPublic = (rootMethodDef.MemberAccess == CLRMethodDefRow.MethodMemberAccess.Public);
         }
 
         private CppVtableSlot(CppVtableSlot baseInstance, CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)
         {
             Signature = baseInstance.Signature.Instantiate(typeParams, methodParams);
             Name = baseInstance.Name;
-            VtableMangle = baseInstance.VtableMangle;
-            InternalName = baseInstance.InternalName;
+            VtableSlotTag = baseInstance.VtableSlotTag;
             DeclaredSignature = baseInstance.DeclaredSignature;
             DisambigSpec = baseInstance.DisambigSpec.Instantiate(typeParams, methodParams);
             IsGenericInterface = baseInstance.IsGenericInterface;
+            IsPublic = baseInstance.IsPublic;
         }
 
         public CppVtableSlot Instantiate(CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)
@@ -64,9 +64,13 @@ namespace AssemblyImporter.CppExport
             return new CppVtableSlot(this, typeParams, methodParams);
         }
 
-        public string GenerateName()
+        public void Write(System.IO.StreamWriter writer)
         {
-            return "vs" + Name + VtableMangle;
+            writer.Write("slot ( ");
+            writer.Write(RpaTagFactory.CreateName(Name));
+            writer.Write(", ");
+            VtableSlotTag.Write(writer);
+            writer.Write(") ");
         }
 
         public override bool Equals(object obj)
@@ -86,8 +90,7 @@ namespace AssemblyImporter.CppExport
                 DeclaredSignature.Equals(other.DeclaredSignature) &&
                 DisambigSpec.Equals(other.DisambigSpec) &&
                 Name == other.Name &&
-                VtableMangle == other.VtableMangle &&
-                InternalName == other.InternalName &&
+                VtableSlotTag.Equals(other.VtableSlotTag) &&
                 IsGenericInterface == other.IsGenericInterface;
         }
     }

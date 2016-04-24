@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using AssemblyImporter.CLR;
 
 namespace AssemblyImporter.CppExport
 {
@@ -37,247 +38,205 @@ namespace AssemblyImporter.CppExport
         private CppRegisterAllocator m_regAllocator;
         private CppBuilder m_builder;
         private ExceptionHandlingRegion m_region;
-        private Stack<CfgNode> m_unemittedNodesStack;   // May contain duplicates, check set to dedupe
-        private HashSet<CfgNode> m_emittedNodesSet;
-        private int m_baseIndentLevel;
-        private string m_frameVarName;
-        private CppDependencySet m_depSet;
+        private Queue<CfgNode> m_pendingNodes;
+        private Dictionary<CfgNode, Clarity.Rpa.HighCfgNodeHandle> m_nodesToEmittedNodes;
+        private Dictionary<CfgNode, CppCfgNodeOutline> m_nodeOutlines;
+        private Dictionary<SsaRegister, Clarity.Rpa.HighSsaRegister> m_ssaToEmittedSsa;
+        private IDictionary<VReg, Clarity.Rpa.HighLocal> m_localLookup;
+        private Dictionary<CfgOutboundEdge, CppTranslatedOutboundEdge> m_translatedOutboundEdges;
 
-        public CppRegionEmitter(CppDependencySet depSet, int baseIndentLevel, CppBuilder builder, ExceptionHandlingRegion region, CppRegisterAllocator regAllocator, string frameVarName)
+        public CppRegionEmitter(CppBuilder builder, ExceptionHandlingRegion region, CppRegisterAllocator regAllocator, IDictionary<VReg, Clarity.Rpa.HighLocal> localLookup)
         {
+            m_localLookup = localLookup;
             m_region = region;
             m_builder = builder;
             m_regAllocator = regAllocator;
-            m_emittedNodesSet = new HashSet<CfgNode>();
-            m_unemittedNodesStack = new Stack<CfgNode>();
-            m_baseIndentLevel = baseIndentLevel;
-            m_frameVarName = frameVarName;
-            m_depSet = depSet;
+            m_nodesToEmittedNodes = new Dictionary<CfgNode, Clarity.Rpa.HighCfgNodeHandle>();
+            m_nodeOutlines = new Dictionary<CfgNode, CppCfgNodeOutline>();
+            m_ssaToEmittedSsa = new Dictionary<SsaRegister, Clarity.Rpa.HighSsaRegister>();
+            m_translatedOutboundEdges = new Dictionary<CfgOutboundEdge, CppTranslatedOutboundEdge>();
 
-            AddNode(region.RootCfgNode);
+            m_pendingNodes = new Queue<CfgNode>();
+
+            InternHighCfgNode(region.RootCfgNode);
         }
 
-        private bool AddNode(CfgNode cfgNode)
+        private CppTranslatedOutboundEdge InternOutboundEdge(CfgNode node, CfgOutboundEdge edge)
         {
-            if (m_emittedNodesSet.Contains(cfgNode))
-                return false;
-            m_unemittedNodesStack.Push(cfgNode);
-            return true;
-        }
+            CppTranslatedOutboundEdge outboundEdge;
+            if (m_translatedOutboundEdges.TryGetValue(edge, out outboundEdge))
+                return outboundEdge;
 
-        private void SpillCfgEdge(string indent, CfgNode node, CfgOutboundEdge edge, StreamWriter writer)
-        {
-            List<SsaRegister> outputRegs = new List<SsaRegister>();
+            bool needRegTranslation = false;
 
-            MidInstruction[] instrs = node.MidInstructions;
-            for (int i = instrs.Length - 1; i >= 0; i--)
+            int survivingRegsCount = edge.SurvivingRegs.Length;
+            CfgNode successorNode = edge.SuccessorNode;
+
+            for (int i = 0; i < survivingRegsCount; i++)
             {
-                MidInstruction instr = instrs[i];
-                if (instr.Opcode != MidInstruction.OpcodeEnum.LeakReg)
+                CLR.CLRTypeSpec outType = edge.SurvivingRegs[i].VType.TypeSpec;
+                CLR.CLRTypeSpec inType = successorNode.EntryTypes[i].TypeSpec;
+
+                if (!outType.Equals(inType))
+                {
+                    needRegTranslation = true;
                     break;
-                outputRegs.Add(instr.RegArg);
+                }
             }
 
-            if (edge.SuccessorNode.Predecessors.Count == 1)
+            Clarity.Rpa.HighCfgNodeHandle prevNode = InternHighCfgNode(node);
+
+            if (!needRegTranslation)
             {
-                // Single-predecessor edge, we can decide the spills here
-                List<VReg> tempVRegs = new List<VReg>();
-
-                foreach (SsaRegister outReg in outputRegs)
-                {
-                    if (outReg.IsSpilled)
-                    {
-                        if (outReg.SpillVReg == null)
-                            throw new Exception("Spilled SSA reg has no vreg?");
-                        outReg.SinglePredecessorSpillVReg = outReg.SpillVReg;
-                    }
-                    else
-                    {
-                        VType vt = outReg.VType;
-                        if (CppRegisterAllocator.IsVTypeSpillable(vt))
-                        {
-                            VReg tempVReg = m_regAllocator.AllocReg(vt);
-                            outReg.SinglePredecessorSpillVReg = tempVReg;
-                            tempVRegs.Add(tempVReg);
-                            writer.WriteLine("spill spe ssa " + outReg.SsaID + " to local " + tempVReg.SlotName);
-                        }
-                    }
-                }
-
-                foreach (VReg vReg in tempVRegs)
-                    vReg.Kill();
+                List<Clarity.Rpa.HighSsaRegister> regs = new List<Clarity.Rpa.HighSsaRegister>();
+                foreach (SsaRegister reg in edge.SurvivingRegs)
+                    regs.Add(InternSsaRegister(reg));
+                Clarity.Rpa.HighCfgNodeHandle nextNode = InternHighCfgNode(edge.SuccessorNode);
+                outboundEdge = new CppTranslatedOutboundEdge(prevNode, nextNode, regs);
             }
             else
             {
-                // Multiple predecessor target, need to translate into standard spilling
-                // What we do here is find all SSA registers that need new VRegs, load the ones that aren't
-                // already in the correct VReg, then emit stores
-                VReg[] vRegs = m_regAllocator.TargetRegsForCfgInput(edge.SuccessorNode.EntryTypes);
+                List<Clarity.Rpa.HighInstruction> instrs = new List<Clarity.Rpa.HighInstruction>();
+                List<Clarity.Rpa.HighSsaRegister> regs = new List<Clarity.Rpa.HighSsaRegister>();
+                List<Clarity.Rpa.HighPhi> phis = new List<Clarity.Rpa.HighPhi>();
 
-                if (outputRegs.Count != vRegs.Length)
-                    throw new Exception("Mismatched CFG edge vreg count");
+                Clarity.Rpa.HighCfgNodeHandle nextNode = InternHighCfgNode(edge.SuccessorNode);
 
-                int numTranslations = vRegs.Length;
-
-                SsaRegister[] storeBases = new SsaRegister[numTranslations];
-                for (int i = 0; i < numTranslations; i++)
+                MidInstruction[] midInstrs = edge.SuccessorNode.MidInstructions;
+                for (int i = 0; i < survivingRegsCount; i++)
                 {
-                    VReg vReg = vRegs[i];
-                    if (vReg == null)
-                        continue;
-                    SsaRegister storeBase = outputRegs[i];
-                    if (storeBase.IsSpilled)
-                    {
-                        if (storeBase.SpillVReg == null)
-                            throw new Exception("Bad spill vreg");
-                        if (storeBase.SpillVReg != vReg)
-                        {
-                            storeBase = new SsaRegister(storeBase.VType, -1);
-                            storeBase.SsaID = m_regAllocator.NewSsaID();
+                    MidInstruction midInstr = midInstrs[i];
+                    if (midInstr.Opcode != MidInstruction.OpcodeEnum.EntryReg)
+                        throw new Exception("Internal error");
 
-                            writer.WriteLine("unspill midpoint temp " + storeBase.SsaID + " reg to SSA " + storeBase.SsaID);
-                            storeBases[i] = storeBase;
-                        }
+                    Clarity.Rpa.HighSsaRegister sourceReg = InternSsaRegister(edge.SurvivingRegs[i]);
+                    Clarity.Rpa.HighSsaRegister targetReg = InternSsaRegister(midInstr.RegArg);
+
+                    if (!targetReg.IsConstant)
+                    {
+                        Clarity.Rpa.HighSsaRegister importReg = new Clarity.Rpa.HighSsaRegister(sourceReg.ValueType, sourceReg.Type, sourceReg.ConstantValue);
+                        Clarity.Rpa.HighSsaRegister exportReg = new Clarity.Rpa.HighSsaRegister(targetReg.ValueType, targetReg.Type, targetReg.ConstantValue);
+
+                        Clarity.Rpa.HighPhiLink phiLink = new Clarity.Rpa.HighPhiLink(prevNode, sourceReg);
+                        phis.Add(new Clarity.Rpa.HighPhi(importReg, new Clarity.Rpa.HighPhiLink[] { phiLink }));
+
+                        instrs.Add(new Clarity.Rpa.Instructions.PassiveConvertInstruction(
+                            midInstr.CodeLocation,
+                            exportReg,
+                            importReg
+                            ));
+                        regs.Add(exportReg);
                     }
                     else
-                        storeBases[i] = storeBase;
+                        regs.Add(targetReg);
                 }
 
-                for (int i = 0; i < numTranslations; i++)
-                {
-                    VReg vReg = vRegs[i];
-                    if (vReg == null || storeBases[i] == null)
-                        continue;
-                    SsaRegister storeBase = storeBases[i];
-                    string test = PassiveConvertValue(storeBase.VType, vReg.VType.TypeSpec, StorageLocForSsaReg(storeBase, false, false));
+                instrs.Add(new Clarity.Rpa.Instructions.BranchInstruction(edge.CodeLocation, nextNode));
 
-                    writer.Write(indent);
-                    writer.WriteLine(
-                        StorageLocForVReg(vReg, false, false)
-                        + " = "
-                        + PassiveConvertValue(storeBase.VType, vReg.VType.TypeSpec, StorageLocForSsaReg(storeBase, false, false))
-                        + ";  // cfg edge spillover");
-                }
+                Clarity.Rpa.HighCfgNode cfgNode = new Clarity.Rpa.HighCfgNode(phis.ToArray(), instrs.ToArray());
+                Clarity.Rpa.HighCfgNodeHandle cfgNodeHandle = new Clarity.Rpa.HighCfgNodeHandle(cfgNode);
+
+                outboundEdge = new CppTranslatedOutboundEdge(cfgNodeHandle, cfgNodeHandle, regs);
             }
+
+            m_translatedOutboundEdges.Add(edge, outboundEdge);
+            return outboundEdge;
         }
 
-        private void MirrorFallThroughEdge(CfgNode node, bool isDownward)
+        private void AliasSsaRegister(Clarity.Rpa.HighSsaRegister src, SsaRegister copy)
         {
-            MidInstruction[] outInstrs = node.MidInstructions;
-            MidInstruction[] inInstrs = node.FallThroughEdge.SuccessorNode.MidInstructions;
-
-            for (int i = 0; i < inInstrs.Length; i++)
-            {
-                MidInstruction inInstr = inInstrs[i];
-
-                if (inInstr.Opcode != MidInstruction.OpcodeEnum.EntryReg)
-                    break;
-                MidInstruction outInstr = outInstrs[outInstrs.Length - 1 - i];
-                if (outInstr.Opcode != MidInstruction.OpcodeEnum.LeakReg)
-                    throw new ParseFailedException("Mismatched CFG edge registers");
-
-                SsaRegister outReg = outInstr.RegArg;
-                SsaRegister inReg = inInstr.RegArg;
-
-                // Propagate spill status
-                if (isDownward && outReg.IsSpilled)
-                    inReg.Spill();
-                if (!isDownward && inReg.IsSpilled)
-                    outReg.Spill();
-            }
+            if (m_ssaToEmittedSsa.ContainsKey(copy))
+                throw new Exception();
+            m_ssaToEmittedSsa.Add(copy, src);
         }
 
-        public void LinkContinuationChain(CfgNode firstNode)
+        private Clarity.Rpa.HighSsaRegister InternSsaRegister(SsaRegister ssaRegister)
         {
-            CfgNode lastNode = firstNode;
+            if (ssaRegister == null)
+                return null;
 
-            while (true)
+            Clarity.Rpa.HighSsaRegister highSsa;
+            if (!m_ssaToEmittedSsa.TryGetValue(ssaRegister, out highSsa))
             {
-                if (!lastNode.CanBeContinuous)
-                    break;
-                CfgNode successor = lastNode.FallThroughEdge.SuccessorNode;
-                if (m_emittedNodesSet.Contains(successor))
-                    break;
-                if (successor == firstNode)
-                    break;  // Circular CFG
-                lastNode = successor;
-            }
+                Clarity.Rpa.HighValueType valType;
+                object constValue = null;
 
-            // Mirror nodes down
-            {
-                CfgNode scanNode = firstNode;
-                while (scanNode != lastNode)
+                switch (ssaRegister.VType.ValType)
                 {
-                    MirrorFallThroughEdge(scanNode, true);
-                    scanNode = scanNode.FallThroughEdge.SuccessorNode;
+                    case VType.ValTypeEnum.ManagedPtr:
+                        valType = Clarity.Rpa.HighValueType.ManagedPtr;
+                        break;
+                    case VType.ValTypeEnum.ConstantValue:
+                        constValue = ssaRegister.ConstantValue;
+                        valType = Clarity.Rpa.HighValueType.ConstantValue;
+                        break;
+                    case VType.ValTypeEnum.ConstantReference:
+                        constValue = ssaRegister.ConstantValue;
+                        valType = Clarity.Rpa.HighValueType.ConstantString;
+                        break;
+                    case VType.ValTypeEnum.ReferenceValue:
+                        valType = Clarity.Rpa.HighValueType.ReferenceValue;
+                        break;
+                    case VType.ValTypeEnum.Null:
+                        valType = Clarity.Rpa.HighValueType.Null;
+                        break;
+                    case VType.ValTypeEnum.ValueValue:
+                        valType = Clarity.Rpa.HighValueType.ValueValue;
+                        break;
+                    default:
+                        throw new ArgumentException();
                 }
+
+                highSsa = new Clarity.Rpa.HighSsaRegister(valType, RpaTagFactory.CreateTypeTag(ssaRegister.VType.TypeSpec), constValue);
+                m_ssaToEmittedSsa.Add(ssaRegister, highSsa);
             }
 
-            // Mirror nodes up
-            {
-                CfgNode scanNode = lastNode;
-                while (scanNode != firstNode)
-                {
-                    if (scanNode.Predecessors.Count != 1)
-                        throw new Exception("Continuous fallthrough can't enter a multi-predecessor node");
-                    scanNode = scanNode.Predecessors[0];
-                    MirrorFallThroughEdge(scanNode, false);
-                }
-            }
+            return highSsa;
         }
 
-        public void Emit(StreamWriter writer)
+        private Clarity.Rpa.HighCfgNodeHandle InternHighCfgNode(CfgNode cfgNode)
+        {
+            Clarity.Rpa.HighCfgNodeHandle highNode = null;
+            if (!m_nodesToEmittedNodes.TryGetValue(cfgNode, out highNode))
+            {
+                highNode = new Clarity.Rpa.HighCfgNodeHandle();
+                CppCfgNodeOutline outline = new CppCfgNodeOutline(cfgNode);
+
+                m_nodesToEmittedNodes.Add(cfgNode, highNode);
+                m_nodeOutlines.Add(cfgNode, outline);
+
+                m_pendingNodes.Enqueue(cfgNode);
+            }
+
+            return highNode;
+        }
+
+        public Clarity.Rpa.HighRegion Emit()
         {
             //writer.WriteLine("Escape terminators:");
             //foreach (KeyValuePair<uint, CfgNode> terminator in m_region.EscapeTerminators)
             //    writer.WriteLine("    " + terminator.Key + " --> " + m_regAllocator.TargetIDForCfgNode(terminator.Value));
             
             CfgNode lastCfgNode = null;
-            bool exitIsContinuous = false;
-            while (m_unemittedNodesStack.Count > 0)
+            while (m_pendingNodes.Count > 0)
             {
-                CfgNode cfgNode = m_unemittedNodesStack.Pop();
-                if (m_emittedNodesSet.Contains(cfgNode))
-                    continue;
+                CfgNode cfgNode = m_pendingNodes.Dequeue();
 
-                bool enterIsContinuous = exitIsContinuous;
-                exitIsContinuous = 
-                    cfgNode.CanBeContinuous
-                    && !m_emittedNodesSet.Contains(cfgNode.FallThroughEdge.SuccessorNode);
-
-                if (!enterIsContinuous)
-                    LinkContinuationChain(cfgNode);
-
-                m_emittedNodesSet.Add(cfgNode);
-
-                EmitCfgNode(m_baseIndentLevel, cfgNode, writer, enterIsContinuous, exitIsContinuous);
+                EmitCfgNode(cfgNode);
                 lastCfgNode = cfgNode;
 
-                if (!exitIsContinuous)
-                {
-                    foreach (VReg vReg in m_regAllocator.AllRegisters)
-                        if (vReg.IsAlive)
-                            throw new Exception("VReg leaked");
-                }
+                foreach (VReg vReg in m_regAllocator.AllRegisters)
+                    if (vReg.IsAlive)
+                        throw new Exception("VReg leaked");
             }
+
+            Clarity.Rpa.HighCfgNodeHandle hdl = InternHighCfgNode(m_region.RootCfgNode);
+            return new Clarity.Rpa.HighRegion(hdl);
         }
 
-        private static string StorageLocForVReg(VReg vReg, bool makeLive, bool zombify)
+        public static string StorageLocForVReg(VReg vReg, bool makeLive, bool zombify)
         {
-            bool isTraced = (vReg.Traceability != CppTraceabilityEnum.NotTraced);
-            string prefix;
-            if (isTraced)
-            {
-                if (makeLive)
-                    prefix = "::CLRVM::LivenVReg(";
-                else if (zombify)
-                    prefix = "::CLRVM::KillAndReturnVReg(";
-                else
-                    prefix = "::CLRVM::VRegValue(";
-                return prefix + vReg.SlotName + ")";
-            }
-            else
-                return vReg.SlotName;
+            return vReg.SlotName;
         }
 
         private CLR.CLRTypeSpec TypeSpecForArrayIndex(CLR.CLRTypeSpec indexBaseSpec)
@@ -448,442 +407,129 @@ namespace AssemblyImporter.CppExport
             return m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(elementType));
         }
 
-        private string StorageLocForSsaReg(SsaRegister ssaReg, bool forWrite, bool zombify)
+        private void EmitCfgNode(CfgNode cfgNode)
         {
-            if (forWrite && zombify)
-                throw new ArgumentException();
-            if (ssaReg.IsSpilled)
-            {
-                VReg vReg = ssaReg.SpillVReg;
-                if (zombify)
-                    vReg.Zombify();
-                return StorageLocForVReg(vReg, forWrite, zombify);
-            }
-            else
-            {
-                switch (ssaReg.VType.ValType)
-                {
-                    case VType.ValTypeEnum.ValueValue:
-                    case VType.ValTypeEnum.NotNullReferenceValue:
-                    case VType.ValTypeEnum.NullableReferenceValue:
-                    case VType.ValTypeEnum.AnchoredManagedPtr:
-                    case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                    case VType.ValTypeEnum.LocalManagedPtr:
-                        return "ssa" + ssaReg.SsaID;
-                    case VType.ValTypeEnum.Null:
-                    case VType.ValTypeEnum.ConstantValue:
-                    case VType.ValTypeEnum.ConstantReference:
-                        return PassiveConvertValue(ssaReg.VType, ssaReg.VType.TypeSpec, "");
-                    default:
-                        throw new Exception("Couldn't resolve storage location for SSA register");
-                }
-            }
-        }
+            List<Clarity.Rpa.HighInstruction> outInstructions = new List<Clarity.Rpa.HighInstruction>();
+            List<Clarity.Rpa.HighPhi> outPhis = new List<Clarity.Rpa.HighPhi>();
 
-        private string PassiveConvertManagedPtr(VType sourceVType, VType targetVType, string valStr)
-        {
-            if (!sourceVType.TypeSpec.Equals(targetVType.TypeSpec))
-                throw new Exception("PassiveConvertManagedPtr with incompatible type specs");
-
-            if (sourceVType.ValType == targetVType.ValType)
-                return valStr;
-
-            string result = "::CLRUtil::PassiveConvert";
-            switch (sourceVType.ValType)
-            {
-                case VType.ValTypeEnum.AnchoredManagedPtr:
-                    result += "Anchored";
-                    break;
-                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                    result += "MaybeAnchored";
-                    break;
-                case VType.ValTypeEnum.LocalManagedPtr:
-                    result += "Local";
-                    break;
-                default:
-                    throw new Exception("Strange passive conversion requested");
-            }
-            result += "To";
-            switch (targetVType.ValType)
-            {
-                case VType.ValTypeEnum.AnchoredManagedPtr:
-                    result += "Anchored";
-                    break;
-                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                    result += "MaybeAnchored";
-                    break;
-                case VType.ValTypeEnum.LocalManagedPtr:
-                    result += "Local";
-                    break;
-                default:
-                    throw new Exception("Strange passive conversion requested");
-            }
-
-            result += "ManagedPtr< ";
-            result += m_builder.SpecToAmbiguousStorage(sourceVType.TypeSpec);
-            result += " >(";
-            result += valStr;
-            result += ")";
-            return result;
-        }
-
-        public static void GenerateCppStringConstant(string inStr, out string outEncodedStr, out int outHash, out bool outIsPacked)
-        {
-            // Clarity string constant encoding isn't UTF-8, but rather, a packed encoding that converts
-            // into UTF-16 code points directly.
-            // "?" is escaped to avoid trigraph conversion
-            List<char> resultChars = new List<char>();
-            string constStrs = " !#$%&()*+,-./0123456789:l<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz~";
-            bool isPacked = false;
-
-            foreach (char inChar in inStr)
-            {
-                if (constStrs.IndexOf(inChar) >= 0)
-                    resultChars.Add(inChar);
-                else
-                {
-                    int codePoint = ((int)inChar) & 0xffff;
-                    bool first = true;
-
-                    while (codePoint != 0 || first)
-                    {
-                        first = false;
-
-                        int codedFragment = codePoint & 0x7f;
-                        codePoint >>= 7;
-                        resultChars.Add('\\');
-
-                        if (codePoint != 0)
-                        {
-                            codedFragment |= 0x80;
-                            isPacked = true;
-                        }
-
-                        for (int octalDigitIndex = 0; octalDigitIndex < 3; octalDigitIndex++)
-                        {
-                            int octalDigit = ((codedFragment >> ((2 - octalDigitIndex) * 3)) & 0x7);
-                            resultChars.Add((char)('0' + octalDigit));
-                        }
-                    }
-                }
-            }
-
-            string encodedStr = new string(resultChars.ToArray());
-            byte[] asciiBytes = System.Text.Encoding.ASCII.GetBytes(encodedStr);
-            byte[] longHash = System.Security.Cryptography.SHA256Managed.Create().ComputeHash(asciiBytes);
-
-            int hash = 0;
-            for (int i = 0; i < 4; i++)
-                hash = ((hash << 8) | longHash[i]);
-
-            outEncodedStr = encodedStr;
-            outHash = hash;
-            outIsPacked = isPacked;
-        }
-
-        private string PassiveConvertValueToNumeric(VType vType, string valStr)
-        {
-            CppClass cls = m_builder.GetCachedClass(vType.TypeSpec);
-            if (cls.IsEnum)
-                return PassiveConvertValue(vType, cls.GetEnumUnderlyingType(), valStr);
-            return valStr;
-        }
-
-        private string PassiveConvertValue(VType sourceVType, CLR.CLRTypeSpec targetTypeSpec, string valStr)
-        {
-            switch (sourceVType.ValType)
-            {
-                case VType.ValTypeEnum.Null:
-                    return "::CLRUtil::NullReference< " + m_builder.SpecToAmbiguousStorage(targetTypeSpec) + " >()";
-                case VType.ValTypeEnum.ConstantReference:
-                    {
-                        CLR.CLRTypeSpecClass targetClassSpec = ((CLR.CLRTypeSpecClass)targetTypeSpec);
-                        string targetName = targetClassSpec.TypeDef.TypeName;
-                        string sourceName = ((CLR.CLRTypeSpecClass)sourceVType.TypeSpec).TypeDef.TypeName;
-                        if (sourceName == "String")
-                        {
-                            string strConstant = (string)sourceVType.ConstantValue;
-                            string encodedStr;
-                            int hash;
-                            bool isPacked;
-                            GenerateCppStringConstant(strConstant, out encodedStr, out hash, out isPacked);
-
-                            return "::CLRVM::StringConstant< "
-                                + m_builder.SpecToAmbiguousStorage(targetClassSpec)
-                                + " >(" + m_frameVarName
-                                + ", " + (isPacked ? "true" : "false")
-                                + ", " + strConstant.Length.ToString()
-                                + ", " + hash.ToString()
-                                + ", \"" + encodedStr + "\")";
-                        }
-                        else
-                            throw new Exception("Unexpected constant reference type");
-                    }
-                case VType.ValTypeEnum.ConstantValue:
-                    {
-                        string instanceMacro;
-                        CLR.CLRTypeSpecClass targetClassSpec = ((CLR.CLRTypeSpecClass)targetTypeSpec);
-                        string targetName = targetClassSpec.TypeDef.TypeName;
-
-                        if (targetName == "Int16")
-                            instanceMacro = "CLARITY_INT16CONSTANT";
-                        else if (targetName == "UInt16")
-                            instanceMacro = "CLARITY_UINT16CONSTANT";
-                        else if (targetName == "Int32")
-                            instanceMacro = "CLARITY_INT32CONSTANT";
-                        else if (targetName == "UInt32")
-                            instanceMacro = "CLARITY_UINT32CONSTANT";
-                        else if (targetName == "Int64")
-                            instanceMacro = "CLARITY_UINT64CONSTANT";
-                        else if (targetName == "UInt64")
-                            instanceMacro = "CLARITY_UINT64CONSTANT";
-                        else if (targetName == "SByte")
-                            instanceMacro = "CLARITY_INT8CONSTANT";
-                        else if (targetName == "Byte")
-                            instanceMacro = "CLARITY_UINT8CONSTANT";
-                        else if (targetName == "Boolean")
-                            instanceMacro = "CLARITY_BOOLCONSTANT";
-                        else if (targetName == "Single")
-                            instanceMacro = "CLARITY_FLOAT32CONSTANT";
-                        else if (targetName == "Double")
-                            instanceMacro = "CLARITY_FLOAT64CONSTANT";
-                        else if (targetName == "Char")
-                            instanceMacro = "CLARITY_CHARCONSTANT";
-                        else if (targetName == "IntPtr")
-                            instanceMacro = "CLARITY_INTPTRCONSTANT";
-                        else
-                        {
-                            CppClass targetClass = m_builder.GetCachedClass(targetClassSpec);
-                            if (targetClass.IsEnum)
-                            {
-                                instanceMacro = "::CLRVM::ConstantEnum< ";
-                                instanceMacro += m_builder.SpecToAmbiguousStorage(targetClassSpec);
-                                instanceMacro += " >";
-                            }
-                            else
-                                throw new Exception("Unexpected constant value type");
-                        }
-
-                        return instanceMacro + "(" + sourceVType.ConstantValue.ToString() + ")";
-                    }
-                default:
-                    break;
-            }
-
-            if (valStr == "")
-                throw new Exception("Missing value in passive conversion");
-
-            if (targetTypeSpec.Equals(sourceVType.TypeSpec))
-                return valStr;
-
-            string result = "";
-            switch (sourceVType.ValType)
-            {
-                case VType.ValTypeEnum.ValueValue:
-                    result += "::CLRUtil::PassiveValueConverter< ";
-                    break;
-                case VType.ValTypeEnum.NotNullReferenceValue:
-                case VType.ValTypeEnum.NullableReferenceValue:
-                    result += "::CLRUtil::PassiveReferenceConverter< ";
-                    break;
-                default:
-                    throw new Exception("Strange passive conversion requested");
-            }
-
-            result += m_builder.SpecToAmbiguousStorage(sourceVType.TypeSpec);
-            result += ", ";
-            result += m_builder.SpecToAmbiguousStorage(targetTypeSpec);
-            result += " >::Convert(";
-            result += valStr;
-            result += ")";
-            return result;
-        }
-
-        private void AddVTypeDependency(VType vType)
-        {
-            m_depSet.AddTypeSpecDependencies(vType.TypeSpec, true);
-        }
-
-        private void EmitCfgNode(int indentLevel, CfgNode cfgNode, StreamWriter writer, bool enterIsContinuous, bool exitIsContinuous)
-        {
+            Clarity.Rpa.HighCfgNodeHandle highNode = m_nodesToEmittedNodes[cfgNode];
+            CppCfgNodeOutline outline = m_nodeOutlines[cfgNode];
             List<SsaRegister> leakedRegs = new List<SsaRegister>();
-            CppScopeStack scopeStack = new CppScopeStack(indentLevel);
 
-            Queue<SsaRegister> continuedRegs = null;
-            if (enterIsContinuous || cfgNode.Predecessors.Count == 1)
-            {
-                continuedRegs = new Queue<SsaRegister>();
-                CfgNode predecessor = cfgNode.Predecessors[0];
-                MidInstruction[] instrs = predecessor.MidInstructions;
-                for (int i = instrs.Length - 1; i >= 0; i--)
-                {
-                    MidInstruction instr = instrs[i];
-                    if (instr.Opcode != MidInstruction.OpcodeEnum.LeakReg)
-                        break;
-                    continuedRegs.Enqueue(instr.RegArg);
-                }
-            }
-
-            if (!enterIsContinuous)
-            {
-                writer.Write(scopeStack.Indent);
-                writer.Write("bLabel_");
-                writer.Write(m_regAllocator.TargetIDForCfgNode(cfgNode));
-                writer.WriteLine(":;");
-            }
+            int numContinuedRegs = 0;
 
             int debugInstrNum = -1;
             MidInstruction[] midInstrs = cfgNode.MidInstructions;
-            bool regionIsTerminated = false;
+
+            bool fallthroughMerged = false;
+
             foreach (MidInstruction midInstr in midInstrs)
             {
                 debugInstrNum++;
                 switch (midInstr.Opcode)
                 {
                     case MidInstruction.OpcodeEnum.AllocObject:
-                        AddVTypeDependency(midInstr.RegArg.VType);
-                        m_depSet.AddTypeSpecDependencies(midInstr.TypeSpecArg, true);
-                        writer.Write(scopeStack.Indent);
-                        writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
-                        writer.Write(" = ::CLRVM::AllocObject< ");
-                        writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.TypeSpecArg));
-                        writer.Write(" >(");
-                        writer.Write(m_frameVarName);
-                        writer.WriteLine(");");
-                        m_depSet.AddTypeSpecDependencies(midInstr.TypeSpecArg, true);
+                        {
+                            Clarity.Rpa.HighSsaRegister dest = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.TypeSpecTag type = RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg);
+                            outInstructions.Add(new Clarity.Rpa.Instructions.AllocObjInstruction(midInstr.CodeLocation, dest, type));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.CallMethod:
                     case MidInstruction.OpcodeEnum.CallConstructor:
+                    case MidInstruction.OpcodeEnum.ConstrainedCallMethod:
                         {
-                            bool shouldZombifyThis = (midInstr.Opcode == MidInstruction.OpcodeEnum.CallMethod);
                             CppMethodSpec methodSpec = midInstr.MethodSpecArg;
                             CppMethod cppMethod = methodSpec.CppMethod;
                             CppClass thisClass = m_builder.GetCachedClass(cppMethod.DeclaredInClassSpec);
 
-                            m_depSet.AddTypeSpecDependencies(cppMethod.DeclaredInClassSpec, true);
-
                             SsaRegister returnReg = midInstr.RegArg;
                             SsaRegister thisReg = midInstr.RegArg2;
-                            SsaRegister[] paramsRegs = midInstr.RegArgs;
+                            List<Clarity.Rpa.HighSsaRegister> parameters = new List<Clarity.Rpa.HighSsaRegister>();
 
-                            writer.Write(scopeStack.Indent);
+                            if (!cppMethod.MethodDef.Static && midInstr.Opcode != MidInstruction.OpcodeEnum.ConstrainedCallMethod)
+                                thisReg = EmitPassiveConversion_PermitRefs(midInstr.CodeLocation, thisReg, cppMethod.DeclaredInClassSpec, outline, outInstructions);
+
+                            // CLARITYTODO: Verify that this works with generic method parameters
+                            for (int pIdx = 0; pIdx < midInstr.RegArgs.Length; pIdx++)
+                            {
+                                SsaRegister inReg = EmitPassiveConversion_PermitRefs(midInstr.CodeLocation, midInstr.RegArgs[pIdx], cppMethod.MethodSignature.ParamTypes[pIdx].Type, outline, outInstructions);
+                                parameters.Add(InternSsaRegister(inReg));
+                            }
+
+                            Clarity.Rpa.HighSsaRegister outDestReg = null;
+
                             if (returnReg != null)
-                            {
-                                writer.Write(StorageLocForSsaReg(returnReg, true, false));
-                                writer.Write(" = ");
-                            }
+                                outDestReg = InternSsaRegister(returnReg);
 
-                            if (cppMethod.MethodDef.Static || thisClass.IsValueType)
-                            {
-                                writer.Write(m_builder.SpecToAmbiguousStorage(cppMethod.DeclaredInClassSpec));
-                                writer.Write("::");
-                            }
-                            else
-                            {
-                                if (cppMethod.DeclaredInClassSpec.Equals(thisReg.VType.TypeSpec))
-                                {
-                                    writer.Write(StorageLocForSsaReg(thisReg, false, shouldZombifyThis));
-                                    writer.Write("->");
-                                }
-                                else
-                                {
-                                    if (thisReg.VType.ValType != VType.ValTypeEnum.ConstantReference &&
-                                        thisReg.VType.ValType != VType.ValTypeEnum.NotNullReferenceValue &&
-                                        thisReg.VType.ValType != VType.ValTypeEnum.NullableReferenceValue)
-                                        throw new Exception("Internal error: Translated call site of a non-reference");
+                            Clarity.Rpa.TypeSpecTag constraintTag = null;
 
-                                    CLR.CLRTypeSpec destTypeSpec = cppMethod.DeclaredInClassSpec;
-                                    CLR.CLRTypeSpec sourceTypeSpec = thisReg.VType.TypeSpec;
-                                    writer.Write("(::CLRUtil::PassiveReferenceConverter< ");
-                                    writer.Write(m_builder.SpecToAmbiguousStorage(sourceTypeSpec));
-                                    writer.Write(", ");
-                                    writer.Write(m_builder.SpecToAmbiguousStorage(destTypeSpec));
-                                    writer.Write(" >::Convert(");
-                                    writer.Write(StorageLocForSsaReg(thisReg, false, shouldZombifyThis));
-                                    writer.Write("))->");
-                                }
-                            }
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.ConstrainedCallMethod)
+                                constraintTag = RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg);
 
-                            writer.Write(cppMethod.GenerateCallName());
-
-                            if (methodSpec.GenericParameters != null)
-                            {
-                                writer.Write("< ");
-                                for (int i = 0; i < methodSpec.GenericParameters.Length; i++)
-                                {
-                                    if (i != 0)
-                                        writer.Write(", ");
-                                    writer.Write(m_builder.SpecToAmbiguousStorage(methodSpec.GenericParameters[i]));
-                                }
-                                writer.Write(" >");
-                            }
-
-                            writer.Write("(");
-                            writer.Write(m_frameVarName);
-
-                            if (!cppMethod.MethodDef.Static && thisClass.IsValueType)
-                            {
-                                writer.Write(", ::CLRVM::PassValueThis(");
-                                writer.Write(StorageLocForSsaReg(thisReg, false, shouldZombifyThis));
-                                writer.Write(")");
-                            }
+                            Clarity.Rpa.HighSsaRegister instanceReg = null;
+                            if (!cppMethod.MethodDef.Static)
+                                instanceReg = InternSsaRegister(thisReg);
 
                             CLR.CLRMethodSignatureInstance methodSig = cppMethod.MethodSignature;
 
-                            int numParams = paramsRegs.Length;
+                            int numParams = parameters.Count;
                             if (numParams != methodSig.ParamTypes.Length)
                                 throw new Exception("Internal error: CallMethod param count mismatch");
 
-                            for (int i = 0; i < numParams; i++)
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.CallMethod || midInstr.Opcode == MidInstruction.OpcodeEnum.CallConstructor)
                             {
-                                SsaRegister paramReg = paramsRegs[i];
-                                CLR.CLRMethodSignatureInstanceParam paramSig = methodSig.ParamTypes[i];
-
-                                writer.Write(", ");
-
-                                if (paramSig.TypeOfType == CLR.CLRSigParamOrRetType.TypeOfTypeEnum.Value)
+                                if (cppMethod.MethodDef.Static)
                                 {
-                                    if (thisClass.IsDelegate && i == 1 && midInstr.Opcode == MidInstruction.OpcodeEnum.CallConstructor)
-                                    {
-                                        writer.Write("FIXME_DELEGATE_CONSTANT");
-                                    }
-                                    else
-                                    {
-                                        string paramValue = StorageLocForSsaReg(paramReg, false, true);
-                                        writer.Write(PassiveConvertValue(paramReg.VType, paramSig.Type, paramValue));
-                                    }
+                                    outInstructions.Add(new Clarity.Rpa.Instructions.CallStaticMethodInstruction(
+                                        midInstr.CodeLocation,
+                                        outDestReg,
+                                        RpaTagFactory.CreateMethodSpec(Clarity.Rpa.MethodSlotType.Static, methodSpec),
+                                        parameters.ToArray()
+                                        ));
                                 }
                                 else
                                 {
-                                    string paramValue = StorageLocForSsaReg(paramReg, false, true);
-                                    writer.Write(paramValue);
+                                    outInstructions.Add(new Clarity.Rpa.Instructions.CallInstanceMethodInstruction(
+                                        midInstr.CodeLocation,
+                                        outDestReg,
+                                        RpaTagFactory.CreateMethodSpec(Clarity.Rpa.MethodSlotType.Instance, methodSpec),
+                                        instanceReg,
+                                        parameters.ToArray()
+                                        ));
                                 }
                             }
-                            writer.WriteLine(");");
+                            else if (midInstr.Opcode == MidInstruction.OpcodeEnum.ConstrainedCallMethod)
+                            {
+                                outInstructions.Add(new Clarity.Rpa.Instructions.CallConstrainedMethodInstruction(
+                                    midInstr.CodeLocation,
+                                    outDestReg,
+                                    constraintTag,
+                                    RpaTagFactory.CreateMethodSpec(Clarity.Rpa.MethodSlotType.Instance, methodSpec),
+                                    instanceReg,
+                                    parameters.ToArray()
+                                    ));
+                            }
                         }
                         break;
                     case MidInstruction.OpcodeEnum.CallVirtualMethod:
+                    case MidInstruction.OpcodeEnum.ConstrainedCallVirtualMethod:
                         {
                             CppMethodSpec methodSpec = midInstr.MethodSpecArg;
                             CppMethod cppMethod = methodSpec.CppMethod;
                             CppClass thisClass = m_builder.GetCachedClass(cppMethod.DeclaredInClassSpec);
 
-                            m_depSet.AddTypeSpecDependencies(cppMethod.DeclaredInClassSpec, true);
+                            Clarity.Rpa.HighSsaRegister returnReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister thisReg = null;
+                            List<Clarity.Rpa.HighSsaRegister> paramRegs = new List<Clarity.Rpa.HighSsaRegister>();
 
-                            SsaRegister returnReg = midInstr.RegArg;
-                            SsaRegister thisReg = midInstr.RegArg2;
-                            SsaRegister[] paramsRegs = midInstr.RegArgs;
+                            if (midInstr.Opcode != MidInstruction.OpcodeEnum.ConstrainedCallVirtualMethod)
+                                thisReg = InternSsaRegister(EmitPassiveConversion_PermitRefs(midInstr.CodeLocation, midInstr.RegArg2, cppMethod.DeclaredInClassSpec, outline, outInstructions));
+                            else
+                                thisReg = InternSsaRegister(midInstr.RegArg2);
 
-                            writer.Write(scopeStack.Indent);
-                            if (returnReg != null)
-                            {
-                                writer.Write(StorageLocForSsaReg(returnReg, true, false));
-                                writer.Write(" = ");
-                            }
-
-
-                            writer.Write(StorageLocForSsaReg(thisReg, false, true));
-                            writer.Write("->");
+                            for (int pIdx = 0; pIdx < midInstr.RegArgs.Length; pIdx++)
+                                paramRegs.Add(InternSsaRegister(EmitPassiveConversion_PermitRefs(midInstr.CodeLocation, midInstr.RegArgs[pIdx], cppMethod.MethodSignature.ParamTypes[pIdx].Type, outline, outInstructions)));
 
                             CppVtableSlot vtableSlot = cppMethod.CreatesSlot;
                             if (vtableSlot == null)
@@ -891,484 +537,707 @@ namespace AssemblyImporter.CppExport
                             if (vtableSlot == null)
                                 throw new Exception("Internal error: Couldn't resolve vtable slot for method");
 
-                            writer.Write(vtableSlot.GenerateName());
+                            Clarity.Rpa.TypeSpecTag constraintType = null;
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.ConstrainedCallVirtualMethod)
+                                constraintType = RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg);
 
-                            if (methodSpec.GenericParameters != null)
-                                throw new NotSupportedException("Virtual generics are not supported");
-
-                            writer.Write("(");
-                            writer.Write(m_frameVarName);
+                            if (cppMethod.MethodDef.Static)
+                                throw new Exception();
 
                             CLR.CLRMethodSignatureInstance methodSig = cppMethod.MethodSignature;
 
-                            int numParams = paramsRegs.Length;
+                            int numParams = paramRegs.Count;
                             if (numParams != methodSig.ParamTypes.Length)
-                                throw new Exception("Internal error: CallVirtualMethod param count mismatch");
+                                throw new Exception("Internal error: CallMethod param count mismatch");
 
-                            for (int i = 0; i < numParams; i++)
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.CallVirtualMethod)
                             {
-                                SsaRegister paramReg = paramsRegs[i];
-                                CLR.CLRMethodSignatureInstanceParam paramSig = methodSig.ParamTypes[i];
-
-                                writer.Write(", ");
-
-                                string paramValue = StorageLocForSsaReg(paramReg, false, true);
-                                if (paramSig.TypeOfType == CLR.CLRSigParamOrRetType.TypeOfTypeEnum.Value)
-                                    writer.Write(PassiveConvertValue(paramReg.VType, paramSig.Type, paramValue));
-                                else
-                                    writer.Write(paramValue);
+                                outInstructions.Add(new Clarity.Rpa.Instructions.CallVirtualMethodInstruction(
+                                    midInstr.CodeLocation,
+                                    returnReg,
+                                    RpaTagFactory.CreateMethodSpec(Clarity.Rpa.MethodSlotType.Virtual, methodSpec),
+                                    thisReg,
+                                    paramRegs.ToArray()
+                                ));
                             }
-
-                            writer.WriteLine(");");
-                        }
-                        break;
-                    case MidInstruction.OpcodeEnum.ConstrainedCallVirtualMethod:
-                        writer.WriteLine("ConstrainedCallVirtualMethod " + midInstr.MethodSpecArg);
-                        if (midInstr.TypeSpecArg != null)
-                            writer.WriteLine("    Return SSA: " + midInstr.TypeSpecArg);
-                        if (midInstr.RegArg != null)
-                            writer.WriteLine("    Return SSA: " + midInstr.RegArg.SsaID);
-                        if (midInstr.RegArg2 != null)
-                            writer.WriteLine("    This SSA: " + midInstr.RegArg2.SsaID);
-                        if (midInstr.RegArgs != null)
-                        {
-                            writer.Write("    Parameter SSAs:");
-                            foreach (SsaRegister reg in midInstr.RegArgs)
-                            {
-                                writer.Write(" ");
-                                writer.Write(reg.SsaID);
-                            }
-                            writer.WriteLine();
-                        }
-                        break;
-                    case MidInstruction.OpcodeEnum.ConstrainedCallMethod:
-                        writer.WriteLine("ConstrainedCallMethod " + midInstr.MethodSpecArg);
-                        if (midInstr.TypeSpecArg != null)
-                            writer.WriteLine("    Return SSA: " + midInstr.TypeSpecArg);
-                        if (midInstr.RegArg != null)
-                            writer.WriteLine("    Return SSA: " + midInstr.RegArg.SsaID);
-                        if (midInstr.RegArg2 != null)
-                            writer.WriteLine("    This SSA: " + midInstr.RegArg2.SsaID);
-                        if (midInstr.RegArgs != null)
-                        {
-                            writer.Write("    Parameter SSAs:");
-                            foreach (SsaRegister reg in midInstr.RegArgs)
-                            {
-                                writer.Write(" ");
-                                writer.Write(reg.SsaID);
-                            }
-                            writer.WriteLine();
+                            else if (midInstr.Opcode == MidInstruction.OpcodeEnum.ConstrainedCallVirtualMethod)
+                                outInstructions.Add(new Clarity.Rpa.Instructions.CallConstrainedVirtualMethodInstruction(
+                                    midInstr.CodeLocation,
+                                    returnReg,
+                                    constraintType,
+                                    RpaTagFactory.CreateMethodSpec(Clarity.Rpa.MethodSlotType.Virtual, methodSpec),
+                                    thisReg,
+                                    paramRegs.ToArray()
+                                    ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.KillReg:
-                        if (midInstr.RegArg.IsSpilled)
-                        {
-                            VReg vReg = midInstr.RegArg.SpillVReg;
-
-                            if (vReg.Traceability != CppTraceabilityEnum.NotTraced && !vReg.IsZombie)
-                            {
-                                writer.Write(scopeStack.Indent);
-                                writer.Write("::CLRVM::KillVReg(");
-                                writer.Write(vReg.SlotName);
-                                writer.WriteLine(");");
-                            }
-                            midInstr.RegArg.SpillVReg.Kill();
-                        }
-                        else
-                            scopeStack.KillReg(midInstr.RegArg, writer);
                         break;
                     case MidInstruction.OpcodeEnum.LivenReg:
                         {
                             SsaRegister reg = midInstr.RegArg;
-                            if (reg.VType.TypeSpec != null)
-                                m_depSet.AddTypeSpecDependencies(reg.VType.TypeSpec, true);
-                            reg.SsaID = m_regAllocator.NewSsaID();
-
-                            if (reg.IsSpilled)
-                                reg.SpillVReg = m_regAllocator.AllocReg(reg.VType);
-                            else
-                                scopeStack.LivenReg(reg, m_builder, writer);
+                            reg.GenerateUniqueID(m_regAllocator);
+                            reg.MakeUsable();
                         }
                         break;
                     case MidInstruction.OpcodeEnum.Return:
-                        writer.Write(scopeStack.Indent);
-                        writer.WriteLine("return;");
-                        regionIsTerminated = true;
+                        outInstructions.Add(new Clarity.Rpa.Instructions.ReturnInstruction(midInstr.CodeLocation));
                         break;
                     case MidInstruction.OpcodeEnum.ReturnValue:
-                        writer.Write(scopeStack.Indent);
-                        writer.Write("return ");
-                        writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.TypeSpecArg, StorageLocForSsaReg(midInstr.RegArg, false, true)));
-                        writer.WriteLine(";");
-                        regionIsTerminated = true;
+                        {
+                            SsaRegister returnRegister = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.TypeSpecArg, outline, outInstructions);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.ReturnValueInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(returnRegister)));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadReg_ManagedPtr:
-                        writer.Write(scopeStack.Indent);
-                        writer.WriteLine(StorageLocForSsaReg(midInstr.RegArg, true, false) + " = " + StorageLocForVReg(midInstr.VRegArg, false, false) + ";");
+                        {
+                            Clarity.Rpa.HighLocal lcl = m_localLookup[midInstr.VRegArg];
+                            Clarity.Rpa.HighSsaRegister dest = InternSsaRegister(midInstr.RegArg);
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LoadLocalInstruction(
+                                midInstr.CodeLocation,
+                                dest,
+                                lcl
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadReg_Value:
-                        writer.Write(scopeStack.Indent);
-                        writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
-                        writer.Write(" = ");
-                        writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.VRegArg.VType.TypeSpec, StorageLocForVReg(midInstr.VRegArg, false, false)));
-                        writer.WriteLine(";");
+                        {
+                            CLR.CLRTypeSpec srcSpec = midInstr.VRegArg.VType.TypeSpec;
+                            CLR.CLRTypeSpec destSpec = midInstr.RegArg.VType.TypeSpec;
+                            if (srcSpec.Equals(destSpec))
+                            {
+                                outInstructions.Add(new Clarity.Rpa.Instructions.LoadLocalInstruction(
+                                    midInstr.CodeLocation,
+                                    InternSsaRegister(midInstr.RegArg),
+                                    m_localLookup[midInstr.VRegArg]
+                                    ));
+                            }
+                            else
+                            {
+                                SsaRegister tempReg = new SsaRegister(midInstr.VRegArg.VType);
+                                tempReg.MakeUsable();
+                                tempReg.GenerateUniqueID(m_regAllocator);
+
+                                outline.AddRegister(tempReg);
+
+
+                                outInstructions.Add(new Clarity.Rpa.Instructions.LoadLocalInstruction(
+                                    midInstr.CodeLocation,
+                                    InternSsaRegister(tempReg),
+                                    m_localLookup[midInstr.VRegArg]
+                                    ));
+
+                                outInstructions.Add(new Clarity.Rpa.Instructions.PassiveConvertInstruction(
+                                    midInstr.CodeLocation,
+                                    InternSsaRegister(midInstr.RegArg),
+                                    InternSsaRegister(tempReg)
+                                    ));
+                            }
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.StoreReg_ManagedPtr:
-                        writer.Write(scopeStack.Indent);
-                        writer.Write(StorageLocForVReg(midInstr.VRegArg, false, false));
-                        writer.Write(" = ");
-                        writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                        writer.WriteLine(";");
+                        outInstructions.Add(new Clarity.Rpa.Instructions.StoreLocalInstruction(
+                            midInstr.CodeLocation,
+                            m_localLookup[midInstr.VRegArg],
+                            InternSsaRegister(midInstr.RegArg)
+                            ));
                         break;
                     case MidInstruction.OpcodeEnum.StoreReg_Value:
-                        writer.Write(scopeStack.Indent);
-                        writer.Write(StorageLocForVReg(midInstr.VRegArg, false, false));
-                        writer.Write(" = ");
-                        writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.VRegArg.VType.TypeSpec, StorageLocForSsaReg(midInstr.RegArg, false, false)));
-                        writer.WriteLine(";");
+                        {
+                            SsaRegister srcReg = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.VRegArg.VType.TypeSpec, outline, outInstructions);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.StoreLocalInstruction(
+                                midInstr.CodeLocation,
+                                m_localLookup[midInstr.VRegArg],
+                                InternSsaRegister(srcReg)
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.beq_ref:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("beq_ref Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
+                    case MidInstruction.OpcodeEnum.bne_ref:
+                        {
+                            fallthroughMerged = true;
+                            CppTranslatedOutboundEdge edgeA = InternOutboundEdge(cfgNode, midInstr.CfgEdgeArg);
+                            CppTranslatedOutboundEdge edgeB = InternOutboundEdge(cfgNode, cfgNode.FallThroughEdge);
+
+                            CppTranslatedOutboundEdge trueEdge, falseEdge;
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.beq_ref)
+                            {
+                                trueEdge = edgeA;
+                                falseEdge = edgeB;
+                            }
+                            else if (midInstr.Opcode == MidInstruction.OpcodeEnum.bne_ref)
+                            {
+                                trueEdge = edgeB;
+                                falseEdge = edgeA;
+                            }
+                            else
+                                throw new Exception();
+
+                            Clarity.Rpa.HighSsaRegister regA = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister regB = InternSsaRegister(midInstr.RegArg2);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.BranchCompareRefsInstruction(midInstr.CodeLocation, regA, regB, trueEdge.NextNode, falseEdge.NextNode));
+                        }
+                        break;
+                    case MidInstruction.OpcodeEnum.cne_ref:
+                    case MidInstruction.OpcodeEnum.ceq_ref:
+                        {
+                            int trueValue, falseValue;
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg);
+
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.ceq_ref)
+                            {
+                                trueValue = 1;
+                                falseValue = 0;
+                            }
+                            else if (midInstr.Opcode == MidInstruction.OpcodeEnum.cne_ref)
+                            {
+                                trueValue = 0;
+                                falseValue = 1;
+                            }
+                            else
+                                throw new Exception();
+
+                            Clarity.Rpa.HighSsaRegister regA = InternSsaRegister(midInstr.RegArg2);
+                            Clarity.Rpa.HighSsaRegister regB = InternSsaRegister(midInstr.RegArg3);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.CompareRefsInstruction(midInstr.CodeLocation, destReg, regA, regB, trueValue, falseValue));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.beq_val:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("beq_val Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
-                    case MidInstruction.OpcodeEnum.bne_ref:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("bne_ref Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
                     case MidInstruction.OpcodeEnum.bne_val:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("bne_val Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
                     case MidInstruction.OpcodeEnum.bge:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("bge Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
                     case MidInstruction.OpcodeEnum.bgt:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("bgt Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
                     case MidInstruction.OpcodeEnum.ble:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("ble Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
                     case MidInstruction.OpcodeEnum.blt:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("blt Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Target CFG " + m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
-                        break;
                     case MidInstruction.OpcodeEnum.clt:
                     case MidInstruction.OpcodeEnum.cgt:
                     case MidInstruction.OpcodeEnum.ceq_numeric:
                         {
-                            bool isUnsigned = midInstr.FlagArg;
-                            CLR.CLRTypeSpec comparisonSpec = this.TypeSpecForNumericBinaryOp(midInstr.RegArg2, midInstr.RegArg3, isUnsigned);
-
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
-                            writer.Write(" = ((");
-
-                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, comparisonSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
-                            writer.Write(") ");
+                            bool isBranch;
+                            SsaRegister leftReg, rightReg;
 
                             switch (midInstr.Opcode)
                             {
+                                case MidInstruction.OpcodeEnum.beq_val:
+                                case MidInstruction.OpcodeEnum.bne_val:
+                                case MidInstruction.OpcodeEnum.bge:
+                                case MidInstruction.OpcodeEnum.bgt:
+                                case MidInstruction.OpcodeEnum.ble:
+                                case MidInstruction.OpcodeEnum.blt:
+                                    isBranch = true;
+                                    leftReg = midInstr.RegArg;
+                                    rightReg = midInstr.RegArg2;
+                                    break;
                                 case MidInstruction.OpcodeEnum.clt:
-                                    writer.Write("<");
-                                    break;
                                 case MidInstruction.OpcodeEnum.cgt:
-                                    writer.Write("<");
-                                    break;
                                 case MidInstruction.OpcodeEnum.ceq_numeric:
-                                    writer.Write("==");
+                                    isBranch = false;
+                                    leftReg = midInstr.RegArg2;
+                                    rightReg = midInstr.RegArg3;
+                                    break;
+                                default:
+                                    throw new Exception();
+                            }
+
+                            bool isUnsigned = midInstr.FlagArg;
+                            bool isReversed = false;
+
+                            NumericStackType nst = NumericStackTypeForNumericBinaryOp(leftReg, rightReg);
+
+                            if (isUnsigned && (nst == NumericStackType.Float32 || nst == NumericStackType.Float64))
+                            {
+                                isUnsigned = false;
+                                isReversed = true;
+                            }
+
+                            CLR.CLRTypeSpec comparisonSpec = this.TypeSpecForNumericBinaryOp(leftReg, rightReg, isUnsigned);
+
+                            Clarity.Rpa.HighSsaRegister leftHighReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, leftReg, comparisonSpec, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister rightHighReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, rightReg, comparisonSpec, outline, outInstructions));
+
+                            Clarity.Rpa.Instructions.NumberCompareOperation op;
+
+                            switch (midInstr.Opcode)
+                            {
+                                case MidInstruction.OpcodeEnum.blt:
+                                case MidInstruction.OpcodeEnum.clt:
+                                    op = isReversed ?
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.GreaterOrEqual :
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.LessThan;
+                                    break;
+                                case MidInstruction.OpcodeEnum.bgt:
+                                case MidInstruction.OpcodeEnum.cgt:
+                                    op = isReversed ?
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.LessOrEqual :
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.GreaterThan;
+                                    break;
+                                case MidInstruction.OpcodeEnum.ble:
+                                    op = isReversed ?
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.GreaterThan :
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.LessOrEqual;
+                                    break;
+                                case MidInstruction.OpcodeEnum.bge:
+                                    op = isReversed ?
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.LessThan :
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.GreaterOrEqual;
+                                    break;
+                                case MidInstruction.OpcodeEnum.beq_val:
+                                case MidInstruction.OpcodeEnum.ceq_numeric:
+                                    op = isReversed ?
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.NotEqual :
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.Equal;
+                                    break;
+                                case MidInstruction.OpcodeEnum.bne_val:
+                                    op = isReversed ?
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.Equal :
+                                        Clarity.Rpa.Instructions.NumberCompareOperation.NotEqual;
                                     break;
                                 default:
                                     throw new ArgumentException();
                             }
 
-                            writer.Write(" (");
-                            writer.Write(PassiveConvertValue(midInstr.RegArg3.VType, comparisonSpec, StorageLocForSsaReg(midInstr.RegArg3, false, false)));
-                            writer.WriteLine("));");
+                            Clarity.Rpa.Instructions.NumberArithType numType;
+
+                            switch (nst)
+                            {
+                                case NumericStackType.Float32:
+                                    numType = Clarity.Rpa.Instructions.NumberArithType.Float32;
+                                    break;
+                                case NumericStackType.Float64:
+                                    numType = Clarity.Rpa.Instructions.NumberArithType.Float64;
+                                    break;
+                                case NumericStackType.Int32:
+                                    numType = isUnsigned ?
+                                        Clarity.Rpa.Instructions.NumberArithType.UInt32 :
+                                        Clarity.Rpa.Instructions.NumberArithType.Int32;
+                                    break;
+                                case NumericStackType.Int64:
+                                    numType = isUnsigned ?
+                                        Clarity.Rpa.Instructions.NumberArithType.UInt64 :
+                                        Clarity.Rpa.Instructions.NumberArithType.Int64;
+                                    break;
+                                case NumericStackType.NativeInt:
+                                    numType = isUnsigned ?
+                                        Clarity.Rpa.Instructions.NumberArithType.NativeUInt :
+                                        Clarity.Rpa.Instructions.NumberArithType.NativeInt;
+                                    break;
+                                default:
+                                    throw new ArgumentException();
+                            }
+
+                            if (isBranch)
+                            {
+                                fallthroughMerged = true;
+                                CppTranslatedOutboundEdge trueEdge = InternOutboundEdge(cfgNode, midInstr.CfgEdgeArg);
+                                CppTranslatedOutboundEdge falseEdge = InternOutboundEdge(cfgNode, cfgNode.FallThroughEdge);
+
+                                if (isReversed)
+                                {
+                                    CppTranslatedOutboundEdge temp = trueEdge;
+                                    trueEdge = falseEdge;
+                                    falseEdge = temp;
+                                }
+
+                                outInstructions.Add(new Clarity.Rpa.Instructions.BranchCompareNumbersInstruction(
+                                    midInstr.CodeLocation,
+                                    op,
+                                    numType,
+                                    leftHighReg,
+                                    rightHighReg,
+                                    trueEdge.NextNode,
+                                    falseEdge.NextNode
+                                    ));
+                            }
+                            else
+                            {
+                                int trueValue = 0;
+                                int falseValue = 1;
+
+                                if (isReversed)
+                                {
+                                    trueValue = 0;
+                                    falseValue = 1;
+                                }
+
+                                Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg);
+
+                                outInstructions.Add(new Clarity.Rpa.Instructions.CompareNumbersInstruction(
+                                midInstr.CodeLocation,
+                                    destReg,
+                                    op,
+                                    numType,
+                                    leftHighReg,
+                                    rightHighReg,
+                                    trueValue,
+                                    falseValue
+                                    ));
+                            }
                         }
                         break;
-                    case MidInstruction.OpcodeEnum.cne_ref:
-                    case MidInstruction.OpcodeEnum.ceq_ref:
-                        writer.Write(scopeStack.Indent);
-                        writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
-                        writer.Write(" = ");
-                        if (midInstr.Opcode == MidInstruction.OpcodeEnum.ceq_ref)
-                            writer.Write("(::CLRVM::ReferenceEqualityComparer< ");
-                        else if (midInstr.Opcode == MidInstruction.OpcodeEnum.cne_ref)
-                            writer.Write("(!::CLRVM::ReferenceEqualityComparer< ");
-                        else
-                            throw new ArgumentException();
-                        writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg2.VType.TypeSpec));
-                        writer.Write(", ");
-                        writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg3.VType.TypeSpec));
-                        writer.Write(" >::AreEqual(");
-                        writer.Write(StorageLocForSsaReg(midInstr.RegArg2, false, false));
-                        writer.Write(", ");
-                        writer.Write(StorageLocForSsaReg(midInstr.RegArg3, false, false));
-                        writer.WriteLine("));");
-                        break;
                     case MidInstruction.OpcodeEnum.LoadArgA_Value:
-                        writer.WriteLine("LoadArgA_Value SSA: " + midInstr.RegArg.SsaID + "  VReg: " + midInstr.VRegArg.SlotName);
+                        {
+                            Clarity.Rpa.HighSsaRegister dest = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighLocal src = m_localLookup[midInstr.VRegArg];
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.RefLocalInstruction(
+                                midInstr.CodeLocation,
+                                dest,
+                                src
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.brzero:
                     case MidInstruction.OpcodeEnum.brnotzero:
-                        writer.Write(scopeStack.Indent);
-                        writer.Write("if (");
-
-                        if (midInstr.Opcode == MidInstruction.OpcodeEnum.brnotzero)
-                            writer.Write("!");
-                        else if (midInstr.Opcode != MidInstruction.OpcodeEnum.brzero)
-                            throw new ArgumentException();
-
-                        switch(midInstr.RegArg.VType.ValType)
                         {
-                            case VType.ValTypeEnum.ConstantValue:
-                            case VType.ValTypeEnum.ValueValue:
-                                break;
-                            default:
-                                throw new ArgumentException();
-                        }
+                            SsaRegister inReg = midInstr.RegArg;
+                            CLR.CLRTypeSpec targetType;
+                            object zeroValue;
 
-                        writer.Write("::CLRVM::IsNumberZero(::CLRTypes::DetagNumber(");
-                        writer.Write(PassiveConvertValueToNumeric(midInstr.RegArg.VType, StorageLocForSsaReg(midInstr.RegArg, false, false)));
-                        writer.WriteLine(")))");
-                        writer.Write(scopeStack.Indent);
-                        writer.WriteLine("{");
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        writer.Write(scopeStack.Indent);
-                        writer.Write("\tgoto bLabel_");
-                        writer.Write(m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        writer.WriteLine(";");
-                        writer.Write(scopeStack.Indent);
-                        writer.WriteLine("}");
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
+                            CLR.CLRTypeSpecClass cls = (CLR.CLRTypeSpecClass)inReg.VType.TypeSpec;
+                            string typeName = cls.TypeDef.TypeName;
+                            Clarity.Rpa.Instructions.NumberArithType arithType;
+
+                            if (typeName == "Char" || typeName == "Boolean" ||
+                                typeName == "Byte" || typeName == "UInt16" ||
+                                typeName == "UInt32")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.Int32, true);
+                                zeroValue = (uint)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.UInt32;
+                            }
+                            else if (typeName == "SByte" || typeName == "Int16" || typeName == "Int32")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.Int32, false);
+                                zeroValue = (int)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.Int32;
+                            }
+                            else if (typeName == "UInt64")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.Int64, true);
+                                zeroValue = (ulong)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.UInt64;
+                            }
+                            else if (typeName == "Int64")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.Int64, false);
+                                zeroValue = (long)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.Int64;
+                            }
+                            else if (typeName == "IntPtr")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.NativeInt, false);
+                                zeroValue = (long)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.NativeInt;
+                            }
+                            else if (typeName == "UIntPtr")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.NativeInt, true);
+                                zeroValue = (ulong)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.NativeUInt;
+                            }
+                            else if (typeName == "Single")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.Float32, false);
+                                zeroValue = (float)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.Float32;
+                            }
+                            else if (typeName == "Double")
+                            {
+                                targetType = TypeSpecForNumericStackType(NumericStackType.Float64, false);
+                                zeroValue = (double)0;
+                                arithType = Clarity.Rpa.Instructions.NumberArithType.Float64;
+                            }
+                            else
+                                throw new Exception();
+
+                            fallthroughMerged = true;
+                            CppTranslatedOutboundEdge trueEdge = InternOutboundEdge(cfgNode, midInstr.CfgEdgeArg);
+                            CppTranslatedOutboundEdge falseEdge = InternOutboundEdge(cfgNode, cfgNode.FallThroughEdge);
+
+                            Clarity.Rpa.Instructions.NumberCompareOperation compareOp;
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.brzero)
+                                compareOp = Clarity.Rpa.Instructions.NumberCompareOperation.Equal;
+                            else if (midInstr.Opcode == MidInstruction.OpcodeEnum.brnotzero)
+                                compareOp = Clarity.Rpa.Instructions.NumberCompareOperation.NotEqual;
+                            else
+                                throw new Exception();
+
+                            SsaRegister converted = EmitPassiveConversion(midInstr.CodeLocation, inReg, targetType, outline, outInstructions);
+                            Clarity.Rpa.TypeSpecTag typeTag = RpaTagFactory.CreateTypeTag(targetType);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.BranchCompareNumbersInstruction(
+                                midInstr.CodeLocation,
+                                compareOp,
+                                arithType,
+                                InternSsaRegister(converted),
+                                new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ConstantValue, typeTag, zeroValue),
+                                trueEdge.NextNode,
+                                falseEdge.NextNode
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.brnull:
                     case MidInstruction.OpcodeEnum.brnotnull:
-                        writer.Write(scopeStack.Indent);
-                        writer.Write("if (");
-
-                        if (midInstr.Opcode == MidInstruction.OpcodeEnum.brnotnull)
-                            writer.Write("!");
-                        else if (midInstr.Opcode != MidInstruction.OpcodeEnum.brnull)
-                            throw new ArgumentException();
-
-                        switch (midInstr.RegArg.VType.ValType)
                         {
-                            case VType.ValTypeEnum.NotNullReferenceValue:
-                            case VType.ValTypeEnum.NullableReferenceValue:
-                            case VType.ValTypeEnum.Null:
-                            case VType.ValTypeEnum.ConstantReference:
-                                writer.Write("::CLRVM::IsNull");
-                                break;
-                            default:
-                                throw new ArgumentException();
-                        }
+                            fallthroughMerged = true;
+                            CppTranslatedOutboundEdge isNullEdge = InternOutboundEdge(cfgNode, midInstr.CfgEdgeArg);
+                            CppTranslatedOutboundEdge isNotNullEdge = InternOutboundEdge(cfgNode, cfgNode.FallThroughEdge);
 
-                        writer.Write("< ");
-                        writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
-                        writer.Write(" >(");
-                        writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, true));
-                        writer.WriteLine("))");
-                        writer.Write(scopeStack.Indent);
-                        writer.WriteLine("{");
-                        SpillCfgEdge(scopeStack.Indent, cfgNode, midInstr.CfgEdgeArg, writer);
-                        writer.Write(scopeStack.Indent);
-                        writer.Write("\tgoto bLabel_");
-                        writer.Write(m_regAllocator.TargetIDForCfgNode(midInstr.CfgEdgeArg.SuccessorNode));
-                        writer.WriteLine(";");
-                        writer.Write(scopeStack.Indent);
-                        writer.WriteLine("}");
-                        AddNode(midInstr.CfgEdgeArg.SuccessorNode);
+                            if (midInstr.Opcode == MidInstruction.OpcodeEnum.brnotnull)
+                            {
+                                CppTranslatedOutboundEdge temp = isNullEdge;
+                                isNullEdge = isNotNullEdge;
+                                isNotNullEdge = temp;
+                            }
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.BranchRefNullInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg),
+                                isNullEdge.NextNode,
+                                isNotNullEdge.NextNode
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LeakReg:
                         {
                             leakedRegs.Add(midInstr.RegArg);
-                            if (!exitIsContinuous && midInstr.RegArg.IsSpilled)
-                                midInstr.RegArg.SpillVReg.Kill();
                         }
                         break;
                     case MidInstruction.OpcodeEnum.EntryReg:
                         {
-                            if (enterIsContinuous)
-                            {
-                                SsaRegister newReg = midInstr.RegArg;
-                                SsaRegister oldReg = continuedRegs.Dequeue();
+                            SsaRegister reg = midInstr.RegArg;
 
-                                newReg.SsaID = oldReg.SsaID;
-                                if (newReg.IsSpilled)
-                                {
-                                    newReg.SpillVReg = oldReg.SpillVReg;
-                                    if (newReg.SpillVReg == null || !newReg.SpillVReg.IsAlive)
-                                        throw new Exception("Continued a spilled SSA register, but the vreg is dead");
-                                }
-                                else
-                                    scopeStack.RecycleReg(midInstr.RegArg);
-                            }
-                            else
-                            {
-                                SsaRegister oldReg = null;
-                                if (cfgNode.Predecessors.Count == 1)
-                                    oldReg = continuedRegs.Dequeue();
+                            reg.GenerateUniqueID(m_regAllocator);
+                            reg.MakeUsable();
 
-                                SsaRegister reg = midInstr.RegArg;
-                                reg.SsaID = m_regAllocator.NewSsaID();
-                                if (CppRegisterAllocator.IsVTypeSpillable(reg.VType))
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(reg);
+
+                            // Blocks can have constants on entry if all predecessors have the same value
+                            if (!destReg.IsConstant)
+                            {
+                                List<Clarity.Rpa.HighPhiLink> phiLinks = new List<Clarity.Rpa.HighPhiLink>();
+
+                                foreach (CfgNode pred in cfgNode.Predecessors)
                                 {
-                                    reg.Spill();
-                                    if (cfgNode.Predecessors.Count == 1)
+                                    // Find the successor edge
+                                    CppTranslatedOutboundEdge edge = null;
+                                    foreach (CfgOutboundEdge outEdge in pred.Successors)
                                     {
-                                        reg.SpillVReg = oldReg.SinglePredecessorSpillVReg;
-                                        reg.SpillVReg.Liven();
-                                        if (reg.SpillVReg == null)
-                                            throw new Exception("Single-predecessor edge-crossing register wasn't spilled");
+                                        if (outEdge.SuccessorNode == cfgNode)
+                                        {
+                                            edge = InternOutboundEdge(pred, outEdge);
+                                            break;
+                                        }
                                     }
-                                    else
-                                        reg.SpillVReg = m_regAllocator.AllocReg(reg.VType);
+
+                                    if (edge == null)
+                                        throw new Exception("Mismatched CFG edge");
+
+                                    phiLinks.Add(new Clarity.Rpa.HighPhiLink(edge.PrevNode, edge.Regs[numContinuedRegs]));
                                 }
+
+
+                                outPhis.Add(new Clarity.Rpa.HighPhi(
+                                    InternSsaRegister(reg),
+                                    phiLinks.ToArray()
+                                    ));
                             }
+
+                            numContinuedRegs++;
                         }
                         break;
                     case MidInstruction.OpcodeEnum.Throw:
                         {
                             CLR.CLRTypeSpec objSpec = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.OBJECT));
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("::CLRVM::Throw(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", ");
-                            writer.Write(PassiveConvertValue(midInstr.RegArg.VType, objSpec, StorageLocForSsaReg(midInstr.RegArg, false, false)));
-                            writer.WriteLine(");");
+                            SsaRegister converted = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, objSpec, outline, outInstructions);
 
-                            regionIsTerminated = true;
+                            outInstructions.Add(new Clarity.Rpa.Instructions.ThrowInstruction(
+                                    midInstr.CodeLocation,
+                                    InternSsaRegister(converted)
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.NewSZArray:
                         {
                             NumericStackType indexNst = StackTypeForTypeSpec(midInstr.RegArg2.VType.TypeSpec);
-                            CLR.CLRSigType.ElementType indexElementType;
 
-                            if (indexNst == NumericStackType.Int32)
-                                indexElementType = CLR.CLRSigType.ElementType.I4;
-                            else if (indexNst == NumericStackType.NativeInt)
-                                indexElementType = CLR.CLRSigType.ElementType.I;    // CLARITYTODO: Test UIntPtr
-                            else
-                                throw new ArgumentException("Unusual array subscript type");
+                            CLR.CLRTypeSpec indexSpec = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.I));
 
-                            CLR.CLRTypeSpec indexSpec = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(indexElementType));
+                            SsaRegister indexReg = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, indexSpec, outline, outInstructions);
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
-                            writer.Write(" = CLRVM::ArrayCreator< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
-                            writer.Write(" >::Create(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", ");
-                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, indexSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.AllocArrayInstruction(
+                                midInstr.CodeLocation,
+                                    InternSsaRegister(midInstr.RegArg),
+                                    new Clarity.Rpa.HighSsaRegister[] { InternSsaRegister(indexReg) }
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadField_ManagedPtr:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("LoadField_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
+                        {
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, destReg.Type, null);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.PtrFieldInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                objReg,
+                                midInstr.StrArg
+                                ));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LoadPtrInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                addrReg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadFieldA_ManagedPtr:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("LoadFieldA_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
+                        {
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.PtrFieldInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                objReg,
+                                midInstr.StrArg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadField_Object:
-                        // CLARITYTODO: Null ref check
                         {
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
-                            writer.Write(" = ");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                            writer.Write("->f");
-                            writer.Write(CppBuilder.LegalizeName(midInstr.StrArg, true));
-                            writer.WriteLine(".Value();");
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, destReg.Type, null);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.RefFieldInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                objReg,
+                                midInstr.StrArg
+                                ));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LoadPtrInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                addrReg
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadFieldA_Object:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("LoadFieldA_Object Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
+                        {
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.RefFieldInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                objReg,
+                                midInstr.StrArg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadField_Value:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("LoadField_Value Object SSA: " + midInstr.RegArg.SsaID + "  Value: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
+                        {
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LoadValueFieldInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                objReg,
+                                midInstr.StrArg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadRegA:
                         {
-                            VType.ValTypeEnum baseValType = midInstr.VRegArg.VType.ValType;
-                            if (baseValType != VType.ValTypeEnum.ValueValue
-                                && baseValType != VType.ValTypeEnum.NullableReferenceValue)
-                                throw new Exception("Bad vreg type for LoadRegA");
+                            Clarity.Rpa.HighLocal local = m_localLookup[midInstr.VRegArg];
+                            Clarity.Rpa.HighSsaRegister dest = InternSsaRegister(midInstr.RegArg);
 
-                            CLR.CLRTypeSpec boxType = midInstr.RegArg.VType.TypeSpec;
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
-                            writer.Write(" = ::CLRVM::CreateLocalManagedPtr< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.VRegArg.VType.TypeSpec));
-                            writer.Write(" >(");
-                            writer.Write(StorageLocForVReg(midInstr.VRegArg, false, false));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetLocalPtrInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg),
+                                m_localLookup[midInstr.VRegArg]
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadArrayElem:
+                        {
+                            CLR.CLRTypeSpec indexSpec = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.I));
+                            Clarity.Rpa.HighSsaRegister arrayReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister indexReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, indexSpec, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg3);
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, destReg.Type, null);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetArrayElementPtrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                arrayReg,
+                                new Clarity.Rpa.HighSsaRegister[] { indexReg }
+                                ));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LoadPtrInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                addrReg
+                                ));
+                        }
+                        break;
                     case MidInstruction.OpcodeEnum.LoadArrayElemAddr:
                         {
-                            CLR.CLRTypeSpec szArraySpec = midInstr.RegArg.VType.TypeSpec;
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg3, true, false));
-                            writer.Write(" = ");
+                            CLR.CLRTypeSpec indexSpec = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.I));
+                            Clarity.Rpa.HighSsaRegister arrayReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister indexReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, indexSpec, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg3);
 
-                            switch (midInstr.Opcode)
-                            {
-                                case MidInstruction.OpcodeEnum.LoadArrayElem:
-                                    writer.Write("::CLRVM::SZArrayLoader< ");
-                                    break;
-                                case MidInstruction.OpcodeEnum.LoadArrayElemAddr:
-                                    writer.Write("::CLRVM::SZArrayAddrLoader< ");
-                                    break;
-                                default:
-                                    throw new ArgumentException();
-                            }
-                            writer.Write(m_builder.SpecToAmbiguousStorage(szArraySpec));
-                            writer.Write(" >::Load(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", ");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                            writer.Write(", ");
-
-                            CLR.CLRTypeSpec indexSpec = TypeSpecForArrayIndex(midInstr.RegArg2.VType.TypeSpec);
-
-                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, indexSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetArrayElementPtrInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                arrayReg,
+                                new Clarity.Rpa.HighSsaRegister[] { indexReg }
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.StoreField_ManagedPtr:
-                        writer.WriteLine("StoreField_ManagedPtr Object SSA: " + midInstr.RegArg.SsaID + "  Value SSA: " + midInstr.RegArg2.SsaID + "  Field: " + midInstr.StrArg);
+                        {
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister valueReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, midInstr.TypeSpecArg, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, valueReg.Type, null);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.PtrFieldInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                objReg,
+                                midInstr.StrArg));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.StorePtrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                valueReg
+                                ));
+                        }
+                        break;
+                    case MidInstruction.OpcodeEnum.StoreField_Object:
+                        {
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister valueReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, midInstr.TypeSpecArg, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, valueReg.Type, null);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.RefFieldInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                objReg,
+                                midInstr.StrArg));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.StorePtrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                valueReg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.add:
                     case MidInstruction.OpcodeEnum.sub:
@@ -1378,22 +1247,31 @@ namespace AssemblyImporter.CppExport
                     case MidInstruction.OpcodeEnum.and:
                     case MidInstruction.OpcodeEnum.or:
                     case MidInstruction.OpcodeEnum.xor:
+                    case MidInstruction.OpcodeEnum.shl:
+                    case MidInstruction.OpcodeEnum.shr: // [.un]
                         {
                             bool isUnsigned = (midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Un) != 0;
                             bool isOvf = (midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Ovf) != 0;
-                            bool isInteger;
                             NumericStackType nst = NumericStackTypeForNumericBinaryOp(midInstr.RegArg, midInstr.RegArg2);
+
+                            Clarity.Rpa.Instructions.NumberArithType arithType;
 
                             switch(nst)
                             {
                                 case NumericStackType.Float32:
+                                    arithType = Clarity.Rpa.Instructions.NumberArithType.Float32;
+                                    break;
                                 case NumericStackType.Float64:
-                                    isInteger = false;
+                                    arithType = Clarity.Rpa.Instructions.NumberArithType.Float64;
                                     break;
                                 case NumericStackType.Int32:
+                                    arithType = isUnsigned ? Clarity.Rpa.Instructions.NumberArithType.UInt32 : Clarity.Rpa.Instructions.NumberArithType.Int32;
+                                    break;
                                 case NumericStackType.Int64:
+                                    arithType = isUnsigned ? Clarity.Rpa.Instructions.NumberArithType.Int64 : Clarity.Rpa.Instructions.NumberArithType.Int64;
+                                    break;
                                 case NumericStackType.NativeInt:
-                                    isInteger = true;
+                                    arithType = isUnsigned ? Clarity.Rpa.Instructions.NumberArithType.NativeUInt : Clarity.Rpa.Instructions.NumberArithType.NativeInt;
                                     break;
                                 default:
                                     throw new ArgumentException();
@@ -1401,230 +1279,205 @@ namespace AssemblyImporter.CppExport
 
                             CLR.CLRTypeSpec opSpec = TypeSpecForNumericStackType(nst, isUnsigned);
 
-                            string arithOp;
+                            Clarity.Rpa.Instructions.NumberArithOp arithOp;
                             bool canThrow = isOvf;
                             switch (midInstr.Opcode)
                             {
                                 case MidInstruction.OpcodeEnum.add:
-                                    arithOp = "Add";
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.Add;
                                     break;
                                 case MidInstruction.OpcodeEnum.sub:
-                                    arithOp = "Subtract";
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.Subtract;
                                     break;
                                 case MidInstruction.OpcodeEnum.mul:
-                                    arithOp = "Multiply";
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.Multiply;
                                     break;
                                 case MidInstruction.OpcodeEnum.div:
-                                    if (isInteger)
-                                    {
-                                        arithOp = "DivideInteger";
-                                        canThrow = true;
-                                    }
-                                    else
-                                    {
-                                        arithOp = "Divide";
-                                        canThrow = false;
-                                    }
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.Divide;
                                     break;
                                 case MidInstruction.OpcodeEnum.rem:
-                                    if (isInteger)
-                                    {
-                                        arithOp = "ModuloInteger";
-                                        canThrow = true;
-                                    }
-                                    else
-                                    {
-                                        arithOp = "Modulo";
-                                        canThrow = false;
-                                    }
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.Modulo;
                                     break;
                                 case MidInstruction.OpcodeEnum.and:
-                                    arithOp = "BitwiseAnd";
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.BitAnd;
                                     break;
                                 case MidInstruction.OpcodeEnum.or:
-                                    arithOp = "BitwiseOr";
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.BitOr;
                                     break;
                                 case MidInstruction.OpcodeEnum.xor:
-                                    arithOp = "BitwiseXor";
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.BitXor;
+                                    break;
+                                case MidInstruction.OpcodeEnum.shl:
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.ShiftLeft;
+                                    break;
+                                case MidInstruction.OpcodeEnum.shr:
+                                    arithOp = Clarity.Rpa.Instructions.NumberArithOp.ShiftRight;
                                     break;
                                 default:
                                     throw new ArgumentException();
                             }
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg3, true, false));
-                            writer.Write(" = CLRVM::ArithOps< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(opSpec));
-                            writer.Write(" >::");
-                            writer.Write(arithOp);
-                            if (isOvf)
-                                writer.Write("Ovf");
+                            SsaRegister left = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, opSpec, outline, outInstructions);
+                            SsaRegister right = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, opSpec, outline, outInstructions);
 
-                            writer.Write("(");
-                            if (canThrow)
-                            {
-                                writer.Write(m_frameVarName);
-                                writer.Write(", ");
-                            }
-
-                            writer.Write(PassiveConvertValue(midInstr.RegArg.VType, opSpec, StorageLocForSsaReg(midInstr.RegArg, false, false)));
-                            writer.Write(", ");
-                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, opSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.ArithInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg3),
+                                arithOp,
+                                arithType,
+                                InternSsaRegister(left),
+                                InternSsaRegister(right),
+                                isOvf
+                                ));
                         }
-                        break;
-                    case MidInstruction.OpcodeEnum.shl:
-                    case MidInstruction.OpcodeEnum.shr: // [.un]
-                        writer.WriteLine("ShiftOp " + midInstr.Opcode.ToString() + "  Value 1 SSA: " + midInstr.RegArg.SsaID + "  Value 2 SSA: " + midInstr.RegArg2.SsaID + "  Result SSA: " + midInstr.RegArg3.SsaID + "  Arith mode " + (int)midInstr.ArithArg);
                         break;
                     case MidInstruction.OpcodeEnum.neg:
                     case MidInstruction.OpcodeEnum.not:
-                        writer.WriteLine("UnaryArith " + midInstr.Opcode.ToString() + "  Value SSA: " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID + "  Arith mode " + (int)midInstr.ArithArg);
+                        {
+                            Clarity.Rpa.HighSsaRegister srcReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.RegArg2.VType.TypeSpec, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
+
+                            Clarity.Rpa.Instructions.NumberArithType arithType;
+                            switch (midInstr.ArithArg)
+                            {
+                                case MidInstruction.ArithEnum.ArithType_Int32:
+                                    arithType = Clarity.Rpa.Instructions.NumberArithType.Int32;
+                                    break;
+                                case MidInstruction.ArithEnum.ArithType_Int64:
+                                    arithType = Clarity.Rpa.Instructions.NumberArithType.Int64;
+                                    break;
+                                case MidInstruction.ArithEnum.ArithType_NativeInt:
+                                    arithType = Clarity.Rpa.Instructions.NumberArithType.NativeInt;
+                                    break;
+                                case MidInstruction.ArithEnum.ArithType_Float32:
+                                    arithType = Clarity.Rpa.Instructions.NumberArithType.Float32;
+                                    break;
+                                case MidInstruction.ArithEnum.ArithType_Float64:
+                                    arithType = Clarity.Rpa.Instructions.NumberArithType.Float64;
+                                    break;
+                                default:
+                                    throw new Exception();
+                            }
+
+                            Clarity.Rpa.Instructions.NumberUnaryArithOp arithOp;
+                            switch(midInstr.Opcode)
+                            {
+                                case MidInstruction.OpcodeEnum.neg:
+                                    arithOp = Clarity.Rpa.Instructions.NumberUnaryArithOp.Negate;
+                                    break;
+                                case MidInstruction.OpcodeEnum.not:
+                                    arithOp = Clarity.Rpa.Instructions.NumberUnaryArithOp.BitNot;
+                                    break;
+                                default:
+                                    throw new Exception();
+                            }
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.UnaryArithInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                arithOp,
+                                arithType,
+                                srcReg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.TryConvertObj:
                         {
-                            CLR.CLRTypeSpec sourceSpec = midInstr.RegArg.VType.TypeSpec;
-                            CLR.CLRTypeSpec destSpec = midInstr.RegArg2.VType.TypeSpec;
-
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
-                            writer.Write(" = ::CLRVM::DynamicCaster< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(sourceSpec));
-                            writer.Write(", ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(destSpec));
-                            writer.Write(" >::Cast(");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.DynamicCastInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg2),
+                                InternSsaRegister(midInstr.RegArg)
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.Leave:
-                        writer.WriteLine("Leave Esc " + midInstr.UIntArg);
+                        {
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LeaveRegionInstruction(
+                                midInstr.CodeLocation,
+                                midInstr.UIntArg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.DuplicateReg:
-                        writer.WriteLine("DuplicateReg SSA: " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID);
+                        AliasSsaRegister(InternSsaRegister(midInstr.RegArg), midInstr.RegArg2);
                         break;
                     case MidInstruction.OpcodeEnum.StoreStaticField:
-
                         {
-                            int staticInitID = m_regAllocator.AllocStaticToken(midInstr.TypeSpecArg);
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("if (!bStaticInit");
-                            writer.Write(staticInitID);
-                            writer.WriteLine(")");
+                            Clarity.Rpa.TypeSpecTag staticType = RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg);
+                            string fieldName = midInstr.StrArg;
 
-                            writer.Write(scopeStack.Indent);
-                            writer.WriteLine("{");
+                            Clarity.Rpa.HighSsaRegister srcReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.TypeSpecArg2, outline, outInstructions));
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("\t::CLRVM::InitStaticToken< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.TypeSpecArg));
-                            writer.Write(" >(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", bTracedLocals.bStatic");
-                            writer.Write(staticInitID);
-                            writer.WriteLine(".m_value);");
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, srcReg.Type, null);
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("\tbStaticInit");
-                            writer.Write(staticInitID);
-                            writer.WriteLine(" = true;");
-
-                            writer.Write(scopeStack.Indent);
-                            writer.WriteLine("}");
-
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("bTracedLocals.bStatic");
-                            writer.Write(staticInitID);
-                            writer.Write(".m_value->f");
-                            writer.Write(CppBuilder.LegalizeName(midInstr.StrArg, true));
-                            writer.Write(".Set(");
-
-                            writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.TypeSpecArg2, StorageLocForSsaReg(midInstr.RegArg, true, false)));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetStaticFieldAddrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                staticType,
+                                fieldName
+                                ));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.StorePtrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                srcReg
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadIndirect:
                         {
-                            writer.Write(scopeStack.Indent);
+                            SsaRegister srcReg = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.RegArg2.VType.TypeSpec, outline, outInstructions);
+                            SsaRegister destReg = midInstr.RegArg2;
 
-                            switch (midInstr.RegArg.VType.ValType)
-                            {
-                                case VType.ValTypeEnum.AnchoredManagedPtr:
-                                    writer.Write("::CLRVM::LoadAnchoredManagedPtr");
-                                    break;
-                                case VType.ValTypeEnum.LocalManagedPtr:
-                                    writer.Write("::CLRVM::LoadAnchoredManagedPtr");
-                                    break;
-                                case VType.ValTypeEnum.MaybeAnchoredManagedPtr:
-                                    writer.Write("::CLRVM::LoadMaybeAnchoredManagedPtr");
-                                    break;
-                                default:
-                                    throw new ArgumentException();
-                            }
-
-                            writer.Write("< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
-                            writer.Write(" >(");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
-                            writer.Write(", ");
-                            writer.Write(PassiveConvertValue(midInstr.RegArg.VType, midInstr.RegArg2.VType.TypeSpec, StorageLocForSsaReg(midInstr.RegArg, false, false)));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LoadPtrInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(destReg),
+                                InternSsaRegister(srcReg)
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadStaticField:
                         {
-                            int staticInitID = m_regAllocator.AllocStaticToken(midInstr.TypeSpecArg);
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("if (!bStaticInit");
-                            writer.Write(staticInitID);
-                            writer.WriteLine(")");
+                            Clarity.Rpa.TypeSpecTag staticType = RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg);
+                            string fieldName = midInstr.StrArg;
 
-                            writer.Write(scopeStack.Indent);
-                            writer.WriteLine("{");
+                            Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, destReg.Type, null);
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("\t::CLRVM::InitStaticToken< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.TypeSpecArg));
-                            writer.Write(" >(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", bTracedLocals.bStatic");
-                            writer.Write(staticInitID);
-                            writer.WriteLine(".m_value);");
-                            
-                            writer.Write(scopeStack.Indent);
-                            writer.Write("\tbStaticInit");
-                            writer.Write(staticInitID);
-                            writer.WriteLine(" = true;");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetStaticFieldAddrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                staticType,
+                                fieldName
+                                ));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.LoadPtrInstruction(
+                                midInstr.CodeLocation,
+                                destReg,
+                                addrReg
+                                ));
+                        }
+                        break;
+                    case MidInstruction.OpcodeEnum.LoadStaticFieldAddr:
+                        {
+                            Clarity.Rpa.TypeSpecTag staticType = RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg);
+                            string fieldName = midInstr.StrArg;
 
-                            writer.Write(scopeStack.Indent);
-                            writer.WriteLine("}");
+                            Clarity.Rpa.HighSsaRegister addrReg = InternSsaRegister(midInstr.RegArg);
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, true, false));
-                            writer.Write(" = ");
-                            writer.Write("bTracedLocals.bStatic");
-                            writer.Write(staticInitID);
-                            writer.Write(".m_value->f");
-                            writer.Write(CppBuilder.LegalizeName(midInstr.StrArg, true));
-                            writer.WriteLine(".Value();");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetStaticFieldAddrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                staticType,
+                                fieldName
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.Box:
                         {
-                            CLR.CLRTypeSpec boxType = midInstr.RegArg.VType.TypeSpec;
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
-                            writer.Write(" = ::CLRVM::Box< ");
-
-                            if (boxType.UsesAnyGenericParams)
-                                writer.Write("typename ");
-
-                            writer.Write(m_builder.SpecToAmbiguousStorage(boxType));
-                            writer.Write(" >(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", ");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.BoxInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg2),
+                                InternSsaRegister(midInstr.RegArg)
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.ConvertNumber:
@@ -1632,157 +1485,366 @@ namespace AssemblyImporter.CppExport
                             bool isOvf = ((midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Ovf) != 0);
                             bool isUn = ((midInstr.ArithArg & MidInstruction.ArithEnum.Flags_Un) != 0);
 
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
-                            writer.Write(" = ::CLRVM::ClrSemanticNumberConverter< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
-                            writer.Write(", ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg2.VType.TypeSpec));
+                            SsaRegister srcReg = midInstr.RegArg;
+                            SsaRegister destReg = midInstr.RegArg2;
 
-                            writer.Write(isOvf ? ", 1" : ", 0");
-                            writer.Write(isUn ? ", 1" : ", 0");
+                            NumericStackType sourceNST = StackTypeForTypeSpec(midInstr.RegArg.VType.TypeSpec);
+                            CLR.CLRTypeSpec srcSignAdjustedType = TypeSpecForNumericStackType(sourceNST, isUn);
 
-                            if (isOvf)
-                            {
-                                writer.Write(" >::CheckedConvert(");
-                                writer.Write(m_frameVarName);
-                                writer.Write(", ");
-                            }
-                            else
-                                writer.Write(" >::Convert(");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                            writer.WriteLine(");");
+                            srcReg = EmitPassiveConversion(midInstr.CodeLocation, srcReg, srcSignAdjustedType, outline, outInstructions);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.NumberConvertInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(destReg),
+                                InternSsaRegister(srcReg),
+                                isOvf
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadArrayLength:
                         {
-                            writer.Write(scopeStack.Indent);
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg2, true, false));
-                            writer.Write(" = ::CLRVM::ArrayLengthReader< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(midInstr.RegArg.VType.TypeSpec));
-                            writer.Write(" >::Read(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", ");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetArrayLengthInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg2),
+                                InternSsaRegister(midInstr.RegArg)
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.LoadTypeInfoHandle:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("LoadTypeInfoHandle SSA " + midInstr.RegArg.SsaID + "  Type: " + midInstr.TypeSpecArg);
+                        {
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetTypeInfoInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg),
+                                RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg)
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.ConvertObj:
-                        // UNIMPLEMENTED
-                        writer.WriteLine("ConvertObj SSA " + midInstr.RegArg.SsaID + "  Result SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            outInstructions.Add(new Clarity.Rpa.Instructions.ForceDynamicCastInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg2),
+                                InternSsaRegister(midInstr.RegArg)
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.StoreArrayElem:
                         {
                             CLR.CLRTypeSpec szArraySpec = midInstr.RegArg.VType.TypeSpec;
                             CLR.CLRTypeSpec subscriptType = ((CLR.CLRTypeSpecSZArray)szArraySpec).SubType;
-                            writer.Write(scopeStack.Indent);
 
-                            writer.Write("::CLRVM::SZArrayStorer< ");
-                            writer.Write(m_builder.SpecToAmbiguousStorage(szArraySpec));
-                            writer.Write(" >::Store(");
-                            writer.Write(m_frameVarName);
-                            writer.Write(", ");
-                            writer.Write(StorageLocForSsaReg(midInstr.RegArg, false, false));
-                            writer.Write(", ");
+                            SsaRegister arrayReg = midInstr.RegArg;
+                            SsaRegister indexReg = midInstr.RegArg2;
+                            SsaRegister valueReg = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg3, subscriptType, outline, outInstructions);
 
-                            CLR.CLRTypeSpec indexSpec = TypeSpecForArrayIndex(midInstr.RegArg2.VType.TypeSpec);
+                            Clarity.Rpa.HighSsaRegister arrayRegHigh = InternSsaRegister(arrayReg);
+                            Clarity.Rpa.HighSsaRegister indexRegHigh = InternSsaRegister(indexReg);
+                            Clarity.Rpa.HighSsaRegister valueRegHigh = InternSsaRegister(valueReg);
+                            Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, valueRegHigh.Type, null);
 
-                            writer.Write(PassiveConvertValue(midInstr.RegArg2.VType, indexSpec, StorageLocForSsaReg(midInstr.RegArg2, false, false)));
-                            writer.Write(", ");
-                            writer.Write(PassiveConvertValue(midInstr.RegArg3.VType, subscriptType, StorageLocForSsaReg(midInstr.RegArg3, false, false)));
-
-                            writer.WriteLine(");");
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetArrayElementPtrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                arrayRegHigh,
+                                new Clarity.Rpa.HighSsaRegister[] { indexRegHigh }
+                                ));
+                            outInstructions.Add(new Clarity.Rpa.Instructions.StorePtrInstruction(
+                                midInstr.CodeLocation,
+                                addrReg,
+                                valueRegHigh));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.Switch:
                         {
-                            writer.WriteLine("Switch Value SSA " + midInstr.RegArg.SsaID);
+                            CLR.CLRTypeSpec intType = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.I4));
+
+                            SsaRegister caseReg = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, intType, outline, outInstructions);
+
                             int numCases = midInstr.CfgEdgesArg.Length;
+                            Clarity.Rpa.HighCfgNodeHandle[] outNodes = new Clarity.Rpa.HighCfgNodeHandle[numCases];
                             for (int i = 0; i < numCases; i++)
                             {
-                                CfgOutboundEdge edge = midInstr.CfgEdgesArg[numCases - 1 - i];
+                                CfgOutboundEdge edge = midInstr.CfgEdgesArg[i];
                                 CfgNode caseNode = edge.SuccessorNode;
-                                SpillCfgEdge(scopeStack.Indent, cfgNode, edge, writer);
-                                AddNode(caseNode);
+
+                                CppTranslatedOutboundEdge outEdge = InternOutboundEdge(cfgNode, edge);
+
+                                outNodes[i] = outEdge.NextNode;
                             }
-                            foreach (CfgOutboundEdge outboundEdge in midInstr.CfgEdgesArg)
-                                writer.WriteLine("    Case target: " + m_regAllocator.TargetIDForCfgNode(outboundEdge.SuccessorNode));
+
+                            fallthroughMerged = true;
+                            CppTranslatedOutboundEdge defaultEdge = InternOutboundEdge(cfgNode, cfgNode.FallThroughEdge);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.SwitchInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(caseReg),
+                                outNodes,
+                                defaultEdge.NextNode
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.StoreIndirect:
-                        writer.WriteLine("StoreIndirect SSA: " + midInstr.RegArg.SsaID + "  Value SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            SsaRegister destReg = midInstr.RegArg;
+                            SsaRegister valueReg = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, midInstr.RegArg.VType.TypeSpec, outline, outInstructions);
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.StorePtrInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(destReg),
+                                InternSsaRegister(valueReg)
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.LoadFieldInfoHandle:
-                        writer.WriteLine("LoadFieldInfoHandle SSA: " + midInstr.RegArg.SsaID + "  Class: " + midInstr.TypeSpecArg + "  Field: " + midInstr.StrArg);
+                        {
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetFieldInfoInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg),
+                                RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg),
+                                midInstr.StrArg
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.UnboxPtr:
-                        writer.WriteLine("UnboxPtr SSA: " + midInstr.RegArg.SsaID + "  Value SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            outInstructions.Add(new Clarity.Rpa.Instructions.UnboxPtrInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg2),
+                                InternSsaRegister(midInstr.RegArg)
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.UnboxValue:
-                        writer.WriteLine("UnboxValue SSA: " + midInstr.RegArg.SsaID + "  Value SSA: " + midInstr.RegArg2.SsaID);
+                        {
+                            outInstructions.Add(new Clarity.Rpa.Instructions.UnboxValueInstruction(
+                                midInstr.CodeLocation,
+                                InternSsaRegister(midInstr.RegArg2),
+                                InternSsaRegister(midInstr.RegArg)
+                                ));
+                        }
                         break;
                     case MidInstruction.OpcodeEnum.ZeroFillPtr:
-                        writer.WriteLine("ZeroFillPtr SSA: " + midInstr.RegArg.SsaID);
+                        outInstructions.Add(new Clarity.Rpa.Instructions.ZeroFillPtrInstruction(
+                            midInstr.CodeLocation,
+                            InternSsaRegister(midInstr.RegArg)
+                            ));
                         break;
                     case MidInstruction.OpcodeEnum.EnterProtectedBlock:
                         {
-                            writer.WriteLine("EnterProtectedBlock");
                             ExceptionHandlingCluster cluster = midInstr.EhClusterArg;
-                            writer.WriteLine("Try {");
+
+                            Clarity.Rpa.HighRegion tryRegion;
                             {
-                                CppRegionEmitter tryEmitter = new CppRegionEmitter(m_depSet, m_baseIndentLevel + 1, m_builder, cluster.TryRegion, m_regAllocator, m_frameVarName);
-                                tryEmitter.Emit(writer);
-                            }
-                            writer.WriteLine("}");
-                            foreach (ExceptionHandlingRegion handlerRegion in cluster.ExceptionHandlingRegions)
-                            {
-                                if (cluster.ClusterType == ExceptionHandlingCluster.ClusterTypeEnum.TryCatch)
-                                    writer.WriteLine("Catch " + handlerRegion.ExceptionType + " {");
-                                else if (cluster.ClusterType == ExceptionHandlingCluster.ClusterTypeEnum.TryFault)
-                                    writer.WriteLine("Fault {");
-                                else if (cluster.ClusterType == ExceptionHandlingCluster.ClusterTypeEnum.TryFinally)
-                                    writer.WriteLine("Finally {");
-                                CppRegionEmitter hdlEmitter = new CppRegionEmitter(m_depSet, m_baseIndentLevel + 1, m_builder, handlerRegion, m_regAllocator, m_frameVarName);
-                                hdlEmitter.Emit(writer);
-                                writer.WriteLine("}");
+                                CppRegionEmitter tryEmitter = new CppRegionEmitter(m_builder, cluster.TryRegion, m_regAllocator, m_localLookup);
+                                tryRegion = tryEmitter.Emit();
                             }
 
+                            List<Clarity.Rpa.HighCatchHandler> catchHandlers = new List<Clarity.Rpa.HighCatchHandler>();
+                            List<Clarity.Rpa.HighRegion> otherRegions = new List<Clarity.Rpa.HighRegion>();
+                            foreach (ExceptionHandlingRegion handlerRegion in cluster.ExceptionHandlingRegions)
+                            {
+                                CppRegionEmitter hdlEmitter = new CppRegionEmitter(m_builder, handlerRegion, m_regAllocator, m_localLookup);
+                                Clarity.Rpa.HighRegion hdlRegion = hdlEmitter.Emit();
+
+                                switch (cluster.ClusterType)
+                                {
+                                    case ExceptionHandlingCluster.ClusterTypeEnum.TryCatch:
+                                        {
+                                            Clarity.Rpa.HighCfgNode entryNode = hdlRegion.EntryNode.Value;
+
+                                            if (entryNode.Phis.Length != 1 || entryNode.Phis[0].Links.Length != 0)
+                                                throw new Exception("Catch handler should start with an unlinked phi node");
+
+                                            // Inject a catch landing instruction and delete the phi node
+                                            Clarity.Rpa.HighSsaRegister exceptionReg = entryNode.Phis[0].Dest;
+
+                                            List<Clarity.Rpa.HighInstruction> instrs = new List<Clarity.Rpa.HighInstruction>();
+                                            instrs.Add(new Clarity.Rpa.Instructions.CatchInstruction(entryNode.Instructions[0].CodeLocation, exceptionReg));
+                                            instrs.AddRange(entryNode.Instructions);
+
+                                            Clarity.Rpa.HighCfgNode replacementNode = new Clarity.Rpa.HighCfgNode(new Clarity.Rpa.HighPhi[0], instrs.ToArray());
+                                            hdlRegion = new Clarity.Rpa.HighRegion(new Clarity.Rpa.HighCfgNodeHandle(replacementNode));
+
+                                            catchHandlers.Add(new Clarity.Rpa.HighCatchHandler(
+                                                RpaTagFactory.CreateTypeTag(handlerRegion.ExceptionType),
+                                                hdlRegion
+                                                ));
+                                        }
+                                        break;
+                                    case ExceptionHandlingCluster.ClusterTypeEnum.TryFault:
+                                    case ExceptionHandlingCluster.ClusterTypeEnum.TryFinally:
+                                        otherRegions.Add(hdlRegion);
+                                        break;
+                                    default:
+                                        throw new Exception();
+                                }
+                            }
+
+                            List<Clarity.Rpa.HighEscapePathTerminator> terminators = new List<Clarity.Rpa.HighEscapePathTerminator>();
                             foreach (uint escapePath in cluster.EscapePaths)
                             {
                                 CfgNode targetNode;
                                 if (m_region.EscapeTerminators.TryGetValue(escapePath, out targetNode))
-                                    AddNode(targetNode);
+                                {
+                                    Clarity.Rpa.HighCfgNodeHandle terminatorNode = InternHighCfgNode(targetNode);
+                                    terminators.Add(new Clarity.Rpa.HighEscapePathTerminator(escapePath, terminatorNode));
+                                }
                             }
+
+                            Clarity.Rpa.HighProtectedRegion protRegion;
+                            switch (cluster.ClusterType)
+                            {
+                                case ExceptionHandlingCluster.ClusterTypeEnum.TryCatch:
+                                    protRegion = new Clarity.Rpa.HighTryCatchRegion(tryRegion, catchHandlers.ToArray());
+                                    break;
+                                case ExceptionHandlingCluster.ClusterTypeEnum.TryFault:
+                                    protRegion = new Clarity.Rpa.HighTryFaultRegion(tryRegion, otherRegions[0]);
+                                    break;
+                                case ExceptionHandlingCluster.ClusterTypeEnum.TryFinally:
+                                    protRegion = new Clarity.Rpa.HighTryFinallyRegion(tryRegion, otherRegions[0]);
+                                    break;
+                                default:
+                                    throw new Exception();
+                            }
+
+                            Clarity.Rpa.HighEHCluster highCluster = new Clarity.Rpa.HighEHCluster(protRegion, terminators.ToArray());
+
+                            outInstructions.Add(new Clarity.Rpa.Instructions.EnterProtectedBlockInstruction(
+                                midInstr.CodeLocation,
+                                highCluster
+                                ));
                         }
                         break;
                     case MidInstruction.OpcodeEnum.ExitFinally:
-                        writer.WriteLine("ExitFinally");
+                        outInstructions.Add(new Clarity.Rpa.Instructions.ReturnInstruction(midInstr.CodeLocation));
+                        break;
+                    case MidInstruction.OpcodeEnum.BindDelegate:
+                        {
+                            SsaRegister objReg = midInstr.RegArg;
+                            CppMethodSpec methodSpec = (CppMethodSpec)midInstr.RegArg2.ConstantValue;
+                            SsaRegister destReg = midInstr.RegArg3;
+
+                            Clarity.Rpa.MethodSignatureTag sigTag = RpaTagFactory.CreateMethodSignature(methodSpec.CppMethod.MethodSignature);
+
+                            Clarity.Rpa.HighSsaRegister destRegHigh = InternSsaRegister(destReg);
+
+                            Clarity.Rpa.MethodSlotType slotType;
+
+                            if (methodSpec.CppMethod.Static)
+                                slotType = Clarity.Rpa.MethodSlotType.Static;
+                            else
+                            {
+                                objReg = EmitPassiveConversion(midInstr.CodeLocation, objReg, methodSpec.CppMethod.DeclaredInClassSpec, outline, outInstructions);
+                                if (midInstr.RegArg2.VType.ValType == VType.ValTypeEnum.DelegateSimpleMethod)
+                                    slotType = Clarity.Rpa.MethodSlotType.Instance;
+                                else if (midInstr.RegArg2.VType.ValType == VType.ValTypeEnum.DelegateVirtualMethod)
+                                    slotType = Clarity.Rpa.MethodSlotType.Virtual;
+                                else
+                                    throw new ArgumentException();
+                            }
+
+                            Clarity.Rpa.MethodSpecTag methodSpecTag = RpaTagFactory.CreateMethodSpec(slotType, methodSpec);
+
+                            if (methodSpec.CppMethod.Static)
+                            {
+                                outInstructions.Add(new Clarity.Rpa.Instructions.BindStaticDelegateInstruction(
+                                    midInstr.CodeLocation,
+                                    InternSsaRegister(destReg),
+                                    methodSpecTag
+                                    ));
+                            }
+                            else if (midInstr.RegArg2.VType.ValType == VType.ValTypeEnum.DelegateSimpleMethod)
+                            {
+                                outInstructions.Add(new Clarity.Rpa.Instructions.BindInstanceDelegateInstruction(
+                                    midInstr.CodeLocation,
+                                    InternSsaRegister(destReg),
+                                    InternSsaRegister(objReg),
+                                    methodSpecTag
+                                    ));
+                            }
+                            else if (midInstr.RegArg2.VType.ValType == VType.ValTypeEnum.DelegateVirtualMethod)
+                            {
+                                outInstructions.Add(new Clarity.Rpa.Instructions.BindVirtualDelegateInstruction(
+                                    midInstr.CodeLocation,
+                                    InternSsaRegister(destReg),
+                                    InternSsaRegister(objReg),
+                                    methodSpecTag
+                                    ));
+                            }
+                        }
                         break;
                     default:
                         throw new ArgumentException("Invalid mid IL opcode");
                 }
             }
 
-            if (cfgNode.FallThroughEdge != null)
+            if (cfgNode.FallThroughEdge != null && !fallthroughMerged)
             {
-                if (!exitIsContinuous)
-                {
-                    SpillCfgEdge(scopeStack.Indent, cfgNode, cfgNode.FallThroughEdge, writer);
-                    writer.Write(scopeStack.Indent);
-                    writer.Write("goto bLabel_");
-                    writer.Write(m_regAllocator.TargetIDForCfgNode(cfgNode.FallThroughEdge.SuccessorNode));
-                    writer.WriteLine(";  // Non-continuous exit");
+                CppTranslatedOutboundEdge outEdge = InternOutboundEdge(cfgNode, cfgNode.FallThroughEdge);
 
-                    foreach (SsaRegister leakedReg in leakedRegs)
-                        scopeStack.KillReg(leakedReg, writer);
-                }
-
-                AddNode(cfgNode.FallThroughEdge.SuccessorNode);
+                outInstructions.Add(new Clarity.Rpa.Instructions.BranchInstruction(cfgNode.FallThroughEdge.CodeLocation, outEdge.NextNode));
             }
+
+            highNode.Value = new Clarity.Rpa.HighCfgNode(outPhis.ToArray(), outInstructions.ToArray());
+        }
+
+        private SsaRegister EmitPassiveConversion_PermitRefs(Clarity.Rpa.CodeLocationTag codeLocation, SsaRegister sourceReg, CLRTypeSpec destType, CppCfgNodeOutline outline, IList<Clarity.Rpa.HighInstruction> instrs)
+        {
+            switch (sourceReg.VType.ValType)
+            {
+                case VType.ValTypeEnum.ManagedPtr:
+                    if (sourceReg.VType.TypeSpec.Equals(destType))
+                        return sourceReg;
+                    throw new ArgumentException();
+                default:
+                    return EmitPassiveConversion(codeLocation, sourceReg, destType, outline, instrs);
+            }
+        }
+
+        private SsaRegister EmitPassiveConversion(Clarity.Rpa.CodeLocationTag codeLocation, SsaRegister sourceReg, CLRTypeSpec destType, CppCfgNodeOutline outline, IList<Clarity.Rpa.HighInstruction> instrs)
+        {
+            if (sourceReg.VType.ValType == VType.ValTypeEnum.DelegateSimpleMethod ||
+                sourceReg.VType.ValType == VType.ValTypeEnum.DelegateVirtualMethod)
+                return sourceReg;
+
+            if (sourceReg.VType.TypeSpec.Equals(destType))
+                return sourceReg;
+
+            if (sourceReg.VType.ValType == VType.ValTypeEnum.Null)
+            {
+                SsaRegister nullReg = new SsaRegister(new VType(VType.ValTypeEnum.Null, destType));
+                nullReg.MakeUsable();
+                nullReg.GenerateUniqueID(m_regAllocator);
+
+                outline.AddRegister(nullReg);
+                return nullReg;
+            }
+
+            SsaRegister newReg;
+            switch (sourceReg.VType.ValType)
+            {
+                case VType.ValTypeEnum.ConstantReference:
+                case VType.ValTypeEnum.ReferenceValue:
+                    newReg = new SsaRegister(new VType(VType.ValTypeEnum.ReferenceValue, destType));
+                    break;
+                case VType.ValTypeEnum.ValueValue:
+                case VType.ValTypeEnum.ConstantValue:
+                    newReg = new SsaRegister(new VType(VType.ValTypeEnum.ValueValue, destType));
+                    break;
+                default:
+                    throw new ArgumentException();
+            }
+
+            newReg.MakeUsable();
+            newReg.GenerateUniqueID(m_regAllocator);
+
+            instrs.Add(new Clarity.Rpa.Instructions.PassiveConvertInstruction(
+                codeLocation,
+                InternSsaRegister(newReg),
+                InternSsaRegister(sourceReg)
+                ));
+
+            return newReg;
         }
     }
 }

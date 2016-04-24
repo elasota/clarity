@@ -23,6 +23,12 @@ namespace System.Reflection
             get;
         }
 
+        public extern override Type ReflectedType
+        {
+            [MethodImplAttribute(MethodImplOptions.InternalCall)]
+            get;
+        }
+
         public extern override Type FieldType
         {
             [MethodImplAttribute(MethodImplOptions.InternalCall)]

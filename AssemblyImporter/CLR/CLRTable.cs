@@ -9,7 +9,7 @@ namespace AssemblyImporter.CLR
         private uint m_numRows;
         private CLRMetaData m_metaData;
 
-        public void Init(uint numRows, CLRMetaData metaData)
+        public void Init(uint tableNumber, uint numRows, CLRMetaData metaData)
         {
             m_rows = new T[numRows];
             m_numRows = numRows;
@@ -18,7 +18,7 @@ namespace AssemblyImporter.CLR
             for (uint i = 0; i < numRows; i++)
             {
                 m_rows[i] = new T();
-                m_rows[i].Initialize(i, this);
+                m_rows[i].Initialize(tableNumber, i, this);
             }
         }
 

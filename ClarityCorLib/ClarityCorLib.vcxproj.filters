@@ -36,5 +36,20 @@
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tIComparable.Code.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tInt32.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tValueType.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tGlobalization\tNumberFormatInfo.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tConvert.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tNumber.Code.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

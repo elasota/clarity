@@ -7,6 +7,7 @@ namespace AssemblyImporter.CppExport
 {
     public class CppStubExporter
     {
+        /*
         public static void ExportStub(CppBuilder cppBuilder, string stubDir, CppClass cls)
         {
             string stubKeyBase = "// CLARITY_STUB ";
@@ -190,5 +191,6 @@ namespace AssemblyImporter.CppExport
                 }
             }
         }
+        */
     }
 }

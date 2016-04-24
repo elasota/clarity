@@ -124,11 +124,16 @@
   <ItemGroup>
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tArgumentException.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tArgumentNullException.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tConvert.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tException.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tGlobalization\tNumberFormatInfo.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tIComparable.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tInt32.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tNumber.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tObject.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tString.Code.cpp" />
     <ClCompile Include="..\ClarityCorLibExported\tSystem\tSystemException.Code.cpp" />
+    <ClCompile Include="..\ClarityCorLibExported\tSystem\tValueType.Code.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

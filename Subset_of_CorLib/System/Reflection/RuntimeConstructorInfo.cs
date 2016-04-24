@@ -10,6 +10,11 @@ namespace System.Reflection
     [Serializable()]
     internal sealed class RuntimeConstructorInfo : ConstructorInfo
     {
+        public extern override Type ReflectedType
+        {
+            [MethodImplAttribute(MethodImplOptions.InternalCall)]
+            get;
+        }
     }
 }
 

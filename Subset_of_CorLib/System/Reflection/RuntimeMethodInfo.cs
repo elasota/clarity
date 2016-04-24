@@ -18,6 +18,12 @@ namespace System.Reflection
             [MethodImplAttribute(MethodImplOptions.InternalCall)]
             get;
         }
+
+        public extern override Type ReflectedType
+        {
+            [MethodImplAttribute(MethodImplOptions.InternalCall)]
+            get;
+        }
     }
 }   // Namespace
 

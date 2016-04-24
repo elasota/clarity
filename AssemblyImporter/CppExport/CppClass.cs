@@ -13,19 +13,20 @@ namespace AssemblyImporter.CppExport
         public bool IsMulticastDelegate { get; private set; }
         public bool IsDelegate { get; private set; }
 
-        public IEnumerable<CppMethod> Methods { get { return m_methods; } }
+        public IList<CppMethod> Methods { get { return m_methods; } }
         public IEnumerable<CppField> Fields { get { return m_fields; } }
         public IEnumerable<CppField> InheritedFields { get { return m_inheritedFields; } }
         public CLRTypeSpec ParentTypeSpec { get; private set; }
         public int NumGenericParameters { get; private set; }
         public int NumNewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces.Count; } }
-        public IEnumerable<CLRTypeSpec> NewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces; } }
-        public IEnumerable<CLRTypeSpec> ReimplementedInterfaces { get { return m_reimplementedInterfaces; } }
+        public IList<CLRTypeSpec> NewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces; } }
+        public IList<CLRTypeSpec> ReimplementedInterfaces { get { return m_reimplementedInterfaces; } }
         public IEnumerable<CLRTypeSpec> InheritedImplementedInterfaces { get { return m_inheritedImplementedInterfaces; } }
-        public IEnumerable<CLRTypeSpec> PassiveInterfaceConversions { get { return m_passiveIfcConversions; } }
+        public IList<CLRTypeSpec> PassiveInterfaceConversions { get { return m_passiveIfcConversions; } }
 
         public IEnumerable<CppVtableSlot> AllVtableSlots { get { return m_allVtableSlots; } }
-        public IEnumerable<CppVtableSlot> VisibleVtableSlots { get { return m_visibleVtableSlots; } }
+        public IEnumerable<CppVtableSlot> OverrideVisibleVtableSlots { get { return m_overrideVisibleVtableSlots; } }
+        public IEnumerable<CppVtableSlot> ImplementationVisibleVtableSlots { get { return m_overrideVisibleVtableSlots; } }
 
         public CLRTypeDefRow TypeDef { get { return m_typeDef; } }
         public IEnumerable<CLRTypeSpec> GenericParameters { get { return m_genericParameters; } }
@@ -37,7 +38,16 @@ namespace AssemblyImporter.CppExport
 
         private List<CppMethod> m_methods;
         private List<CppVtableSlot> m_allVtableSlots;       // All slots
-        private List<CppVtableSlot> m_visibleVtableSlots;   // Slots that haven't been overlapped by a NewSlot
+
+        // Visible slots for overriding and implementation for specific slot keys.
+        // The difference between these is important:
+        // - Override visible slots are the slots that will be overrided by colliding newslot signatures.
+        //   This can be overrided by methods of any visibility.
+        // - Implementation visible slots are the slots that can implement interfaces.
+        //   This can only be overrided by methods with public visibility.
+        // For an example of where this difference matters, see TestNonPublicImplementation
+        private List<CppVtableSlot> m_overrideVisibleVtableSlots;   // Slots that haven't been overlapped by a NewSlot
+        private List<CppVtableSlot> m_implementationVisibleVtableSlots;   // Slots that haven't been overlapped by a NewSlot
         private List<CppField> m_fields;
         private List<CppField> m_inheritedFields;
         private List<CLRTypeSpec> m_newlyImplementedInterfaces;
@@ -54,7 +64,8 @@ namespace AssemblyImporter.CppExport
             m_methods = new List<CppMethod>();
             m_fields = new List<CppField>();
             m_allVtableSlots = new List<CppVtableSlot>();
-            m_visibleVtableSlots = new List<CppVtableSlot>();
+            m_overrideVisibleVtableSlots = new List<CppVtableSlot>();
+            m_implementationVisibleVtableSlots = new List<CppVtableSlot>();
             m_inheritedFields = new List<CppField>();
             m_reimplementedInterfaces = new List<CLRTypeSpec>();
             m_newlyImplementedInterfaces = new List<CLRTypeSpec>();
@@ -84,7 +95,8 @@ namespace AssemblyImporter.CppExport
             m_methods = new List<CppMethod>();
             m_fields = new List<CppField>();
             m_allVtableSlots = new List<CppVtableSlot>();
-            m_visibleVtableSlots = new List<CppVtableSlot>();
+            m_overrideVisibleVtableSlots = new List<CppVtableSlot>();
+            m_implementationVisibleVtableSlots = new List<CppVtableSlot>();
             m_inheritedFields = new List<CppField>();
             m_reimplementedInterfaces = new List<CLRTypeSpec>();
             m_newlyImplementedInterfaces = new List<CLRTypeSpec>();
@@ -108,8 +120,10 @@ namespace AssemblyImporter.CppExport
             foreach (CppField field in baseInstance.m_fields)
                 m_fields.Add(field.Instantiate(typeParams, methodParams));
 
-            foreach (CppVtableSlot vts in baseInstance.m_visibleVtableSlots)
-                m_visibleVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
+            foreach (CppVtableSlot vts in baseInstance.m_overrideVisibleVtableSlots)
+                m_overrideVisibleVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
+            foreach (CppVtableSlot vts in baseInstance.m_implementationVisibleVtableSlots)
+                m_implementationVisibleVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
             foreach (CppVtableSlot vts in baseInstance.m_allVtableSlots)
                 m_allVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
 
@@ -155,7 +169,9 @@ namespace AssemblyImporter.CppExport
             m_methods.Add(cppMethod);
             if (cppMethod.Virtual && !cppMethod.Overrides)
             {
-                m_visibleVtableSlots.Add(cppMethod.CreatesSlot);
+                m_overrideVisibleVtableSlots.Add(cppMethod.CreatesSlot);
+                if (cppMethod.MethodDef.MemberAccess == CLRMethodDefRow.MethodMemberAccess.Public)
+                    m_implementationVisibleVtableSlots.Add(cppMethod.CreatesSlot);
                 m_allVtableSlots.Add(cppMethod.CreatesSlot);
             }
         }
@@ -210,7 +226,7 @@ namespace AssemblyImporter.CppExport
 
         public static void RemoveOverrides(List<CppVtableSlot> visible, CppVtableSlot slot)
         {
-            List<int> removeIndexes = FindOverrideIndexes(visible, slot.InternalName, slot.Signature);
+            List<int> removeIndexes = FindOverrideIndexes(visible, slot.Name, slot.Signature);
             for (int i = 0; i < removeIndexes.Count; i++)
                 visible.RemoveAt(removeIndexes[removeIndexes.Count - 1 - i]);
         }
@@ -222,7 +238,7 @@ namespace AssemblyImporter.CppExport
             {
                 CppVtableSlot candidate = visible[i];
 
-                if (candidate.InternalName == name && candidate.Signature.Equals(sig))
+                if (candidate.Name == name && candidate.Signature.Equals(sig))
                     removeIndexes.Add(i);
             }
             return removeIndexes;
@@ -260,26 +276,32 @@ namespace AssemblyImporter.CppExport
             {
                 m_allVtableSlots.AddRange(parentClass.m_allVtableSlots);
 
-                List<CppVtableSlot> parentVisibleSlots = new List<CppVtableSlot>();
-                parentVisibleSlots.AddRange(parentClass.m_visibleVtableSlots);
+                List<CppVtableSlot> parentOverrideVisibleSlots = new List<CppVtableSlot>(parentClass.m_overrideVisibleVtableSlots);
+                List<CppVtableSlot> parentImplementationVisibleSlots = new List<CppVtableSlot>(parentClass.m_implementationVisibleVtableSlots);
+
                 foreach (CppMethod method in m_methods)
                 {
                     if (method.Virtual)
                     {
                         if (method.CreatesSlot != null)
-                            RemoveOverrides(parentVisibleSlots, method.CreatesSlot);
+                        {
+                            RemoveOverrides(parentOverrideVisibleSlots, method.CreatesSlot);
+                            if (method.MethodDef.MemberAccess == CLRMethodDefRow.MethodMemberAccess.Public)
+                                RemoveOverrides(parentImplementationVisibleSlots, method.CreatesSlot);
+                        }
 
                         if (method.Overrides)
                         {
-                            List<int> overrideIndexes = FindOverrideIndexes(parentVisibleSlots, method.Name, method.MethodSignature);
+                            List<int> overrideIndexes = FindOverrideIndexes(parentOverrideVisibleSlots, method.Name, method.MethodSignature);
                             if (overrideIndexes.Count != 1)
                                 throw new ParseFailedException("Method did not override exactly one slot");
-                            method.ReplacesStandardSlot = parentVisibleSlots[overrideIndexes[0]];
+                            method.ReplacesStandardSlot = parentOverrideVisibleSlots[overrideIndexes[0]];
                         }
                     }
                 }
 
-                m_visibleVtableSlots.AddRange(parentVisibleSlots);
+                m_overrideVisibleVtableSlots.AddRange(parentOverrideVisibleSlots);
+                m_implementationVisibleVtableSlots.AddRange(parentImplementationVisibleSlots);
             }
 
             if (parentClass != null)
@@ -320,7 +342,6 @@ namespace AssemblyImporter.CppExport
 
                 if (IsDelegate)
                 {
-                    CLRMethodSignatureInstance delegateSig = null;
                     foreach (CppMethod method in m_methods)
                     {
                         if (method.Name == "Invoke")
@@ -357,132 +378,6 @@ namespace AssemblyImporter.CppExport
                 throw new Exception("Enum has no underlying types");
 
             return valueField.Type;
-        }
-
-        public static string GeneratePathForFullName(string fullName, string suffix)
-        {
-            string[] fullClassPath = fullName.Split('.');
-
-            string path = "";
-            for (int i = 0; i < fullClassPath.Length; i++)
-            {
-                if (i != 0)
-                    path += '\\';
-                path += CppBuilder.LegalizeName(fullClassPath[i], true);
-            }
-            path += suffix;
-            return path;
-        }
-
-        public static string GenerateInstanceCodePathForFullName(string fullName)
-        {
-            return GeneratePathForFullName(fullName, ".Code.cpp");
-        }
-
-        public string GenerateInstanceCodePath()
-        {
-            return GenerateInstanceCodePathForFullName(FullName);
-        }
-
-        public static string GenerateBoxPathForFullName(string fullName)
-        {
-            return GeneratePathForFullName(fullName, ".Box.h");
-        }
-
-        public string GenerateBoxPath()
-        {
-            return GenerateBoxPathForFullName(FullName);
-        }
-
-        public static string GenerateDefinitionPathForFullName(string fullName)
-        {
-            return GeneratePathForFullName(fullName, ".Def.h");
-        }
-
-        public string GenerateDefinitionPath()
-        {
-            return GenerateDefinitionPathForFullName(FullName);
-        }
-
-        public static string GenerateStaticDefPathForFullName(string fullName)
-        {
-            return GeneratePathForFullName(fullName, ".Statics.h");
-        }
-
-        public string GenerateStaticDefPath()
-        {
-            return GenerateStaticDefPathForFullName(FullName);
-        }
-
-        public static string GenerateMainHeaderForFullName(string fullName)
-        {
-            return GeneratePathForFullName(fullName, ".h");
-        }
-
-        public string GenerateMainHeaderPath()
-        {
-            return GenerateMainHeaderForFullName(FullName);
-        }
-
-        public static string GeneratePrototypePathForFullName(string fullName)
-        {
-            return GeneratePathForFullName(fullName, ".Proto.h");
-        }
-
-        public string GeneratePrototypePath()
-        {
-            return GeneratePrototypePathForFullName(FullName);
-        }
-
-        public string GenerateInlineCodePath()
-        {
-            return GeneratePathForFullName(FullName, ".InlineCode.h");
-        }
-
-        public string GenerateExportedCodePath()
-        {
-            return GeneratePathForFullName(FullName, ".ExportedCode.cpp");
-        }
-
-        public static string GenerateCppClassNameFromFullName(string prefix, string fullName)
-        {
-            string[] fullClassPath = fullName.Split('.');
-
-            string cn = prefix;
-            for (int i = 0; i < fullClassPath.Length - 1; i++)
-                cn += "::N" + CppBuilder.LegalizeName(fullClassPath[i], true);
-            cn += "::" + CppBuilder.LegalizeName(fullClassPath[fullClassPath.Length - 1], true);
-            return cn;
-        }
-
-        public string GenerateCppClassName()
-        {
-            return GenerateCppClassNameFromFullName("::CLRX", this.FullName);
-        }
-
-        public static string GenerateCppGenericBaseClassNameFromFullName(string prefix, string fullName)
-        {
-            string[] fullClassPath = fullName.Split('.');
-
-            string cn = prefix;
-            for (int i = 0; i < fullClassPath.Length - 1; i++)
-                cn += "::N" + CppBuilder.LegalizeName(fullClassPath[i], true);
-            cn += "::bGenericBase_" + CppBuilder.LegalizeName(fullClassPath[fullClassPath.Length - 1], true);
-            return cn;
-        }
-
-        public string GenerateCppGenericBaseClassName()
-        {
-            if (this.NumGenericParameters > 0)
-                return GenerateCppClassName();
-            return GenerateCppGenericBaseClassNameFromFullName("::CLRX", this.FullName);
-
-        }
-
-
-        public string GenerateStaticCppClassName()
-        {
-            return GenerateCppClassNameFromFullName("::CLRX::Statics", this.FullName);
         }
 
         public static string GenerateFullPath(CLRTypeDefRow typeDef)

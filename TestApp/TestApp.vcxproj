@@ -81,6 +81,9 @@
     <ProjectReference Include="..\ClarityCorLibNative\ClarityCorLibNative.vcxproj">
       <Project>{093ab855-56a2-4aec-a760-b533390b3f0d}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\ClarityCorLib\ClarityCorLib.vcxproj">
+      <Project>{30e48393-fd2d-4f0e-9039-bfcf481064a3}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

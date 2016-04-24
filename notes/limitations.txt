@@ -1,0 +1,22 @@
+Clarity's goal is to fully support the core features of the CLI where possible.  However, some differences exist:
+
+1.) RPAs are less interchangable than assemblies:
+- Virtual method resolution is always explicit and mapped to the class that first declared the virtual.
+- RPA code is significantly stricter about type checking than CLI code, so changing method signatures, changing methods from virtual to non-virtual, and changing field types will usually cause code referencing the field or method in other RPAs to become invalid.
+
+2.) Because Clarity is a static compiler, the following rules are enforced:
+- Generic virtual methods on classes must be sealed.
+- Generic virtual methods on interfaces must only be called via type constraints.
+- Generic types that expand infinitely will not compile.  For instance, this is not allowed:
+  class MyClass<T>
+  {
+    MyClass<MyClass<T>> myVar;
+  }
+- Uninitialized reference locals may not be used.  This is normally only possible via CLI assembly.
+
+3.) Clarity does not respect visibility modifiers.
+
+4.) Clarity does not respect type constraints.  However, constraint violations will usually cause compilation failures.
+
+
+Not respecting these limitations will result in an AssemblyImporter error.

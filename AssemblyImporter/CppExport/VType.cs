@@ -11,13 +11,9 @@ namespace AssemblyImporter.CppExport
         {
             Invalid,
             ValueValue,
-            NotNullReferenceValue,
-            NullableReferenceValue,
+            ReferenceValue,
             Null,
-            AnchoredManagedPtr,         // Managed pointer with an arbitrary anchor
-            MaybeAnchoredManagedPtr,    // Managed pointer with an anchor in the parent frame ("this" pointer to value type),
-                                        // might be anchored or loose depending on memory movability.
-            LocalManagedPtr,            // Managed ptr to a local
+            ManagedPtr,
             ConstantValue,
             ConstantReference,
             DelegateVirtualMethod,

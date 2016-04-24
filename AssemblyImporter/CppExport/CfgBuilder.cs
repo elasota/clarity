@@ -200,7 +200,7 @@ namespace AssemblyImporter.CppExport
             CfgNode node;
             bool needsReparse = false;
             if (m_cfgNodes.TryGetValue(startInstr, out node))
-                node.UpdateEntryTypes(nodeCompiler, entryTypes, out needsReparse);
+                node.UpdateEntryEdge(nodeCompiler, entryTypes, out needsReparse);
             else
             {
                 node = new CfgNode(this, startInstr, entryTypes);
@@ -230,7 +230,8 @@ namespace AssemblyImporter.CppExport
             List<VType> entryTypes = new List<VType>();
 
             if (m_region.ExceptionType != null)
-                entryTypes.Add(new VType(VType.ValTypeEnum.NotNullReferenceValue, m_region.ExceptionType));
+                entryTypes.Add(new VType(VType.ValTypeEnum.ReferenceValue, m_region.ExceptionType));
+
             AddCfgTarget(null, m_startInstr, entryTypes.ToArray());
 
             while (m_pendingNodesQueue.Count > 0)

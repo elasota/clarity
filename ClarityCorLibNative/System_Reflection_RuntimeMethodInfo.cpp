@@ -9,3 +9,9 @@
 {
 	CLARITY_NOTIMPLEMENTED;
 }
+
+// CLARITY_STUB System.Type System.Reflection.RuntimeMethodInfo/get_ReflectedType()
+::CLRVM::TValValue< ::CLRX::NtSystem::tType >::Type (::CLRX::NtSystem::NtReflection::tRuntimeMethodInfo::mcode_itget__ReflectedType)(const ::CLRExec::Frame &frame, ::CLRVM::TValValue< ::CLRX::NtSystem::NtReflection::tRuntimeMethodInfo >::Type bThis0)
+{
+	CLARITY_NOTIMPLEMENTED;
+}

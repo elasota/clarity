@@ -152,7 +152,7 @@ namespace AssemblyImporter.CLR
             if (m_clrTables[tableId] != null)
                 throw new InvalidOperationException("Internal error");
             m_clrTables[tableId] = clrTable;
-            clrTable.Init(m_rowCounts[tableId], MetaData);
+            clrTable.Init((uint)tableId, m_rowCounts[tableId], MetaData);
         }
     }
 }

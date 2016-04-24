@@ -29,3 +29,9 @@
 {
 	CLARITY_NOTIMPLEMENTED;
 }
+
+// CLARITY_STUB System.Type System.Reflection.RuntimeFieldInfo/get_ReflectedType()
+::CLRVM::TValValue< ::CLRX::NtSystem::tType >::Type (::CLRX::NtSystem::NtReflection::tRuntimeFieldInfo::mcode_itget__ReflectedType)(const ::CLRExec::Frame &frame, ::CLRVM::TValValue< ::CLRX::NtSystem::NtReflection::tRuntimeFieldInfo >::Type bThis0)
+{
+	CLARITY_NOTIMPLEMENTED;
+}

@@ -41,7 +41,7 @@ namespace AssemblyImporter.CppExport
 
         public SsaRegister NewReg(VType vType)
         {
-            return new SsaRegister(vType, 0);
+            return new SsaRegister(vType);
         }
 
         public SsaRegister GetFromTop(int offset)

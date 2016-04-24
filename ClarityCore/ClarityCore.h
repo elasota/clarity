@@ -67,12 +67,12 @@ namespace CLRCore
 	template<class T, class TMore>
 	struct RttiTypeList
 	{
-		static RttiQueries::FQueryTypeInfo Query(CLRTypes::U32 index);
+		static void Query(CLRTypes::U32 index, ClassToken*& classToken, RttiQueries::FQueryTypeInfo &typeInfo);
 	};
 
 	struct RttiTypeListEnd
 	{
-		static RttiQueries::FQueryTypeInfo Query(CLRTypes::U32 index);
+		static void Query(CLRTypes::U32 index, ClassToken*& classToken, RttiQueries::FQueryTypeInfo &typeInfo);
 	};
 
 	template<CLRTypes::S32 V, class TMore>
@@ -320,9 +320,12 @@ namespace CLRTI
 namespace CLRVM
 {
 	template<class T> struct TMaybeAnchoredManagedPtr;
+	template<class T> struct TLocalManagedPtr;
+	template<class T> struct TAnchoredManagedPtr;
 	template<class T> struct TValueObjectType;
 	template<class T> struct TRefValue;
 	template<class T> struct TValValue;
+	template<class T> class Field;
 }
 
 namespace CLRUtil
@@ -612,7 +615,7 @@ namespace CLRUtil
 
 	private:
 		::CLRCore::RefTarget *m_object;
-		T *m_value;
+		typename ::CLRVM::TValValue<T>::Type *m_value;
 	};
 
 	template<class T>
@@ -623,11 +626,8 @@ namespace CLRUtil
 
 	template<class T>
 	struct TDGBoundReturn
+		: public ClarityInternal::TypeDef< T* >
 	{
-		typedef T* Type;
-
-	private:
-		TDGBoundReturn();
 	};
 
 	// Boxed<T>::Type is a container of a boxed value of type T
@@ -647,7 +647,7 @@ namespace CLRUtil
 
 	template<class T>
 	struct TRefParameter
-		: public ::ClarityInternal::TypeDef<T&>
+		: public ::ClarityInternal::TypeDef<const typename ::CLRUtil::TAnchoredManagedPtr<T>::Type &>
 	{
 	};
 
@@ -714,19 +714,70 @@ namespace CLRUtil
 
 	template<class T>
 	typename ::CLRUtil::TAnchoredManagedPtr<T>::Type Unbox(::CLRUtil::Boxed<T> *box);
+}
+
+namespace CLRPrivate
+{
+	template<class TSource, int TSourceIsTagged, class TDest, int TDestIsTagged>
+	struct PassiveValueConverter_ByTraits
+	{
+	};
 
 	template<class TSource, class TDest>
-	struct PassiveValueConverter
-		: public ::ClarityInternal::NoCreate
+	struct PassiveValueConverter_ByTraits<TSource, 0, TDest, 0>
+		: public ClarityInternal::NoCreate
 	{
 		static typename CLRVM::TValValue<TDest>::Type Convert(typename CLRVM::TValValue<TSource>::Type ref);
 	};
 
+	template<class TSource, class TDest>
+	struct PassiveValueConverter_ByTraits<TSource, 0, TDest, 1>
+		: public ClarityInternal::NoCreate
+	{
+		static typename CLRVM::TValValue<TDest>::Type Convert(typename CLRVM::TValValue<TSource>::Type ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveValueConverter_ByTraits<TSource, 1, TDest, 0>
+		: public ClarityInternal::NoCreate
+	{
+		static typename CLRVM::TValValue<TDest>::Type Convert(typename CLRVM::TValValue<TSource>::Type ref);
+	};
+
+	template<class TSource, class TDest>
+	struct PassiveValueConverter_ByTraits<TSource, 1, TDest, 1>
+		: public ClarityInternal::NoCreate
+	{
+		static typename CLRVM::TValValue<TDest>::Type Convert(typename CLRVM::TValValue<TSource>::Type ref);
+	};
+}
+
+namespace CLRUtil
+{
 	template<class T>
 	typename CLRVM::TRefValue<T>::Type NullReference();
 }
 
+namespace CLRVM
+{
+	template<class T>
+	void LoadMaybeAnchoredManagedPtr(typename ::CLRVM::TValValue<T>::Type &val, const typename ::CLRVM::TMaybeAnchoredManagedPtr<T>::Type &ref) { CLARITY_NOTIMPLEMENTED; }
 
+	template<class T>
+	void LoadLocalManagedPtr(typename ::CLRVM::TValValue<T>::Type &val, const typename ::CLRVM::TLocalManagedPtr<T>::Type &ref) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class T>
+	void LoadAnchoredManagedPtr(typename ::CLRVM::TValValue<T>::Type &val, const typename ::CLRUtil::TAnchoredManagedPtr<T>::Type &ref) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class T>
+	typename CLRVM::TRefValue<T>::Type Box(const CLRExec::Frame &frame, const typename CLRVM::TValValue<T>::Type &val) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class T>
+	typename CLRVM::TLocalManagedPtr<T>::Type CreateLocalManagedPtr(typename CLRVM::TValValue<T>::Type &val) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class T>
+	typename CLRVM::TValValue<T>::Type ConstantEnum(CLRTypes::S32 val) { CLARITY_NOTIMPLEMENTED; }
+}
 
 
 namespace CLRX
@@ -840,7 +891,7 @@ namespace CLRPrivate
 	template<class T>
 	struct RefRootResolver_ByTraits<T, 0, 1, 0>
 	{
-		typedef CLRCore::ValueArrayContainer<typename T::TSubscriptType> TRootObjectType;
+		typedef CLRCore::ValueArrayContainer<typename T> TRootObjectType;
 		static TRootObjectType *Resolve(const typename CLRUtil::TSimpleRef<TRootObjectType>::Type &ref) { CLARITY_NOTIMPLEMENTED; }
 	};
 
@@ -867,7 +918,7 @@ namespace CLRPrivate
 
 	template<class T>
 	struct TRefTypeValueResolver_ByTraits<0, 1, 0, T>
-		: public ::ClarityInternal::TypeDef< typename ::CLRUtil::TSimpleRef< ::CLRCore::ValueArrayContainer<typename T::TSubscriptType> >::Type >
+		: public ::ClarityInternal::TypeDef< typename ::CLRUtil::TSimpleRef< ::CLRCore::ValueArrayContainer<typename T> >::Type >
 	{
 	};
 
@@ -934,7 +985,7 @@ namespace CLRPrivate
 	struct RefTracer<0, 0, 1, 0, T>
 		: public ::ClarityInternal::NoCreate
 	{
-		static void Trace(CLRExec::IRefVisitor &visitor, typename CLRUtil::TSimpleRef< CLRCore::ValueArrayContainer<typename T::TSubscriptType> >::Type &ref);
+		static void Trace(CLRExec::IRefVisitor &visitor, typename CLRUtil::TSimpleRef< CLRCore::ValueArrayContainer<typename T> >::Type &ref);
 	};
 
 	template<class T>
@@ -1028,7 +1079,7 @@ namespace CLRPrivate
 	template<class T>
 	struct ArrayRefPackager_ByTraits<0, T>
 	{
-		static typename CLRUtil::TSimpleRef< ::CLRCore::ValueArrayContainer<typename T::TSubscriptType> >::Type PackageRef(CLRCore::ValueArrayContainer<typename T::TSubscriptType> *arrayRef) { CLARITY_NOTIMPLEMENTED; }
+		static typename CLRUtil::TSimpleRef< ::CLRCore::ValueArrayContainer<typename T> >::Type PackageRef(CLRCore::ValueArrayContainer<typename T> *arrayRef) { CLARITY_NOTIMPLEMENTED; }
 	};
 
 	template<class T>
@@ -1095,14 +1146,20 @@ namespace CLRVM
 	};
 
 	template<class T>
+	struct TLocalManagedPtr
+	{
+		typedef typename CLRVM::TValValue<T>::Type *Type;
+	};
+
+	template<class T>
 	struct TValueObjectType
 		: public ClarityInternal::TypeDef<
-		typename CLRPrivate::TValueObjectTypeResolver_ByTraits<
-		T,
-		CLRTI::TypeProtoTraits<T>::IsValueType,
-		CLRTI::TypeProtoTraits<T>::IsArray,
-		CLRTI::TypeProtoTraits<T>::IsReferenceArray
-		>::Type
+			typename CLRPrivate::TValueObjectTypeResolver_ByTraits<
+				T,
+				CLRTI::TypeProtoTraits<T>::IsValueType,
+				CLRTI::TypeProtoTraits<T>::IsArray,
+				CLRTI::TypeProtoTraits<T>::IsReferenceArray
+			>::Type
 		>
 	{
 	};
@@ -1468,6 +1525,16 @@ namespace CLRVM
 	template<class TLocalType>
 	typename TLocalType::LocalValueType &VRegValue(TLocalType &local);
 
+	template<class T>
+	typename CLRUtil::TAnchoredManagedPtr<T>::Type AnchorLocalManagedPtr(const typename CLRVM::TLocalManagedPtr<T>::Type &ptr) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class T>
+	struct ManagedPtrAnchorer
+	{
+		static typename CLRUtil::TAnchoredManagedPtr<T>::Type Anchor(const typename CLRVM::TLocalManagedPtr<T>::Type &ptr) { CLARITY_NOTIMPLEMENTED; }
+	};
+
+
 	template<class TA, class TB>
 	struct ReferenceEqualityComparer
 		: public ::CLRPrivate::ReferenceEqualityComparer_ByTraits<
@@ -1506,6 +1573,7 @@ namespace CLRVM
 	{
 	public:
 		static typename ::CLRVM::TRefValue<TDest>::Type Cast(const typename ::CLRVM::TRefValue<TSource>::Type &src) { CLARITY_NOTIMPLEMENTED; }
+		static typename ::CLRVM::TRefValue<TDest>::Type Cast(const CLRExec::Frame &frame, typename ::CLRVM::TRefValue<TSource>::Type &src) { CLARITY_NOTIMPLEMENTED; }
 	};
 
 	template<class T>
@@ -1568,6 +1636,32 @@ namespace CLRVM
 		static TValueType ModuloUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
 		static TValueType ModuloIntegerUn(const CLRExec::Frame &frame, const TValueType &a, const TValueType &b) { CLARITY_NOTIMPLEMENTED; }
 	};
+
+	template<class T>
+	void StoreToAnchoredManagedPtr(const typename CLRUtil::TAnchoredManagedPtr<T>::Type &ptr, const typename CLRVM::TValValue<T>::Type &value) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class T>
+	void StoreToLocalManagedPtr(const typename CLRUtil::TLocalManagedPtr<T>::Type &ptr, const typename CLRVM::TValValue<T>::Type &value) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class T>
+	void StoreToMaybeAnchoredManagedPtr(const typename CLRVM::TMaybeAnchoredManagedPtr<T>::Type &ptr, const typename CLRVM::TValValue<T>::Type &value) { CLARITY_NOTIMPLEMENTED; }
+
+	template<class TClass, class TFieldType>
+	typename CLRUtil::TAnchoredManagedPtr<TFieldType>::Type AnchorField(typename CLRVM::TRefValue<TClass>::Type val, CLRVM::Field<TFieldType> TClass::* fieldPtr) { CLARITY_NOTIMPLEMENTED; }
+}
+
+namespace CLRUtil
+{
+	template<class TSource, class TDest>
+	struct PassiveValueConverter
+		: public CLRPrivate::PassiveValueConverter_ByTraits<
+			TSource,
+			CLRVM::IsNumberTypeTagged< TSource >::Value,
+			TDest,
+			CLRVM::IsNumberTypeTagged< TDest >::Value
+		>
+	{
+	};
 }
 
 #include "ClarityNumberConversions.h"
@@ -1589,13 +1683,13 @@ namespace CLRCore
 	{
 	};
 
-	template<class T>
+	template<class TArrayType>
 	struct ValueArrayContainer
 		: public CLRCore::ValueArrayContainerBase
 	{
 	};
 
-	template<class T>
+	template<class TArrayType>
 	struct RefArrayContainer
 		: public CLRCore::RefArrayContainerBase
 	{
@@ -1625,9 +1719,9 @@ CLARITY_FORCEINLINE void CLRPrivate::RefTracer<0, 1, 0, 0, T>::Trace(CLRExec::IR
 }
 
 template<class T>
-CLARITY_FORCEINLINE void CLRPrivate::RefTracer<0, 0, 1, 0, T>::Trace(CLRExec::IRefVisitor &visitor, typename CLRUtil::TSimpleRef< CLRCore::ValueArrayContainer<typename T::TSubscriptType> >::Type &ref)
+CLARITY_FORCEINLINE void CLRPrivate::RefTracer<0, 0, 1, 0, T>::Trace(CLRExec::IRefVisitor &visitor, typename CLRUtil::TSimpleRef< CLRCore::ValueArrayContainer<typename T> >::Type &ref)
 {
-	ref = CLRPrivate::SimpleRefVisitor< CLRCore::ValueArrayContainer<typename T::TSubscriptType> >::VisitObject(visitor, ref);
+	ref = CLRPrivate::SimpleRefVisitor< CLRCore::ValueArrayContainer<typename T> >::VisitObject(visitor, ref);
 }
 
 template<class T>
@@ -1639,7 +1733,8 @@ CLARITY_FORCEINLINE void CLRPrivate::RefTracer<0, 0, 1, 1, T>::Trace(CLRExec::IR
 template<class T>
 CLARITY_FORCEINLINE void CLRPrivate::RefTracer<1, 0, 0, 0, T>::Trace(CLRExec::IRefVisitor &visitor, const typename CLRVM::TRefValue<T>::Type &ref)
 {
-	CLRUtil::RetargetSimpleRef(ref);
+	CLARITY_NOTIMPLEMENTED;
+	//CLRUtil::RetargetSimpleRef(ref);
 }
 
 template<class T>
@@ -2202,15 +2297,45 @@ CLARITY_FORCEINLINE T *(::CLRUtil::StrictRef<T>::GetPtr)() const
 #endif
 
 template<class TSource, class TDest>
-CLARITY_FORCEINLINE typename CLRVM::TValValue<TDest>::Type CLRUtil::PassiveValueConverter<TSource, TDest>::Convert(typename CLRVM::TValValue<TSource>::Type val)
+CLARITY_FORCEINLINE typename CLRVM::TValValue<TDest>::Type CLRPrivate::PassiveValueConverter_ByTraits<TSource, 0, TDest, 0>::Convert(typename CLRVM::TValValue<TSource>::Type val)
 {
-	return CLRUtil::PassiveValueConversionWriter<typename CLRVM::TValValue<TDest>::Type>::FromMid(CLRUtil::PassiveValueConversionLoader<typename CLRVM::TValValue<TSource>::Type>::ToMid(val));
+	return CLRUtil::PassiveValueConversionWriter<typename CLRVM::TValValue<TDest>::Type>::FromMid(
+		CLRUtil::PassiveValueConversionLoader<typename CLRVM::TValValue<TSource>::Type>::ToMid(val)
+		);
 }
+
+template<class TSource, class TDest>
+CLARITY_FORCEINLINE typename CLRVM::TValValue<TDest>::Type CLRPrivate::PassiveValueConverter_ByTraits<TSource, 1, TDest, 0>::Convert(typename CLRVM::TValValue<TSource>::Type val)
+{
+	return CLRUtil::PassiveValueConversionWriter<typename CLRVM::TValValue<TDest>::Type>::FromMid(
+		CLRUtil::PassiveValueConversionLoader<typename CLRVM::TValValue<TSource>::Type::TValueType>::ToMid(val.Value())
+		);
+}
+
+template<class TSource, class TDest>
+CLARITY_FORCEINLINE typename CLRVM::TValValue<TDest>::Type CLRPrivate::PassiveValueConverter_ByTraits<TSource, 0, TDest, 1>::Convert(typename CLRVM::TValValue<TSource>::Type val)
+{
+	return typename CLRVM::TValValue<TDest>::Type(
+		CLRUtil::PassiveValueConversionWriter<typename CLRVM::TValValue<TDest>::Type::TValueType>::FromMid(
+			CLRUtil::PassiveValueConversionLoader<typename CLRVM::TValValue<TSource>::Type>::ToMid(val)
+			));
+}
+
+template<class TSource, class TDest>
+CLARITY_FORCEINLINE typename CLRVM::TValValue<TDest>::Type CLRPrivate::PassiveValueConverter_ByTraits<TSource, 1, TDest, 1>::Convert(typename CLRVM::TValValue<TSource>::Type val)
+{
+	return typename CLRVM::TValValue<TDest>::Type(
+		CLRUtil::PassiveValueConversionWriter<typename CLRVM::TValValue<TDest>::Type::TValueType>::FromMid(
+			CLRUtil::PassiveValueConversionLoader<typename CLRVM::TValValue<TSource>::Type::TValueType>::ToMid(val.Value())
+			));
+}
+
+
 
 template<class T>
 CLARITY_FORCEINLINE typename CLRVM::TRefValue<T>::Type CLRUtil::NullReference()
 {
-	return typename CLRVM::TRefValue<T>::Type(static_cast<T*>(CLARITY_NULLPTR));
+	return typename CLRVM::TRefValue<T>::Type(static_cast<typename CLRVM::TValueObjectType<T>::Type *>(CLARITY_NULLPTR));
 }
 
 
@@ -2245,7 +2370,7 @@ inline void CLRUtil::AnchoredManagedPtr<T>::Visit(CLRExec::IRefVisitor &refVisit
 		::CLRTypes::PtrDiffT valueOffset = reinterpret_cast<const ::CLRTypes::U8*>(this->m_value) - reinterpret_cast<const ::CLRTypes::U8*>(ref);
 		ref = refVisitor.TouchReference(ref);
 		this->m_object = ref;
-		this->m_value = reinterpret_cast<T*>(reinterpret_cast< ::CLRTypes::U8* >(ref) + valueOffset);
+		this->m_value = reinterpret_cast<typename ::CLRVM::TValValue<T>::Type*>(reinterpret_cast< ::CLRTypes::U8* >(ref) + valueOffset);
 	}
 }
 
@@ -2268,16 +2393,19 @@ CLARITY_FORCEINLINE T *::CLRUtil::SimpleRefToPtr(T *ref)
 #endif
 
 template<class T, class TMore>
-inline CLRCore::RttiQueries::FQueryTypeInfo CLRCore::RttiTypeList<T, TMore>::Query(CLRTypes::U32 index)
+inline void CLRCore::RttiTypeList<T, TMore>::Query(CLRTypes::U32 index, CLRCore::ClassToken*& classToken, RttiQueries::FQueryTypeInfo &typeInfo)
 {
 	if (index == 0)
-		return T::RttiQuery;
-	return TMore::Query(index - 1);
+	{
+		typeInfo = T::RttiQuery;
+		classToken = &T::bClassToken;
+	}
+	else
+		TMore::Query(index - 1, classToken, typeInfo);
 }
 
-inline CLRCore::RttiQueries::FQueryTypeInfo CLRCore::RttiTypeListEnd::Query(CLRTypes::U32 index)
+inline void CLRCore::RttiTypeListEnd::Query(CLRTypes::U32 index, CLRCore::ClassToken*& classToken, RttiQueries::FQueryTypeInfo &typeInfo)
 {
-	return CLARITY_NULLPTR;
 }
 
 template<CLRTypes::S32 V, class TMore>

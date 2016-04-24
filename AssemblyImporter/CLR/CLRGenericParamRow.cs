@@ -39,9 +39,6 @@ namespace AssemblyImporter.CLR
 
             Variance = (VarianceEnum)(flags & 0x3);
 
-            if ((Variance & (VarianceEnum.Covariant | VarianceEnum.Contravariant)) != 0)
-                throw new NotSupportedException("Covariant and contravariant generic parameters are not supported.");
-
             ReferenceTypeConstraint = ((flags & 0x4) != 0);
             NotNullableValueTypeConstraint = ((flags & 0x8) != 0);
             DefaultConstructorConstraint = ((flags & 0x10) != 0);

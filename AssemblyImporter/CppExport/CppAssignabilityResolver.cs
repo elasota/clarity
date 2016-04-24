@@ -7,6 +7,13 @@ using AssemblyImporter.CLR;
 // can be proven to be a reference type.
 //
 // The rules here are ROUGHLY defined by III.1.8.1.2.3
+//
+// There's some additional non-standard behavior for conversion of arrays to IEquatable<T>,
+// IList<T>, and ICollection<T> that .NET uses itself and we implement for compatibility.
+//
+// .NET only does this for SZArrays and permits the conversion of arrays to incompatible
+// interfaces if the conversion is permitted by array covariance.  For example, where
+// reference type A is assignable to B, A[] is assignable to IList<B>
 namespace AssemblyImporter.CppExport
 {
     public class CppAssignabilityResolver
@@ -29,9 +36,20 @@ namespace AssemblyImporter.CppExport
             if (from.Equals(to))
                 return true;
 
-            if (from is CLRTypeSpecClass || from is CLRTypeSpecGenericInstantiation)
+
+            if (from is CLRTypeSpecClass)
             {
                 CppClass fromClass = m_builder.GetCachedClass(from);
+                return IsClassBasedOn(fromClass, to);
+            }
+            else if (from is CLRTypeSpecGenericInstantiation)
+            {
+                CppClass fromClass = m_builder.GetCachedClass(from);
+                if (fromClass.IsDelegate || fromClass.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Interface)
+                {
+                    if (IsGenericVariantAssignableTo(from, to))
+                        return true;
+                }
                 return IsClassBasedOn(fromClass, to);
             }
             else if (from is CLRTypeSpecComplexArray)
@@ -100,11 +118,67 @@ namespace AssemblyImporter.CppExport
             throw new ArgumentException();
         }
 
+        private bool IsGenericVariantAssignableTo(CLRTypeSpec from, CLRTypeSpec to)
+        {
+            if (from.Equals(to))
+                return true;
+
+            CLRTypeSpecGenericInstantiation fromGI = from as CLRTypeSpecGenericInstantiation;
+            CLRTypeSpecGenericInstantiation toGI = to as CLRTypeSpecGenericInstantiation;
+
+            if (fromGI == null || toGI == null)
+                return false;
+
+            CLRTypeDefRow typeDef = fromGI.GenericType.TypeDef;
+            if (typeDef != toGI.GenericType.TypeDef)
+                return false;
+
+            if (typeDef.Semantics != CLRTypeDefRow.TypeSemantics.Interface)
+            {
+                if (typeDef.Semantics != CLRTypeDefRow.TypeSemantics.Class)
+                    throw new ArgumentException();
+
+                CppClass cls = m_builder.GetCachedClass(from);
+                if (!cls.IsDelegate)
+                    return false;
+            }
+
+            int numParams = typeDef.GenericParameters.Length;
+            for (int i = 0; i < numParams; i++)
+            {
+                CLRTypeSpec fromParam = fromGI.ArgTypes[i];
+                CLRTypeSpec toParam = fromGI.ArgTypes[i];
+                CLRGenericParamRow genericParam = typeDef.GenericParameters[i];
+
+                if (fromParam.Equals(toParam))
+                    continue;
+
+                switch (genericParam.Variance)
+                {
+                    case CLRGenericParamRow.VarianceEnum.None:
+                        // Invariant: Can't assign at all
+                        return false;
+                    case CLRGenericParamRow.VarianceEnum.Covariant:
+                        if (!IsProvablyReferenceType(fromParam) || !IsProvablyReferenceType(toParam) || !IsRefAssignable(fromParam, toParam))
+                            return false;
+                        break;
+                    case CLRGenericParamRow.VarianceEnum.Contravariant:
+                        if (!IsProvablyReferenceType(fromParam) || !IsProvablyReferenceType(toParam) || !IsRefAssignable(toParam, fromParam))
+                            return false;
+                        break;
+                    default:
+                        throw new ArgumentException();
+                }
+            }
+
+            return true;
+        }
+
         private bool IsClassBasedOn(CppClass cls, CLRTypeSpec to)
         {
             foreach (CLRTypeSpec newIfc in cls.NewlyImplementedInterfaces)
             {
-                if (newIfc.Equals(to))
+                if (IsGenericVariantAssignableTo(newIfc, to))
                     return true;
             }
 

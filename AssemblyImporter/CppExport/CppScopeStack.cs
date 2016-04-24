@@ -52,18 +52,12 @@ namespace AssemblyImporter.CppExport
             return CppRegisterAllocator.IsVTypeSpillable(reg.VType);
         }
 
-        public void LivenReg(SsaRegister reg, CppBuilder builder, StreamWriter writer)
+        public void LivenReg(SsaRegister reg, CppBuilder builder)
         {
             if (!IsRegScopable(reg))
                 return;
 
-            writer.Write(m_indent);
-            writer.WriteLine("{");
-
             AddReg(reg);
-
-            writer.Write(m_indent);
-            writer.WriteLine(builder.VTypeStorageToValueType(reg.VType) + " ssa" + reg.SsaID + ";");
         }
 
         public void KillReg(SsaRegister reg, StreamWriter writer)

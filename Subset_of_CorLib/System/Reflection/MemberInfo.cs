@@ -23,6 +23,11 @@ namespace System.Reflection
         {
             get;
         }
+
+        public abstract Type ReflectedType
+        {
+            get;
+        }
     }
 }
 

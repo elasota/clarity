@@ -11,10 +11,11 @@ namespace System
     [Clarity.ExportStub("System_ValueType.cpp")]
     public abstract class ValueType
     {
-
         [MethodImplAttribute(MethodImplOptions.InternalCall)]
         public extern override bool Equals(Object obj);
 
+        [MethodImplAttribute(MethodImplOptions.InternalCall)]
+        public extern override int GetHashCode();
     }
 }
 

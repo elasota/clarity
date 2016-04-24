@@ -19,6 +19,12 @@ namespace System
             get;
         }
 
+        public extern override Type ReflectedType
+        {
+            [MethodImplAttribute(MethodImplOptions.InternalCall)]
+            get;
+        }
+
         public static Type GetType(String typeName)
         {
             bool fVersion = false;

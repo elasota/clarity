@@ -81,5 +81,14 @@ namespace Tests
                 return b ? v1 : v2;
             }
         }
+
+        public void DoSomething(int a, int b, int c)
+        {
+        }
+
+        public void TestMultiRegSpill(bool flag, int a, int b1, int b2, int c)
+        {
+            DoSomething(a, flag ? b1 : b2, c);
+        }
     }
 }

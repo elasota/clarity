@@ -5,12 +5,16 @@ namespace AssemblyImporter.CLR
     public abstract class CLRTableRow
     {
         public uint RowNumber { get; private set; }
+        public uint TableNumber { get; private set; }
         public ICLRTable Table { get; private set; }
 
-        public void Initialize(uint rowNumber, ICLRTable table)
+        public uint MetadataToken { get { return (TableNumber << 24) | (RowNumber + 1); } }
+
+        public void Initialize(uint tableNumber, uint rowNumber, ICLRTable table)
         {
             RowNumber = rowNumber;
             Table = table;
+            TableNumber = tableNumber;
         }
 
         public virtual void Parse(CLRMetaDataParser parser)

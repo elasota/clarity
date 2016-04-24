@@ -11,9 +11,7 @@ namespace AssemblyImporter.CppExport
 
         public CLRTypeDefRow DeclaredInClass { get; private set; }
         public CLRTypeSpec DeclaredInClassSpec { get; private set; }
-        public string GenericMethodParamMangle { get; private set; }
-        public string GenericTypeParamMangle { get; private set; }
-        public string VtableSlotMangle { get; private set; }
+        public Clarity.Rpa.MethodDeclTag VtableSlotTag { get; private set; }
         public string Name { get; private set; }
         public bool Virtual { get; private set; }
         public bool Static { get; private set; }
@@ -22,7 +20,7 @@ namespace AssemblyImporter.CppExport
         public bool Final { get; private set; }
         public CppVtableSlot ReplacesStandardSlot { get; set; }
         public CppVtableSlot CreatesSlot { get; private set; }
-        public int NumGenericParameters { get; private set; }
+        public uint NumGenericParameters { get; private set; }
         public CLRMethodDefRow MethodDef { get; private set; }
 
         public CppMethod(CLRAssemblyCollection assemblies, CLRTypeDefRow declaredInClass, CLRMethodDefRow methodDef)
@@ -40,35 +38,25 @@ namespace AssemblyImporter.CppExport
             Overrides = (methodDef.VtableLayout == CLRMethodDefRow.MethodVtableLayout.ReuseSlot);
             MethodDef = methodDef;
 
-            if (MethodSignature.UsesGenericTypeParams)
-            {
-                CppMangleBuilder builder = new CppMangleBuilder();
-                builder.Add(MethodSignature);
-                GenericTypeParamMangle = "_gt" + builder.Finish();
-            }
+            if (methodDef.Signature.NumGenericParameters > 0 && this.Virtual && !this.Final && declaredInClass.Semantics != CLRTypeDefRow.TypeSemantics.Interface)
+                throw new NotSupportedException(DeclaredInClassSpec.ToString() + "." + this.Name + " is a non-final virtual generic method, which is only supported on interfaces.");
 
+            Clarity.Rpa.MethodSignatureTag methodSigTag = CppExport.RpaTagFactory.CreateMethodSignature(this.MethodSignature);
+
+            uint numGenericParameters = 0;
             if (methodDef.GenericParameters != null)
-            {
-                CppMangleBuilder builder = new CppMangleBuilder();
-                builder.Add(methodDef.GenericParameters.Length);
-                GenericMethodParamMangle = "_gm" + builder.Finish();
-                NumGenericParameters = methodDef.GenericParameters.Length;
-            }
+                numGenericParameters = (uint)methodDef.GenericParameters.Length;
 
+            Clarity.Rpa.TypeNameTag declaredInClassTag = RpaTagFactory.CreateTypeNameTag(declaredInClass);
+            VtableSlotTag = new Clarity.Rpa.MethodDeclTag(methodDef.Name, methodSigTag, declaredInClassTag);
             if (methodDef.Virtual && !Overrides)
             {
-                CppMangleBuilder builder = new CppMangleBuilder();
-                builder.Add(declaredInClass);
-                VtableSlotMangle = "_" + CppBuilder.LegalizeName(declaredInClass.TypeName, false) + "_gv" + builder.Finish();
-                if (GenericTypeParamMangle != null)
-                    VtableSlotMangle = GenericTypeParamMangle + VtableSlotMangle;
-                if (GenericMethodParamMangle != null)
-                    VtableSlotMangle = GenericMethodParamMangle + VtableSlotMangle;
-
                 bool isGenericInterface = ((methodDef.Owner.Semantics == CLRTypeDefRow.TypeSemantics.Interface) && methodDef.Owner.GenericParameters != null && methodDef.Owner.GenericParameters.Length > 0);
 
-                CreatesSlot = new CppVtableSlot(MethodSignature, DeclaredInClassSpec, CppBuilder.LegalizeName(Name, true), Name, VtableSlotMangle, isGenericInterface, methodDef);
+                CreatesSlot = new CppVtableSlot(MethodSignature, DeclaredInClassSpec, Name, VtableSlotTag, isGenericInterface, methodDef);
             }
+
+            NumGenericParameters = numGenericParameters;
         }
 
         private CppMethod(CppMethod baseInstance, CLRTypeSpec[] typeParams, CLRTypeSpec[] methodParams)
@@ -77,9 +65,7 @@ namespace AssemblyImporter.CppExport
             MethodSignature = baseInstance.MethodSignature.Instantiate(typeParams, methodParams);
             DeclaredInClass = baseInstance.DeclaredInClass;
             DeclaredInClassSpec = baseInstance.DeclaredInClassSpec.Instantiate(typeParams, methodParams);
-            GenericTypeParamMangle = baseInstance.GenericTypeParamMangle;
-            GenericMethodParamMangle = baseInstance.GenericMethodParamMangle;
-            VtableSlotMangle = baseInstance.VtableSlotMangle;
+            VtableSlotTag = baseInstance.VtableSlotTag;
             Name = baseInstance.Name;
             Virtual = baseInstance.Virtual;
             Abstract = baseInstance.Abstract;
@@ -98,13 +84,15 @@ namespace AssemblyImporter.CppExport
 
         public string GenerateBaseName()
         {
+            return "!TODO FIX ME!";
+            /*
             string methodBaseName = MethodDef.Static ? "s" : "i";
             methodBaseName += CppBuilder.LegalizeName(Name, true);
             if (GenericTypeParamMangle != null)
                 methodBaseName += GenericTypeParamMangle;
             if (GenericMethodParamMangle != null)
                 methodBaseName += GenericMethodParamMangle;
-            return methodBaseName;
+            return methodBaseName;*/
         }
 
         public string GenerateCallName()
@@ -125,7 +113,7 @@ namespace AssemblyImporter.CppExport
             HashSet<CppVtableSlot> overrided = new HashSet<CppVtableSlot>();
             foreach (CppVtableSlot slot in overridableSlots)
             {
-                if (slot.InternalName == this.Name && slot.Signature.Equals(this.MethodSignature))
+                if (slot.Name == this.Name && slot.Signature.Equals(this.MethodSignature))
                     overrided.Add(slot);
             }
 

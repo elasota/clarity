@@ -1,0 +1,14 @@
+List of places where .NET diverges from the specification:
+
+- TypeSpec signatures can legally contain VAR and MVAR tokens in .NET, but the standard forbids them.
+- I.8.6.1.5 specifies that the "this" pointer of a virtual method in a value type is the boxed type, but it's actually a managed pointer.
+- III.4 specifies that cgt.un is valid on references, but III.3.23 does not specify a behavior for comparing two non-null references and doesn't specify how null is ordered with respect to non-null references.
+- III.8 specifies that floats "truncate to zero," but does not specify a behavior for converting floats that are too large to represent in the destination type.
+- II.14.4.2 specifies that managed pointers can not be null, but it is valid to load a managed pointer from an initialized local.  The specification of the "ldind" instruction refers to these as "invalid" and generates a NullReferenceException.
+- III.3.62 (stind) does not specify behavior when storing to an invalid managed pointer.
+
+Array implementations of generic collection types have multiple issues:
+- The .NET documentation on MSDN indicates that arrays implement System.Collections.Generic.IList<T>, System.Collections.Generic.ICollection<T>, and System.Collections.Generic.IEnumerable<T>.  This behavior is not specified anywhere in the standard, including the CLI library types document.
+- MSDN does not specify that the generic interfaces are only implemented by single-dimensional zero-lower-bound arrays.
+- The semantics of the implemented methods are not specified (including things like the fact that the IList<T>.Contains implementation does not attempt to use an IEquatable<T> implementation on the subscript type).
+- It is not specified that additional generic interfaces are implemented to satisfy array covariance, i.e. where A is assignable to B, A[] implements IList<B>

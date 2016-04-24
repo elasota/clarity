@@ -33,11 +33,17 @@ namespace Tests
             return array[b, a];
         }
 
+        public void RefSet(ref int v)
+        {
+            v = 4;
+        }
+
         public void Run()
         {
             int[,] test = new int[2, 2];
             Set(1, 0, 2, test);
             Set(0, 1, 3, test);
+            RefSet(ref test[1, 1]);
         }
     }
 }

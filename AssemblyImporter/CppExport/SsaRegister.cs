@@ -6,44 +6,40 @@ namespace AssemblyImporter.CppExport
     {
         private VType m_vType;
         private bool m_isSpilled;
-        private int m_debugIndex;
-        private object m_constantValue;
         private int m_ssaID;
+        private bool m_isUsable;
 
         public VType VType { get { return m_vType; } }
         public VReg SpillVReg { get; set; }
         public VReg SinglePredecessorSpillVReg { get; set; }
-        public object ConstantValue { get { return m_constantValue; } }
+        public object ConstantValue { get { return m_vType.ConstantValue; } }
 
         public int SsaID
         {
             get
             {
-                if (m_ssaID == 0)
-                    throw new Exception("Uninitialized SSA register used");
+                if (!m_isUsable)
+                    throw new Exception("Unusable SSA register used");
                 return m_ssaID;
             }
+        }
 
-            set
+        public int NonUseSsaID
+        {
+            get
             {
-                m_ssaID = value;
+                if (m_ssaID == 0)
+                    throw new Exception("Uninitialized SSA register ID read");
+                return m_ssaID;
             }
         }
 
         public bool IsSpilled { get { return m_isSpilled; } }
 
-        public SsaRegister(VType vt, int index)
+        public SsaRegister(VType vt)
         {
-            m_debugIndex = index;
             m_isSpilled = false;
             m_vType = vt;
-        }
-
-        private SsaRegister(VType vt, object obj)
-        {
-            m_vType = vt;
-            m_constantValue = obj;
-            m_debugIndex = 0;
         }
 
         public void Spill()
@@ -53,15 +49,30 @@ namespace AssemblyImporter.CppExport
             m_isSpilled = true;
         }
 
-        public static SsaRegister Constant(VType vt, object obj)
+        public static SsaRegister Constant(VType vt)
         {
-            return new SsaRegister(vt, obj);
+            if (vt.ConstantValue != null && vt.ConstantValue.GetType() == typeof(ulong))
+                throw new Exception();
+            return new SsaRegister(vt);
         }
 
         public void TrySpill()
         {
             if (CppRegisterAllocator.IsVTypeSpillable(m_vType))
                 m_isSpilled = true;
+        }
+
+        public void GenerateUniqueID(CppRegisterAllocator regAllocator)
+        {
+            if (m_ssaID == 0)
+                m_ssaID = regAllocator.NewSsaID();
+        }
+
+        public void MakeUsable()
+        {
+            if (m_isUsable)
+                throw new Exception("Reg was marked usable multiple times");
+            m_isUsable = true;
         }
     }
 
