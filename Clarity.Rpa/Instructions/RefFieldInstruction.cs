@@ -1,0 +1,52 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+
+namespace Clarity.Rpa.Instructions
+{
+    public sealed class RefFieldInstruction : HighInstruction
+    {
+        private HighSsaRegister m_dest;
+        private HighSsaRegister m_src;
+        private string m_field;
+
+        public override Opcodes Opcode { get { return Opcodes.RefField; } }
+
+        public RefFieldInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighSsaRegister src, string field)
+            : base(codeLocation)
+        {
+            m_dest = dest;
+            m_src = src;
+            m_field = field;
+        }
+
+        public RefFieldInstruction()
+        {
+        }
+
+        public override void VisitSsaDests(VisitSsaDelegate visitor)
+        {
+            visitor(ref m_dest);
+        }
+
+        public override void VisitSsaUses(VisitSsaDelegate visitor)
+        {
+            visitor(ref m_src);
+        }
+
+        public override void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
+        {
+            writer.Write(fileBuilder.IndexString(m_field));
+        }
+
+        public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
+        {
+            m_field = catalog.GetString(reader.ReadUInt32());
+        }
+
+        public override HighInstruction Clone()
+        {
+            return new RefFieldInstruction(CodeLocation, m_dest, m_src, m_field);
+        }
+    }
+}

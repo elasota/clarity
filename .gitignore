@@ -15,8 +15,8 @@
 *.dll
 *.exe
 *.cmake
-*.rpa
 *.ilk
+*.opendb
 CMakeCache.txt
 CMakeFiles/*
 Makefile

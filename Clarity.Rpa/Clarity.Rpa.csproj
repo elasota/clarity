@@ -1,0 +1,166 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{2F2D5D92-7043-49AB-8E8E-2C608D9319F5}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Clarity.Rpa</RootNamespace>
+    <AssemblyName>Clarity.Rpa</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="ArrayCloner.cs" />
+    <Compile Include="CodeLocationTag.cs" />
+    <Compile Include="HighCfgEdge.cs" />
+    <Compile Include="HighCfgNodeHandle.cs" />
+    <Compile Include="HighEnumLiteral.cs" />
+    <Compile Include="HighCatchHandler.cs" />
+    <Compile Include="HighCfgNode.cs" />
+    <Compile Include="HighCfgNodeBuilder.cs" />
+    <Compile Include="HighEHCluster.cs" />
+    <Compile Include="HighEscapePathTerminator.cs" />
+    <Compile Include="HighField.cs" />
+    <Compile Include="HighFileBuilder.cs" />
+    <Compile Include="HighInterfaceImplementation.cs" />
+    <Compile Include="HighInterfaceMethodImplementation.cs" />
+    <Compile Include="HighMethod.cs" />
+    <Compile Include="HighMethodBody.cs" />
+    <Compile Include="HighMethodBodyParseContext.cs" />
+    <Compile Include="HighMethodBuilder.cs" />
+    <Compile Include="HighProtectedRegion.cs" />
+    <Compile Include="HighRegion.cs" />
+    <Compile Include="HighInstruction.cs" />
+    <Compile Include="HighLocal.cs" />
+    <Compile Include="HighRegionBuilder.cs" />
+    <Compile Include="HighSsaRegister.cs" />
+    <Compile Include="HighTryCatchRegion.cs" />
+    <Compile Include="HighTryFaultRegion.cs" />
+    <Compile Include="HighTryFinallyRegion.cs" />
+    <Compile Include="HighTypeDef.cs" />
+    <Compile Include="HighUnresolvedPhiCollection.cs" />
+    <Compile Include="HighValueType.cs" />
+    <Compile Include="HighClassVtableSlot.cs" />
+    <Compile Include="IInternable.cs" />
+    <Compile Include="ILocalUsingInstruction.cs" />
+    <Compile Include="IMethodReferencingInstruction.cs" />
+    <Compile Include="Instructions\AllocArrayInstruction.cs" />
+    <Compile Include="Instructions\AllocObjInstruction.cs" />
+    <Compile Include="Instructions\ArithInstruction.cs" />
+    <Compile Include="Instructions\BindInstanceDelegateInstruction.cs" />
+    <Compile Include="Instructions\BindStaticDelegateInstruction.cs" />
+    <Compile Include="Instructions\BindVirtualDelegateInstruction.cs" />
+    <Compile Include="Instructions\BoxInstruction.cs" />
+    <Compile Include="Instructions\BranchCompareNumbersInstruction.cs" />
+    <Compile Include="Instructions\BranchInstruction.cs" />
+    <Compile Include="Instructions\CatchInstruction.cs" />
+    <Compile Include="Instructions\DynamicCastInstruction.cs" />
+    <Compile Include="Instructions\EnterProtectedBlockInstruction.cs" />
+    <Compile Include="Instructions\ForceDynamicCastInstruction.cs" />
+    <Compile Include="Instructions\GetArrayElementPtrInstruction.cs" />
+    <Compile Include="Instructions\CompareRefsInstruction.cs" />
+    <Compile Include="Instructions\BranchCompareRefsInstruction.cs" />
+    <Compile Include="Instructions\BranchRefNullInstruction.cs" />
+    <Compile Include="Instructions\CallConstrainedVirtualMethodInstruction.cs" />
+    <Compile Include="Instructions\CallInstanceMethodInstruction.cs" />
+    <Compile Include="Instructions\CallConstrainedMethodInstruction.cs" />
+    <Compile Include="Instructions\CallStaticMethodInstruction.cs" />
+    <Compile Include="Instructions\CallVirtualMethodInstruction.cs" />
+    <Compile Include="Instructions\CompareNumbersInstruction.cs" />
+    <Compile Include="Instructions\GetArrayLengthInstruction.cs" />
+    <Compile Include="Instructions\GetFieldInfoInstruction.cs" />
+    <Compile Include="Instructions\GetLocalPtrInstruction.cs" />
+    <Compile Include="Instructions\GetStaticFieldAddrInstruction.cs" />
+    <Compile Include="Instructions\GetTypeInfoInstruction.cs" />
+    <Compile Include="IBranchingInstruction.cs" />
+    <Compile Include="ISsaEmitter.cs" />
+    <Compile Include="ISsaUser.cs" />
+    <Compile Include="ITypeReferencingInstruction.cs" />
+    <Compile Include="Instructions\LeaveRegionInstruction.cs" />
+    <Compile Include="Instructions\LoadPtrInstruction.cs" />
+    <Compile Include="Instructions\LoadValueFieldInstruction.cs" />
+    <Compile Include="Instructions\NumberArithOp.cs" />
+    <Compile Include="Instructions\NumberConvertInstruction.cs" />
+    <Compile Include="Instructions\NumberUnaryArithOp.cs" />
+    <Compile Include="HighPhi.cs" />
+    <Compile Include="HighPhiLink.cs" />
+    <Compile Include="Instructions\PtrFieldInstruction.cs" />
+    <Compile Include="Instructions\RefFieldInstruction.cs" />
+    <Compile Include="Instructions\RefLocalInstruction.cs" />
+    <Compile Include="Instructions\LoadLocalInstruction.cs" />
+    <Compile Include="Instructions\NumberArithType.cs" />
+    <Compile Include="Instructions\NumberCompareOperation.cs" />
+    <Compile Include="Instructions\PassiveConvertInstruction.cs" />
+    <Compile Include="Instructions\ReturnInstruction.cs" />
+    <Compile Include="Instructions\ReturnValueInstruction.cs" />
+    <Compile Include="Instructions\StoreLocalInstruction.cs" />
+    <Compile Include="Instructions\StorePtrInstruction.cs" />
+    <Compile Include="Instructions\SwitchInstruction.cs" />
+    <Compile Include="Instructions\ThrowInstruction.cs" />
+    <Compile Include="Instructions\UnaryArithInstruction.cs" />
+    <Compile Include="Instructions\UnboxPtrInstruction.cs" />
+    <Compile Include="Instructions\UnboxValueInstruction.cs" />
+    <Compile Include="Instructions\ZeroFillPtrInstruction.cs" />
+    <Compile Include="RegionPhiResolver.cs" />
+    <Compile Include="RpaLoadException.cs" />
+    <Compile Include="SimpleHandle.cs" />
+    <Compile Include="TagRepository.cs" />
+    <Compile Include="MethodInstance.cs" />
+    <Compile Include="MethodSignatureParam.cs" />
+    <Compile Include="MethodSignatureParamTypeOfType.cs" />
+    <Compile Include="MethodSignatureTag.cs" />
+    <Compile Include="MethodSlotType.cs" />
+    <Compile Include="MethodSpecTag.cs" />
+    <Compile Include="NameEscaper.cs" />
+    <Compile Include="CatalogReader.cs" />
+    <Compile Include="TypeNameTag.cs" />
+    <Compile Include="TypeSemantics.cs" />
+    <Compile Include="TypeSpecArrayTag.cs" />
+    <Compile Include="TypeSpecClassTag.cs" />
+    <Compile Include="TypeSpecGenericParamTag.cs" />
+    <Compile Include="TypeSpecGenericParamTypeTag.cs" />
+    <Compile Include="TypeSpecTag.cs" />
+    <Compile Include="TypeSpecVoidTag.cs" />
+    <Compile Include="UniqueQueue.cs" />
+    <Compile Include="MethodDeclTag.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>
