@@ -2,53 +2,52 @@
 using System.Collections.Generic;
 using System.Text;
 
-// Insane duplicate interface shit
-//
-// Despite post-substitution unification of interfaces on the same class being illegal,
-// it is still possible for interfaces to duplicate if the interface was implemented
-// by a base class.
-//
-// This appears to be an implementation bug that got patched out of .NET 3.5 SP1,
-// then added back and due to complaints, and then standardized.
-//
-// Sigh.
-//
-// II.12.2
 namespace Tests
 {
     public class TestTDO
     {
-        public interface IMyInterface<T>
+        public class Base
+        {
+        }
+        public class Derived1 : Base
+        {
+        }
+        public class Derived2 : Derived1
+        {
+        }
+
+        public interface IMyInterface<in T>
         {
             void Func(T p);
         }
 
-        public class Base<T> : IMyInterface<T>
+        public class BaseC : IMyInterface<Base>, IMyInterface<Derived1>
         {
-            public virtual void Func(T p)
+            public virtual void Func(Base v)
+            {
+                TestApi.WriteLine("Wrong");
+            }
+            public virtual void Func(Derived1 v)
+            {
+                TestApi.WriteLine("Wrong");
+            }
+        }
+
+        public class DerivedC : BaseC, IMyInterface<Derived1>, IMyInterface<Base>
+        {
+            public new virtual void Func(Derived1 v)
+            {
+                TestApi.WriteLine("Wrong");
+            }
+            public new virtual void Func(Base v)
             {
                 TestApi.WriteLine("OK");
             }
         }
 
-        public class Derived<T, U> : Base<T>, IMyInterface<U>
-        {
-            public virtual void Func(U p)
-            {
-                TestApi.WriteLine("Wrong");
-            }
-
-            public void CallU(U p)
-            {
-                IMyInterface<U> v = this;
-                v.Func(p);
-            }
-        }
-
         public void Run()
         {
-            Derived<int, int> v = new Derived<int, int>();
-            v.CallU(0);
+            ((IMyInterface<Derived2>)new DerivedC()).Func(null);
         }
     }
 }

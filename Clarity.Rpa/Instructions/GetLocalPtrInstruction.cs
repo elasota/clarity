@@ -9,6 +9,9 @@ namespace Clarity.Rpa.Instructions
         private HighLocal m_local;
         private HighSsaRegister m_dest;
 
+        public HighLocal Local { get { return m_local; } }
+        public HighSsaRegister Dest { get { return m_dest; } }
+
         public override Opcodes Opcode { get { return Opcodes.GetLocalPtr; } }
 
         public GetLocalPtrInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighLocal local)

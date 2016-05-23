@@ -50,6 +50,28 @@ namespace Clarity.Rpa
             return hash;
         }
 
+        public override string ToString()
+        {
+            string result;
+            switch (m_typeOfType.Value)
+            {
+                case MethodSignatureParamTypeOfType.Values.ByRef:
+                    result = "ref ";
+                    break;
+                case MethodSignatureParamTypeOfType.Values.TypedByRef:
+                    result = "tref ";
+                    break;
+                case MethodSignatureParamTypeOfType.Values.Value:
+                    result = "";
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
+
+            result += m_type.ToString();
+            return result;
+        }
+
         public void Write(HighFileBuilder fileBuilder, BinaryWriter writer)
         {
             m_typeOfType.Write(writer);
@@ -69,6 +91,16 @@ namespace Clarity.Rpa
         public MethodSignatureParam Instantiate(TagRepository repo, TypeSpecTag[] argTypes)
         {
             TypeSpecTag newType = m_type.Instantiate(repo, argTypes);
+
+            if (newType == m_type)
+                return this;
+
+            return new MethodSignatureParam(newType, m_typeOfType);
+        }
+
+        public MethodSignatureParam Instantiate(TagRepository repo, TypeSpecTag[] typeParams, TypeSpecTag[] methodParams)
+        {
+            TypeSpecTag newType = m_type.Instantiate(repo, typeParams, methodParams);
 
             if (newType == m_type)
                 return this;

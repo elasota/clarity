@@ -40,6 +40,8 @@ namespace Clarity.Rpa
         public static HighPhi Read(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, BinaryReader reader)
         {
             HighSsaRegister dest = HighSsaRegister.ReadDestinationDef(rpa, catalog, reader);
+            if (dest == null)
+                throw new Rpa.RpaLoadException("Phi has no destination");
 
             HighUnresolvedPhiCollection unresolvedCollection = HighUnresolvedPhiCollection.Read(rpa, catalog, cfgNodes, reader);
 

@@ -884,7 +884,7 @@ namespace AssemblyImporter.CppExport
                             Clarity.Rpa.HighSsaRegister dest = InternSsaRegister(midInstr.RegArg);
                             Clarity.Rpa.HighLocal src = m_localLookup[midInstr.VRegArg];
 
-                            outInstructions.Add(new Clarity.Rpa.Instructions.RefLocalInstruction(
+                            outInstructions.Add(new Clarity.Rpa.Instructions.GetLocalPtrInstruction(
                                 midInstr.CodeLocation,
                                 dest,
                                 src
@@ -1113,7 +1113,7 @@ namespace AssemblyImporter.CppExport
                     case MidInstruction.OpcodeEnum.LoadField_Object:
                         {
                             Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
-                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.TypeSpecArg, outline, outInstructions));
                             Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, destReg.Type, null);
 
                             outInstructions.Add(new Clarity.Rpa.Instructions.RefFieldInstruction(
@@ -1132,7 +1132,7 @@ namespace AssemblyImporter.CppExport
                     case MidInstruction.OpcodeEnum.LoadFieldA_Object:
                         {
                             Clarity.Rpa.HighSsaRegister destReg = InternSsaRegister(midInstr.RegArg2);
-                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.TypeSpecArg, outline, outInstructions));
 
                             outInstructions.Add(new Clarity.Rpa.Instructions.RefFieldInstruction(
                                 midInstr.CodeLocation,
@@ -1206,7 +1206,7 @@ namespace AssemblyImporter.CppExport
                     case MidInstruction.OpcodeEnum.StoreField_ManagedPtr:
                         {
                             Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
-                            Clarity.Rpa.HighSsaRegister valueReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, midInstr.TypeSpecArg, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister valueReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, midInstr.TypeSpecArg2, outline, outInstructions));
                             Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, valueReg.Type, null);
 
                             outInstructions.Add(new Clarity.Rpa.Instructions.PtrFieldInstruction(
@@ -1223,8 +1223,8 @@ namespace AssemblyImporter.CppExport
                         break;
                     case MidInstruction.OpcodeEnum.StoreField_Object:
                         {
-                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(midInstr.RegArg);
-                            Clarity.Rpa.HighSsaRegister valueReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, midInstr.TypeSpecArg, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister objReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, midInstr.TypeSpecArg, outline, outInstructions));
+                            Clarity.Rpa.HighSsaRegister valueReg = InternSsaRegister(EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg2, midInstr.TypeSpecArg2, outline, outInstructions));
                             Clarity.Rpa.HighSsaRegister addrReg = new Clarity.Rpa.HighSsaRegister(Clarity.Rpa.HighValueType.ManagedPtr, valueReg.Type, null);
 
                             outInstructions.Add(new Clarity.Rpa.Instructions.RefFieldInstruction(
@@ -1268,7 +1268,7 @@ namespace AssemblyImporter.CppExport
                                     arithType = isUnsigned ? Clarity.Rpa.Instructions.NumberArithType.UInt32 : Clarity.Rpa.Instructions.NumberArithType.Int32;
                                     break;
                                 case NumericStackType.Int64:
-                                    arithType = isUnsigned ? Clarity.Rpa.Instructions.NumberArithType.Int64 : Clarity.Rpa.Instructions.NumberArithType.Int64;
+                                    arithType = isUnsigned ? Clarity.Rpa.Instructions.NumberArithType.UInt64 : Clarity.Rpa.Instructions.NumberArithType.Int64;
                                     break;
                                 case NumericStackType.NativeInt:
                                     arithType = isUnsigned ? Clarity.Rpa.Instructions.NumberArithType.NativeUInt : Clarity.Rpa.Instructions.NumberArithType.NativeInt;
@@ -1556,7 +1556,7 @@ namespace AssemblyImporter.CppExport
                         break;
                     case MidInstruction.OpcodeEnum.Switch:
                         {
-                            CLR.CLRTypeSpec intType = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.I4));
+                            CLR.CLRTypeSpec intType = m_builder.Assemblies.InternVagueType(new CLR.CLRSigTypeSimple(CLR.CLRSigType.ElementType.U4));
 
                             SsaRegister caseReg = EmitPassiveConversion(midInstr.CodeLocation, midInstr.RegArg, intType, outline, outInstructions);
 
@@ -1601,7 +1601,8 @@ namespace AssemblyImporter.CppExport
                                 midInstr.CodeLocation,
                                 InternSsaRegister(midInstr.RegArg),
                                 RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg),
-                                midInstr.StrArg
+                                midInstr.StrArg,
+                                midInstr.FlagArg
                                 ));
                         }
                         break;
@@ -1655,7 +1656,8 @@ namespace AssemblyImporter.CppExport
                                             if (entryNode.Phis.Length != 1 || entryNode.Phis[0].Links.Length != 0)
                                                 throw new Exception("Catch handler should start with an unlinked phi node");
 
-                                            // Inject a catch landing instruction and delete the phi node
+                                            // Inject a catch landing instruction and delete the phi node.
+                                            // This is safe because III.1.7.5 disallows backward branches with stack
                                             Clarity.Rpa.HighSsaRegister exceptionReg = entryNode.Phis[0].Dest;
 
                                             List<Clarity.Rpa.HighInstruction> instrs = new List<Clarity.Rpa.HighInstruction>();

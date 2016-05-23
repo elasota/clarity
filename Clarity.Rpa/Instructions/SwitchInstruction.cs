@@ -10,6 +10,10 @@ namespace Clarity.Rpa.Instructions
         private HighCfgEdge[] m_cases;
         private HighCfgEdge m_defaultCase;
 
+        public HighSsaRegister Value { get { return m_value; } }
+        public HighCfgEdge[] Cases { get { return m_cases; } }
+        public HighCfgEdge DefaultCase { get { return m_defaultCase; } }
+
         public override Opcodes Opcode { get { return Opcodes.Switch; } }
         public override bool TerminatesControlFlow { get { return true; } }
 

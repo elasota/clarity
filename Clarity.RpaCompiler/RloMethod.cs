@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Clarity.Rpa;
-using System;
 
 namespace Clarity.RpaCompiler
 {
@@ -13,7 +12,7 @@ namespace Clarity.RpaCompiler
         private bool m_isInternal;
         private RloMethodBody m_methodBody;
 
-        public RloMethod(Compiler compiler, MethodSpecTag methodSpec)
+        public RloMethod(Compiler compiler, MethodSpecTag methodSpec, MethodInstantiationPath instantiationPath)
         {
             CliClass cls = compiler.GetClosedClass(methodSpec.DeclaringClass);
             HighMethod method;
@@ -37,7 +36,7 @@ namespace Clarity.RpaCompiler
                 throw new Exception("Method generic parameter count doesn't match argument count");
 
             RloInstantiationParameters instParams = new RloInstantiationParameters(typeParams, methodParams);
-            m_methodBody = new RloMethodBody(compiler, method, methodSpec.DeclaringClass, cls.IsStruct, instParams);
+            m_methodBody = new RloMethodBody(compiler, method, methodSpec, methodSpec.DeclaringClass, cls.IsStruct, instParams, instantiationPath);
         }
     }
 }

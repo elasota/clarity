@@ -13,6 +13,12 @@ namespace Clarity.Rpa.Instructions
         private int m_equalValue;
         private int m_notEqualValue;
 
+        public HighSsaRegister SrcA { get { return m_regA; } }
+        public HighSsaRegister SrcB { get { return m_regB; } }
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public int EqualValue { get { return m_equalValue; } }
+        public int NotEqualValue { get { return m_notEqualValue; } }
+
         public override Opcodes Opcode { get { return Opcodes.CompareRefs; } }
 
         public CompareRefsInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighSsaRegister regA, HighSsaRegister regB, int equalValue, int notEqualValue)

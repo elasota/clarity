@@ -192,13 +192,15 @@ namespace AssemblyImporter.CppExport
             RegArg2 = regArg2;
         }
 
-        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, string strArg)
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, string strArg, CLRTypeSpec typeSpecArg, CLRTypeSpec typeSpecArg2)
         {
             Opcode = opcode;
             CodeLocation = codeLocation;
             RegArg = regArg;
             RegArg2 = regArg2;
             StrArg = strArg;
+            TypeSpecArg = typeSpecArg;
+            TypeSpecArg2 = typeSpecArg2;
         }
 
         public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, SsaRegister regArg2, string strArg, CLRTypeSpec typeSpecArg)
@@ -242,6 +244,16 @@ namespace AssemblyImporter.CppExport
             RegArg = regArg;
             TypeSpecArg = typeSpec;
             StrArg = strArg;
+        }
+
+        public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CLRTypeSpec typeSpec, string strArg, bool flagArg)
+        {
+            Opcode = opcode;
+            CodeLocation = codeLocation;
+            RegArg = regArg;
+            TypeSpecArg = typeSpec;
+            StrArg = strArg;
+            FlagArg = flagArg;
         }
 
         public MidInstruction(OpcodeEnum opcode, CodeLocationTag codeLocation, SsaRegister regArg, CLRTypeSpec typeSpec, CLRTypeSpec typeSpec2, string strArg)

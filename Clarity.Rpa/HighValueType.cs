@@ -11,6 +11,6 @@
         ConstantString,
 
         // Compiler-only types
-        BoxedValue
+        BoxedValue,
     }
 }

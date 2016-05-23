@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using AssemblyImporter.CLR;
 using System.IO;
 using Clarity.Pdb;
+using Clarity.Rpa;
 
 namespace AssemblyImporter.CppExport
 {
@@ -395,7 +396,7 @@ namespace AssemblyImporter.CppExport
                 CppClass declaredInClass = this.GetCachedClass(m_assemblies.InternTypeDefOrRefOrSpec(mref.Class));
                 CLRMethodSignatureInstance sig = new CLRMethodSignatureInstance(m_assemblies, mref.MethodSig);
 
-                foreach (CppVtableSlot slot in declaredInClass.ImplementationVisibleVtableSlots)
+                foreach (CppVtableSlot slot in declaredInClass.OverrideVisibleVtableSlots)
                 {
                     if (slot.Name == mref.Name && sig.Equals(slot.DeclaredSignature))
                         return slot;
@@ -422,13 +423,14 @@ namespace AssemblyImporter.CppExport
             uint numNewInterfaces = (uint)cls.NewlyImplementedInterfaces.Count;
             uint numReimplementedInterfaces = (uint)cls.ReimplementedInterfaces.Count;
 
-            List<CLRTypeSpec> reqBindings = new List<CLRTypeSpec>();
+            List<KeyValuePair<CLRTypeSpec, bool>> reqBindings = new List<KeyValuePair<CLRTypeSpec, bool>>();
 
-            reqBindings.AddRange(cls.NewlyImplementedInterfaces);
-            reqBindings.AddRange(cls.ReimplementedInterfaces);
+            foreach (CLRTypeSpec ts in cls.NewlyImplementedInterfaces)
+                reqBindings.Add(new KeyValuePair<CLRTypeSpec, bool>(ts, false));
+            foreach (CLRTypeSpec ts in cls.ReimplementedInterfaces)
+                reqBindings.Add(new KeyValuePair<CLRTypeSpec, bool>(ts, true));
 
-            // New interface count is already known from the new interface list, only need the reimplementation count
-            writer.Write(numReimplementedInterfaces + numNewInterfaces);
+            writer.Write((uint)reqBindings.Count);
 
             List<BoundInterfaceMethodImpl> boundImpls = new List<BoundInterfaceMethodImpl>();
 
@@ -448,21 +450,14 @@ namespace AssemblyImporter.CppExport
                 boundImpls.Add(new BoundInterfaceMethodImpl(spec, decl, body));
             }
 
-            foreach (CLRTypeSpec conv in reqBindings)
+            foreach (KeyValuePair<CLRTypeSpec, bool> convPair in reqBindings)
             {
+                CLRTypeSpec conv = convPair.Key;
+                bool isReimpl = convPair.Value;
+
                 writer.Write(fileBuilder.IndexTypeSpecTag(RpaTagFactory.CreateTypeTag(conv)));
 
                 CppClass ifcClass = this.GetCachedClass(conv);
-
-                bool isReimpl = false;
-                foreach (CLRTypeSpec reimpl in cls.ReimplementedInterfaces)
-                {
-                    if (reimpl.Equals(conv))
-                    {
-                        isReimpl = true;
-                        break;
-                    }
-                }
 
                 writer.Write((uint)ifcClass.Methods.Count);
 
@@ -480,6 +475,7 @@ namespace AssemblyImporter.CppExport
                             bimi.InterfaceSlot.Name == slot.Name && bimi.InterfaceSlot.Signature.Equals(slot.Signature))
                         {
                             isExplicitlyBound = true;
+
                             writer.Write(true);    // HACK - FIXME
                             WriteInterfaceBinding(fileBuilder, writer, bimi.InterfaceSlot, bimi.ClassSlot);
                             boundImpls.RemoveAt(i);
@@ -497,22 +493,15 @@ namespace AssemblyImporter.CppExport
                         //
                         // We depend on visible vtable slots being in method declaration order already,
                         // so the only thing we really need to do is return the first one.
-                        bool haveMatch = false;
-                        foreach (CppVtableSlot vtSlot in cls.ImplementationVisibleVtableSlots)
-                        {
-                            if (slot.Name == vtSlot.Name && slot.Signature.Equals(vtSlot.Signature))
-                            {
-                                if (haveMatch)
-                                {
-                                    Console.WriteLine("WARNING: Class " + cls.FullName + " has multiple matches for the same interface implementation");
-                                    break;
-                                }
-                                haveMatch = true;
-
-                                writer.Write(true);    // HACK - FIXME
-                                WriteInterfaceBinding(fileBuilder, writer, slot, vtSlot);
-                            }
-                        }
+                        //
+                        // .NET has some additional non-standardized behavior: If a reimplemented interface
+                        // doesn't have a new match since the last time it was implemented, then the implementation
+                        // has NO MATCHES.  This matters because since interface dispatch is done per-class,
+                        // per-method, a variant interface that does have a match will take priority if it's
+                        // higher in the class hierarchy.
+                        //
+                        // See TestInheritedImplementationDeprioritization for an example of this.
+                        bool haveMatch = WriteSignatureMatchedBinding(fileBuilder, writer, cls, slot, conv);
 
                         // If there's no match, but this is a reimplementation, then use the old implementation
                         // Allows TestInheritedReimpl to pass.
@@ -520,6 +509,7 @@ namespace AssemblyImporter.CppExport
                         {
                             if (!isReimpl)
                                 throw new ParseFailedException("Unmatched interface method");
+
                             writer.Write(false);    // HACK - FIXME
                         }
                     }
@@ -528,6 +518,45 @@ namespace AssemblyImporter.CppExport
 
             if (boundImpls.Count > 0)
                 throw new NotSupportedException("Don't support non-interface override thunks yet");
+        }
+
+        private bool WriteSignatureMatchedBinding(HighFileBuilder fileBuilder, BinaryWriter writer, CppClass cls, CppVtableSlot ifcSlot, CLRTypeSpec ifcTypeSpec)
+        {
+            bool haveMatch = false;
+            foreach (CppVtableSlot vtSlot in cls.NewImplementationVisibleVtableSlots)
+            {
+                if (ifcSlot.Name == vtSlot.Name && ifcSlot.Signature.Equals(vtSlot.Signature))
+                {
+                    if (haveMatch)
+                    {
+                        Console.WriteLine("WARNING: Class " + cls.FullName + " has multiple matches for the same interface implementation");
+                        break;
+                    }
+                    haveMatch = true;
+
+                    writer.Write(true);    // HACK - FIXME
+                    WriteInterfaceBinding(fileBuilder, writer, ifcSlot, vtSlot);
+                }
+            }
+
+            if (haveMatch == true)
+                return true;
+
+            CLRTypeSpec parentSpec = cls.ParentTypeSpec;
+            if (parentSpec == null)
+                return false;
+
+            CppClass parentClass = GetCachedClass(parentSpec);
+
+            // Look for prior implementations of this interface, if any are found, STOP and return no-match.
+            // See TestInheritedImplementationDeprioritization.  Matches are only recorded if they're new.
+            foreach (CLRTypeSpec ifc in parentClass.NewlyImplementedInterfaces)
+                if (ifc.Equals(ifcTypeSpec))
+                    return false;
+            foreach (CLRTypeSpec ifc in parentClass.ReimplementedInterfaces)
+                if (ifc.Equals(ifcTypeSpec))
+                    return false;
+            return WriteSignatureMatchedBinding(fileBuilder, writer, parentClass, ifcSlot, ifcTypeSpec);
         }
 
         private void WriteVtableThunk(Clarity.Rpa.HighFileBuilder fileBuilder, BinaryWriter writer, CppClass cls, CppMethod method, CppVtableSlot slot)
@@ -778,6 +807,10 @@ namespace AssemblyImporter.CppExport
         private void ExportDelegate(Clarity.Rpa.HighFileBuilder fileBuilder, BinaryWriter writer, CppClass cls)
         {
             writer.Write(cls.IsMulticastDelegate);
+            writer.Write(cls.NumGenericParameters);
+
+            ExportGenericVariance(cls, writer);
+
             foreach (CppMethod method in cls.Methods)
             {
                 if (method.Name == "Invoke")
@@ -789,6 +822,32 @@ namespace AssemblyImporter.CppExport
             throw new ParseFailedException("Malformed delegate");
         }
 
+        private void ExportGenericVariance(CppClass cls, BinaryWriter writer)
+        {
+            if (cls.NumGenericParameters > 0)
+            {
+                foreach (CLRGenericParamRow genericParam in cls.TypeDef.GenericParameters)
+                {
+                    Clarity.Rpa.HighVariance variance;
+                    switch (genericParam.Variance)
+                    {
+                        case CLRGenericParamRow.VarianceEnum.Contravariant:
+                            variance = Clarity.Rpa.HighVariance.Contravariant;
+                            break;
+                        case CLRGenericParamRow.VarianceEnum.Covariant:
+                            variance = Clarity.Rpa.HighVariance.Covariant;
+                            break;
+                        case CLRGenericParamRow.VarianceEnum.None:
+                            variance = Clarity.Rpa.HighVariance.None;
+                            break;
+                        default:
+                            throw new Exception();
+                    }
+                    writer.Write((byte)variance);
+                }
+            }
+        }
+
         private void ExportClassDefinitions(Clarity.Rpa.HighFileBuilder fileBuilder, BinaryWriter writer, CppClass cls)
         {
             if (cls.IsDelegate || cls.IsEnum)
@@ -796,14 +855,22 @@ namespace AssemblyImporter.CppExport
 
             writer.Write((uint)cls.NumGenericParameters);
 
+            if (cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Interface)
+                ExportGenericVariance(cls, writer);
+
             if (!cls.IsValueType && cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Class)
             {
                 writer.Write(cls.TypeDef.IsSealed);
+                writer.Write(cls.TypeDef.IsAbstract);
                 if (cls.ParentTypeSpec == null)
                     writer.Write((uint)0);
                 else
                     writer.Write(1 + fileBuilder.IndexTypeSpecTag(RpaTagFactory.CreateTypeTag(cls.ParentTypeSpec)));
             }
+
+            writer.Write((uint)cls.ExplicitInterfaces.Count);
+            foreach (CLRTypeSpec typeSpec in cls.ExplicitInterfaces)
+                writer.Write(fileBuilder.IndexTypeSpecTag(RpaTagFactory.CreateTypeTag(typeSpec)));
 
             WriteVtableThunks(fileBuilder, writer, cls);
 

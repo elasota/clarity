@@ -14,6 +14,14 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_right;
         private NumberArithType m_numberType;
 
+        public NumberCompareOperation Operation { get { return m_operation; } }
+        public int TrueValue { get { return m_trueValue; } }
+        public int FalseValue { get { return m_falseValue; } }
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public HighSsaRegister Left { get { return m_left; } }
+        public HighSsaRegister Right { get { return m_right; } }
+        public NumberArithType NumberType { get { return m_numberType; } }
+
         public override Opcodes Opcode { get { return Opcodes.CompareNumbers; } }
 
         public CompareNumbersInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, NumberCompareOperation operation, NumberArithType numberType, HighSsaRegister left, HighSsaRegister right, int trueValue, int falseValue)

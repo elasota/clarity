@@ -12,6 +12,12 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister[] m_parameters;
         private HighSsaRegister m_returnDestReg;
 
+        public MethodSpecTag MethodSpec { get { return m_methodSpec; } }
+        public TypeSpecTag ConstraintType { get { return m_constraintType; } }
+        public HighSsaRegister InstanceSrc { get { return m_instanceReg; } }
+        public HighSsaRegister[] Parameters { get { return m_parameters; } }
+        public HighSsaRegister ReturnDest { get { return m_returnDestReg; } }
+
         public override Opcodes Opcode { get { return Opcodes.CallConstrainedMethod; } }
 
         public CallConstrainedMethodInstruction(CodeLocationTag codeLocation, HighSsaRegister returnDestReg, TypeSpecTag constraintType, MethodSpecTag methodSpec, HighSsaRegister instanceReg, HighSsaRegister[] parameters)

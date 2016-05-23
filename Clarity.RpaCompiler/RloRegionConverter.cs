@@ -18,6 +18,7 @@ namespace Clarity.RpaCompiler
         private HighInstruction.VisitCfgNodeDelegate m_cfgNodeTranslate;
         private HighInstruction.VisitCfgEdgeDelegate m_cfgEdgeTranslate;
         private HighInstruction.VisitTypeSpecDelegate m_typeSpecTranslate;
+        private HighInstruction.VisitMethodSpecDelegate m_methodSpecTranslate;
 
         public HighCfgNodeHandle EntryNode { get { return m_entryNode; } }
 
@@ -28,6 +29,7 @@ namespace Clarity.RpaCompiler
             m_cfgNodeTranslate = TranslateCfgNode;
             m_cfgEdgeTranslate = TranslateCfgEdge;
             m_typeSpecTranslate = TranslateTypeSpec;
+            m_methodSpecTranslate = TranslateMethodSpec;
 
             m_methodConverter = methodConverter;
             m_checkInstructions = checkInstructions;
@@ -40,6 +42,11 @@ namespace Clarity.RpaCompiler
 
                 ConvertNode(workItem.Key, workItem.Value);
             }
+        }
+
+        private void TranslateMethodSpec(ref MethodSpecTag methodSpec)
+        {
+            methodSpec = m_methodConverter.InstantiateMethodSpec(methodSpec);
         }
 
         private void TranslateLocal(ref HighLocal highLocal)
@@ -154,7 +161,6 @@ namespace Clarity.RpaCompiler
                 case HighInstruction.Opcodes.UnboxValue:
                 case HighInstruction.Opcodes.Switch:
                 case HighInstruction.Opcodes.Throw:
-                case HighInstruction.Opcodes.RefLocal:
                 case HighInstruction.Opcodes.StorePtr:
                 case HighInstruction.Opcodes.GetFieldInfo:
                 case HighInstruction.Opcodes.LoadValueField:
@@ -179,6 +185,10 @@ namespace Clarity.RpaCompiler
                         ITypeReferencingInstruction typeReferencing = clonedInstr as ITypeReferencingInstruction;
                         if (typeReferencing != null)
                             typeReferencing.VisitTypes(m_typeSpecTranslate);
+
+                        IMethodReferencingInstruction methodReferencing = clonedInstr as IMethodReferencingInstruction;
+                        if (methodReferencing != null)
+                            methodReferencing.VisitMethodSpecs(m_methodSpecTranslate);
 
                         newInstrs.Add(clonedInstr);
                     }

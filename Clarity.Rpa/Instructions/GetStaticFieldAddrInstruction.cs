@@ -10,6 +10,10 @@ namespace Clarity.Rpa.Instructions
         private TypeSpecTag m_staticType;
         private string m_fieldName;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public TypeSpecTag StaticType { get { return m_staticType; } }
+        public string FieldName { get { return m_fieldName; } }
+
         public override Opcodes Opcode { get { return Opcodes.GetStaticFieldAddr; } }
 
         public GetStaticFieldAddrInstruction()

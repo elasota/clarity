@@ -123,5 +123,10 @@ namespace Clarity.Rpa
                 hash += m_declaredInClass.GetHashCode();
             return hash;
         }
+
+        public override string ToString()
+        {
+            return m_declaredInClass.ToString() + "/" + m_name + "|" + m_methodSignature.ToString();
+        }
     }
 }

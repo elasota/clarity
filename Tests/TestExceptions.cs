@@ -27,7 +27,7 @@ namespace Tests
             {
                 try
                 {
-
+                    ThrowAnException();
                 }
                 catch (System.OutOfMemoryException)
                 {
@@ -44,7 +44,6 @@ namespace Tests
                 {
                     TestApi.WriteLine("Running finally handler");
                 }
-                ThrowAnException();
             }
             finally
             {

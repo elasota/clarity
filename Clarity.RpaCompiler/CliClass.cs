@@ -5,7 +5,7 @@ using Clarity.Rpa;
 
 namespace Clarity.RpaCompiler
 {
-    public sealed class CliClass
+    public sealed class CliClass : CliType
     {
         private enum RestrictedExtensionType
         {
@@ -24,8 +24,10 @@ namespace Clarity.RpaCompiler
         private TypeNameTag m_typeName;
         private TypeSpecClassTag m_typeSpec;
         private TypeSpecClassTag m_parentClassSpec;
+        private TypeSpecClassTag[] m_explicitInterfaceSpecs;
         private CliClass m_parentClass;
         private bool m_isSealed;
+        private bool m_isAbstract;
         private bool m_isStruct;
 
         private bool m_isCreated;
@@ -40,10 +42,15 @@ namespace Clarity.RpaCompiler
         private Dictionary<MethodDeclTag, uint> m_declTagToMethod;
         private Dictionary<MethodDeclTag, uint> m_declTagToVTableSlot;
         private Dictionary<TypeSpecClassTag, uint> m_ifcToIfcSlot;
+        private Dictionary<string, uint> m_nameToInstanceFieldSlot;
+        private Dictionary<string, uint> m_nameToStaticFieldSlot;
+        private Dictionary<TypeSpecClassTag, uint> m_typeDeclarationOrder;
 
         public TypeNameTag TypeName { get { return m_typeName; } }
         public TypeSpecClassTag TypeSpec { get { return m_typeSpec; } }
         public TypeSpecClassTag ParentClassSpec { get { return m_parentClassSpec; } }
+        public TypeSpecClassTag[] ExplicitInterfaceSpecs { get { return m_explicitInterfaceSpecs; } }
+
         public CliClass ParentClass { get { return m_parentClass; } }
         public bool IsSealed { get { return m_isSealed; } }
         public bool IsStruct { get { return m_isStruct; } }
@@ -54,11 +61,14 @@ namespace Clarity.RpaCompiler
         public HighField[] InstanceFields { get { return m_instanceFields; } }
 
         public CliVtableSlot[] VTable { get { return m_vtable; } }
-        public CliInterfaceImpl[] InterfaceImpls { get { return m_interfaceImpls; } }
+        public CliInterfaceImpl[] InterfaceImpls2 { get { return m_interfaceImpls; } }
+        public IDictionary<TypeSpecClassTag, uint> TypeDeclarationOrder { get { return m_typeDeclarationOrder; } }
 
         public IDictionary<MethodDeclTag, uint> DeclTagToMethod { get { return m_declTagToMethod; } }
         public IDictionary<MethodDeclTag, uint> DeclTagToVTableSlot { get { return m_declTagToVTableSlot; } }
         public IDictionary<TypeSpecClassTag, uint> IfcToIfcSlot { get { return m_ifcToIfcSlot; } }
+        public IDictionary<string, uint> NameToInstanceFieldSlot { get { return m_nameToInstanceFieldSlot; } }
+        public IDictionary<string, uint> NameToStaticFieldSlot{ get { return m_nameToStaticFieldSlot; } }
 
         public CliClass()
         {
@@ -73,7 +83,9 @@ namespace Clarity.RpaCompiler
             m_parentClassSpec = (TypeSpecClassTag)baseClass.m_parentClassSpec.Instantiate(compiler.TagRepository, argTypes);
             m_parentClass = compiler.GetClosedClass(m_parentClassSpec);
             m_isSealed = baseClass.m_isSealed;
+            m_isAbstract = baseClass.m_isAbstract;
             m_isStruct = baseClass.m_isStruct;
+            m_typeSpec = (TypeSpecClassTag)compiler.TagRepository.InternTypeSpec(new TypeSpecClassTag(m_typeName, argTypes));
 
             m_isCreated = baseClass.m_isCreated;
 
@@ -105,9 +117,16 @@ namespace Clarity.RpaCompiler
                 interfaceImpls.Add(ifcImpl.Instantiate(compiler, argTypes));
             m_interfaceImpls = interfaceImpls.ToArray();
 
+            List<TypeSpecClassTag> explicitInterfaces = new List<TypeSpecClassTag>();
+            foreach (TypeSpecClassTag ifc in baseClass.m_explicitInterfaceSpecs)
+                explicitInterfaces.Add((TypeSpecClassTag)ifc.Instantiate(compiler.TagRepository, argTypes));
+            m_explicitInterfaceSpecs = explicitInterfaces.ToArray();
+
             m_declTagToMethod = baseClass.m_declTagToMethod;
             m_declTagToVTableSlot = baseClass.m_declTagToVTableSlot;
             m_ifcToIfcSlot = baseClass.m_ifcToIfcSlot;
+            m_nameToInstanceFieldSlot = baseClass.m_nameToInstanceFieldSlot;
+            m_nameToStaticFieldSlot = baseClass.m_nameToStaticFieldSlot;
         }
 
         public bool IsCreated { get { return m_isCreated; } }
@@ -225,6 +244,7 @@ namespace Clarity.RpaCompiler
                 m_methods = typeDef.Methods;
                 m_staticFields = typeDef.StaticFields;
                 m_isSealed = typeDef.IsSealed;
+                m_isAbstract = typeDef.IsAbstract;
 
                 replacedSlots = typeDef.ReplacedSlots;
                 newSlots = typeDef.NewSlots;
@@ -245,6 +265,7 @@ namespace Clarity.RpaCompiler
                 m_methods = new HighMethod[0];
                 m_staticFields = new HighField[0];
                 m_isSealed = false;
+                m_isAbstract = true;
 
                 replacedSlots = new HighClassVtableSlot[0];
 
@@ -312,6 +333,7 @@ namespace Clarity.RpaCompiler
                 m_methods = new HighMethod[0];
                 m_staticFields = new HighField[0];
                 m_isSealed = true;
+                m_isAbstract = false;
 
                 replacedSlots = new HighClassVtableSlot[0];
                 newSlots = new HighClassVtableSlot[0];
@@ -323,7 +345,7 @@ namespace Clarity.RpaCompiler
             if (parentClassSpec != null)
             {
                 if (compiler.GetTypeDef(parentClassSpec.TypeName).Semantics != TypeSemantics.Class)
-                    throw new Exception("Can't extend class with non-class semantics");
+                    throw new RpaCompileException("Can't extend class with non-class semantics");
 
                 if (!compiler.HaveCliOpenClass(parentClassSpec.TypeName))
                     return false;
@@ -331,7 +353,7 @@ namespace Clarity.RpaCompiler
                 CliClass parentClass = compiler.GetClosedClass(parentClassSpec);
 
                 if (parentClass.m_isSealed)
-                    throw new Exception("Can't extend sealed CLI class");
+                    throw new RpaCompileException("Can't extend sealed CLI class");
 
                 m_parentClass = parentClass;
             }
@@ -360,7 +382,19 @@ namespace Clarity.RpaCompiler
             {
                 foreach (KeyValuePair<MethodDeclTag, uint> dttvs in m_parentClass.m_declTagToVTableSlot)
                     m_declTagToVTableSlot.Add(dttvs.Key, dttvs.Value);
-                slots.AddRange(m_parentClass.m_vtable);
+
+                foreach (CliVtableSlot parentSlot in m_parentClass.m_vtable)
+                {
+                    CliMethodIndex methodIndex = parentSlot.MethodIndex;
+
+                    if (methodIndex == null)
+                        slots.Add(parentSlot);
+                    else
+                    {
+                        CliMethodIndex newIndex = new CliMethodIndex(methodIndex.Depth + 1, methodIndex.Index);
+                        slots.Add(new CliVtableSlot(newIndex, parentSlot.MethodSignature, parentSlot.IsSealed));
+                    }
+                }
             }
 
             foreach (HighClassVtableSlot slot in replacedSlots)
@@ -404,6 +438,29 @@ namespace Clarity.RpaCompiler
 
             m_vtable = slots.ToArray();
 
+            if (!m_isAbstract)
+                foreach (CliVtableSlot slot in m_vtable)
+                    if (slot.MethodIndex == null)
+                        throw new RpaCompileException("Non-abstract class has unoverrided abstract methods");
+
+            m_nameToInstanceFieldSlot = new Dictionary<string, uint>();
+            for (uint i = 0; i < m_instanceFields.Length; i++)
+            {
+                string fldName = m_instanceFields[i].Name;
+                if (m_nameToInstanceFieldSlot.ContainsKey(fldName))
+                    throw new RpaCompileException("Duplicate field name");
+                m_nameToInstanceFieldSlot.Add(fldName, i);
+            }
+
+            m_nameToStaticFieldSlot = new Dictionary<string, uint>();
+            for (uint i = 0; i < m_staticFields.Length; i++)
+            {
+                string fldName = m_staticFields[i].Name;
+                if (m_nameToStaticFieldSlot.ContainsKey(fldName))
+                    throw new RpaCompileException("Duplicate field name");
+                m_nameToStaticFieldSlot.Add(fldName, i);
+            }
+
             HashSet<TypeSpecClassTag> explicitImpls = new HashSet<TypeSpecClassTag>();
             List<CliInterfaceImpl> interfaceImpls = new List<CliInterfaceImpl>();
             foreach (HighInterfaceImplementation ifcImpl in typeInterfaceImpls)
@@ -416,6 +473,10 @@ namespace Clarity.RpaCompiler
 
             m_interfaceImpls = interfaceImpls.ToArray();
             m_parentClassSpec = parentClassSpec;
+
+            m_explicitInterfaceSpecs = typeDef.ParentInterfaces;
+            if (m_explicitInterfaceSpecs == null)
+                m_explicitInterfaceSpecs = new TypeSpecClassTag[0];
 
             List<TypeSpecTag> thisGenericParameters = new List<TypeSpecTag>();
             for (uint i = 0; i < m_numGenericParameters; i++)
@@ -430,9 +491,29 @@ namespace Clarity.RpaCompiler
             TypeSpecClassTag thisClass = new TypeSpecClassTag(m_typeName, thisGenericParameters.ToArray());
             thisClass = (TypeSpecClassTag)compiler.TagRepository.InternTypeSpec(thisClass);
 
+            m_typeSpec = thisClass;
+
+            m_typeDeclarationOrder = new Dictionary<TypeSpecClassTag, uint>();
+            ResolveTDOForClass(this);
+
             m_isCreated = true;
 
             return true;
+        }
+
+        private void ResolveTDOForClass(CliClass cls)
+        {
+            if (cls.ParentClass != null)
+                ResolveTDOForClass(cls.ParentClass);
+
+            foreach (CliInterfaceImpl impl in cls.InterfaceImpls2)
+            {
+                TypeSpecClassTag ifcSpec = impl.Interface;
+                if (!m_typeDeclarationOrder.ContainsKey(ifcSpec))
+                    m_typeDeclarationOrder.Add(ifcSpec, (uint)m_typeDeclarationOrder.Count);
+            }
+
+            m_typeDeclarationOrder.Add(cls.TypeSpec, (uint)m_typeDeclarationOrder.Count);
         }
 
         private static void CheckSlotCanImpl(CliVtableSlot slot, HighMethod method)
@@ -470,8 +551,7 @@ namespace Clarity.RpaCompiler
         {
             CliInterface ifc = compiler.GetClosedInterface(highIfcImpl.Interface);
 
-            uint[] slotMappings = new uint[ifc.Slots.Length];
-            bool[] slotIsMapped = new bool[slotMappings.Length];
+            CliInterfaceImplSlot[] slots = new CliInterfaceImplSlot[ifc.Slots.Length];
 
             foreach (HighInterfaceMethodImplementation methodImpl in highIfcImpl.MethodImpls)
             {
@@ -480,13 +560,12 @@ namespace Clarity.RpaCompiler
                     throw new Exception("Couldn't map class vtable slot to interface slot");
 
                 uint ifcIndex = ifc.CliSlotForSlotTag(methodImpl.InterfaceSlot);
-                if (slotIsMapped[ifcIndex])
+                if (slots[ifcIndex].HaveNewImpl)
                     throw new Exception("Interface method implemented multiple times");
-                slotIsMapped[ifcIndex] = true;
-                slotMappings[ifcIndex] = classIndex;
+                slots[ifcIndex] = new CliInterfaceImplSlot(true, classIndex);
             }
 
-            return new CliInterfaceImpl(highIfcImpl.Interface, slotMappings.ToArray());
+            return new CliInterfaceImpl(highIfcImpl.Interface, slots.ToArray());
         }
 
         public CliClass Instantiate(Compiler compiler, TypeSpecTag[] argTypes)

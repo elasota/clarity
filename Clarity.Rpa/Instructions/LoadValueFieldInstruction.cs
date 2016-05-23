@@ -10,6 +10,10 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_src;
         private string m_fieldName;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public HighSsaRegister Src { get { return m_src; } }
+        public string FieldName { get { return m_fieldName; } }
+
         public override Opcodes Opcode { get { return Opcodes.LoadValueField; } }
 
         public LoadValueFieldInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighSsaRegister src, string fieldName)

@@ -5,8 +5,9 @@ Clarity's goal is to fully support the core features of the CLI where possible. 
 - RPA code is significantly stricter about type checking than CLI code, so changing method signatures, changing methods from virtual to non-virtual, and changing field types will usually cause code referencing the field or method in other RPAs to become invalid.
 
 2.) Because Clarity is a static compiler, the following rules are enforced:
-- Generic virtual methods on classes must be sealed.
-- Generic virtual methods on interfaces must only be called via type constraints.
+- Generic virtual methods must be sealed.
+- Classes that implement interfaces with generic virtual methods must be sealed.
+- Generic virtual methods on interfaces must only be called via type constraints.  AssemblyImporter is not currently able to fully validate this at import time, it's possible to bypass it by using an interface with a generic method as a type parameter, but rpac will throw an error when encountering it.
 - Generic types that expand infinitely will not compile.  For instance, this is not allowed:
   class MyClass<T>
   {

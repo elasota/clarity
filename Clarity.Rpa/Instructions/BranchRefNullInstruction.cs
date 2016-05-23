@@ -10,6 +10,10 @@ namespace Clarity.Rpa.Instructions
         private HighCfgEdge m_isNullNode;
         private HighCfgEdge m_isNotNullNode;
 
+        public HighSsaRegister Src { get { return m_value; } }
+        public HighCfgEdge IsNullEdge { get { return m_isNullNode; } }
+        public HighCfgEdge IsNotNullEdge { get { return m_isNotNullNode; } }
+
         public override Opcodes Opcode { get { return Opcodes.BranchRefNull; } }
         public override bool TerminatesControlFlow { get { return true; } }
 

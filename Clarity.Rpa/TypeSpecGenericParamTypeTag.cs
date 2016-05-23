@@ -54,6 +54,19 @@ namespace Clarity.Rpa
             return m_value.GetHashCode();
         }
 
+        public override string ToString()
+        {
+            switch (m_value)
+            {
+                case Values.MVar:
+                    return "M";
+                case Values.Var:
+                    return "T";
+                default:
+                    return "?";
+            }
+        }
+
         public static TypeSpecGenericParamTypeTag Read(BinaryReader reader)
         {
             Values v = (Values)reader.ReadByte();

@@ -51,7 +51,7 @@ namespace AssemblyImporter.CppExport
 
             foreach (ExceptionHandlingRegion region in allRegions)
             {
-                CfgBuilder builder = new CfgBuilder(region, ownerBuilder.CppBuilder, ownerBuilder.Class, ownerBuilder.CppMethod, ownerBuilder.Args, ownerBuilder.Locals);
+                CfgBuilder builder = new CfgBuilder(region, ownerBuilder.CppBuilder, ownerBuilder.Class, ownerBuilder.CppMethod, ownerBuilder.Args, ownerBuilder.Locals, ownerBuilder.Temporaries);
                 region.RootCfgNode = builder.RootNode;
 
                 foreach (uint escapePath in region.EscapePaths)

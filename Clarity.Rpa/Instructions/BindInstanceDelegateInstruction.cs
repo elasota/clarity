@@ -10,6 +10,10 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_object;
         private MethodSpecTag m_methodSpec;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public HighSsaRegister Object { get { return m_object; } }
+        public MethodSpecTag MethodSpec { get { return m_methodSpec; } }
+
         public BindInstanceDelegateInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighSsaRegister obj, MethodSpecTag methodSpec)
             : base(codeLocation)
         {

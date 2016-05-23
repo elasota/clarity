@@ -9,17 +9,23 @@ namespace Clarity.RpaCompiler
 {
     public class RloMethodConverter
     {
+        public HighLocal[] Locals { get { return m_locals; } }
+        public TypeSpecTag ReturnType { get { return m_returnType; } }
+
         private Dictionary<HighSsaRegister, HighSsaRegister> m_translatedSsaRegs = new Dictionary<HighSsaRegister, HighSsaRegister>();
         private Dictionary<HighLocal, HighLocal> m_translatedLocals = new Dictionary<HighLocal, HighLocal>();
 
         private TagRepository m_tagRepo;
         private RloInstantiationParameters m_instParams;
         private HighLocal[] m_locals;
+        private TypeSpecTag m_returnType;
 
-        public RloMethodConverter(TagRepository tagRepo, RloInstantiationParameters instParams, HighLocal[] locals)
+        public RloMethodConverter(TagRepository tagRepo, RloInstantiationParameters instParams, TypeSpecTag returnType, HighLocal[] locals)
         {
             m_tagRepo = tagRepo;
             m_instParams = instParams;
+
+            m_returnType = InstantiateType(returnType);
 
             List<HighLocal> newLocals = new List<HighLocal>();
             foreach (HighLocal local in locals)
@@ -53,6 +59,13 @@ namespace Clarity.RpaCompiler
         public HighLocal GetLocal(HighLocal srcLocal)
         {
             return m_translatedLocals[srcLocal];
+        }
+
+        public MethodSpecTag InstantiateMethodSpec(MethodSpecTag methodSpec)
+        {
+            if (m_instParams != null)
+                return methodSpec.Instantiate(m_tagRepo, m_instParams.TypeParams, m_instParams.MethodParams);
+            return methodSpec;
         }
     }
 }

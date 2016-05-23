@@ -12,6 +12,8 @@ namespace Clarity.Rpa
         public TypeNameTag TypeName { get { return m_typeNameTag; } }
         public TypeSpecTag[] ArgTypes { get { return m_argTypes; } }
 
+        public override SubTypeCode SubType { get { return SubTypeCode.Class; } }
+
         public TypeSpecClassTag(TypeNameTag typeNameTag, TypeSpecTag[] argTypes)
         {
             m_typeNameTag = typeNameTag;
@@ -116,6 +118,26 @@ namespace Clarity.Rpa
 
             TypeSpecClassTag newSpec = new TypeSpecClassTag(m_typeNameTag, newArgTypes.ToArray());
             return repo.InternTypeSpec(newSpec);
+        }
+
+        public override string ToString()
+        {
+            string result = this.m_typeNameTag.ToString();
+
+            int numGenericParams = m_argTypes.Length;
+            if (numGenericParams > 0)
+            {
+                result += "<";
+                for (int i = 0; i < numGenericParams; i++)
+                {
+                    if (i != 0)
+                        result += ",";
+                    result += m_argTypes[i].ToString();
+                }
+                result += ">";
+            }
+
+            return result;
         }
     }
 }

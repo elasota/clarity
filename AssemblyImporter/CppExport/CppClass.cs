@@ -12,13 +12,14 @@ namespace AssemblyImporter.CppExport
         public bool IsEnum { get; private set; }
         public bool IsMulticastDelegate { get; private set; }
         public bool IsDelegate { get; private set; }
+        public bool HaveAnyGenericMethods { get; private set; }
 
         public IList<CppMethod> Methods { get { return m_methods; } }
         public IEnumerable<CppField> Fields { get { return m_fields; } }
         public IEnumerable<CppField> InheritedFields { get { return m_inheritedFields; } }
         public CLRTypeSpec ParentTypeSpec { get; private set; }
         public int NumGenericParameters { get; private set; }
-        public int NumNewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces.Count; } }
+        public IList<CLRTypeSpec> ExplicitInterfaces { get { return m_explicitInterfaces; } }
         public IList<CLRTypeSpec> NewlyImplementedInterfaces { get { return m_newlyImplementedInterfaces; } }
         public IList<CLRTypeSpec> ReimplementedInterfaces { get { return m_reimplementedInterfaces; } }
         public IEnumerable<CLRTypeSpec> InheritedImplementedInterfaces { get { return m_inheritedImplementedInterfaces; } }
@@ -26,7 +27,7 @@ namespace AssemblyImporter.CppExport
 
         public IEnumerable<CppVtableSlot> AllVtableSlots { get { return m_allVtableSlots; } }
         public IEnumerable<CppVtableSlot> OverrideVisibleVtableSlots { get { return m_overrideVisibleVtableSlots; } }
-        public IEnumerable<CppVtableSlot> ImplementationVisibleVtableSlots { get { return m_overrideVisibleVtableSlots; } }
+        public IEnumerable<CppVtableSlot> NewImplementationVisibleVtableSlots { get { return m_newImplementationVisibleVtableSlots; } }
 
         public CLRTypeDefRow TypeDef { get { return m_typeDef; } }
         public IEnumerable<CLRTypeSpec> GenericParameters { get { return m_genericParameters; } }
@@ -47,10 +48,11 @@ namespace AssemblyImporter.CppExport
         //   This can only be overrided by methods with public visibility.
         // For an example of where this difference matters, see TestNonPublicImplementation
         private List<CppVtableSlot> m_overrideVisibleVtableSlots;   // Slots that haven't been overlapped by a NewSlot
-        private List<CppVtableSlot> m_implementationVisibleVtableSlots;   // Slots that haven't been overlapped by a NewSlot
+        private List<CppVtableSlot> m_newImplementationVisibleVtableSlots;   // Public slots that haven't been overlapped by a NewSlot
         private List<CppField> m_fields;
         private List<CppField> m_inheritedFields;
         private List<CLRTypeSpec> m_newlyImplementedInterfaces;
+        private List<CLRTypeSpec> m_explicitInterfaces;
         private List<CLRTypeSpec> m_reimplementedInterfaces;
         private List<CLRTypeSpec> m_inheritedImplementedInterfaces;
         private List<CLRTypeSpec> m_passiveIfcConversions;
@@ -65,10 +67,11 @@ namespace AssemblyImporter.CppExport
             m_fields = new List<CppField>();
             m_allVtableSlots = new List<CppVtableSlot>();
             m_overrideVisibleVtableSlots = new List<CppVtableSlot>();
-            m_implementationVisibleVtableSlots = new List<CppVtableSlot>();
+            m_newImplementationVisibleVtableSlots = new List<CppVtableSlot>();
             m_inheritedFields = new List<CppField>();
             m_reimplementedInterfaces = new List<CLRTypeSpec>();
             m_newlyImplementedInterfaces = new List<CLRTypeSpec>();
+            m_explicitInterfaces = new List<CLRTypeSpec>();
             m_inheritedImplementedInterfaces = new List<CLRTypeSpec>();
             m_passiveIfcConversions = new List<CLRTypeSpec>();
             m_inheritedPassiveIfcConversions = new List<CLRTypeSpec>();
@@ -96,10 +99,11 @@ namespace AssemblyImporter.CppExport
             m_fields = new List<CppField>();
             m_allVtableSlots = new List<CppVtableSlot>();
             m_overrideVisibleVtableSlots = new List<CppVtableSlot>();
-            m_implementationVisibleVtableSlots = new List<CppVtableSlot>();
+            m_newImplementationVisibleVtableSlots = new List<CppVtableSlot>();
             m_inheritedFields = new List<CppField>();
             m_reimplementedInterfaces = new List<CLRTypeSpec>();
             m_newlyImplementedInterfaces = new List<CLRTypeSpec>();
+            m_explicitInterfaces = new List<CLRTypeSpec>();
             m_inheritedImplementedInterfaces = new List<CLRTypeSpec>();
             m_passiveIfcConversions = new List<CLRTypeSpec>();
             m_inheritedPassiveIfcConversions = new List<CLRTypeSpec>();
@@ -122,8 +126,8 @@ namespace AssemblyImporter.CppExport
 
             foreach (CppVtableSlot vts in baseInstance.m_overrideVisibleVtableSlots)
                 m_overrideVisibleVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
-            foreach (CppVtableSlot vts in baseInstance.m_implementationVisibleVtableSlots)
-                m_implementationVisibleVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
+            foreach (CppVtableSlot vts in baseInstance.m_newImplementationVisibleVtableSlots)
+                m_newImplementationVisibleVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
             foreach (CppVtableSlot vts in baseInstance.m_allVtableSlots)
                 m_allVtableSlots.Add(vts.Instantiate(typeParams, methodParams));
 
@@ -131,6 +135,8 @@ namespace AssemblyImporter.CppExport
                 m_inheritedFields.Add(field.Instantiate(typeParams, methodParams));
             foreach (CLRTypeSpec impl in baseInstance.m_newlyImplementedInterfaces)
                 m_newlyImplementedInterfaces.Add(impl.Instantiate(typeParams, methodParams));
+            foreach (CLRTypeSpec impl in baseInstance.m_explicitInterfaces)
+                m_explicitInterfaces.Add(impl.Instantiate(typeParams, methodParams));
             foreach (CLRTypeSpec impl in baseInstance.m_reimplementedInterfaces)
                 m_reimplementedInterfaces.Add(impl.Instantiate(typeParams, methodParams));
             foreach (CLRTypeSpec impl in baseInstance.m_inheritedImplementedInterfaces)
@@ -148,6 +154,7 @@ namespace AssemblyImporter.CppExport
                 DelegateSignature = baseInstance.DelegateSignature.Instantiate(typeParams, methodParams);
             HaveNewStaticFields = baseInstance.HaveNewStaticFields;
             HaveInheritedStaticFields = baseInstance.HaveInheritedStaticFields;
+            HaveAnyGenericMethods = baseInstance.HaveAnyGenericMethods;
             StubPath = null;
         }
 
@@ -170,10 +177,11 @@ namespace AssemblyImporter.CppExport
             if (cppMethod.Virtual && !cppMethod.Overrides)
             {
                 m_overrideVisibleVtableSlots.Add(cppMethod.CreatesSlot);
-                if (cppMethod.MethodDef.MemberAccess == CLRMethodDefRow.MethodMemberAccess.Public)
-                    m_implementationVisibleVtableSlots.Add(cppMethod.CreatesSlot);
                 m_allVtableSlots.Add(cppMethod.CreatesSlot);
             }
+
+            if (cppMethod.NumGenericParameters > 0)
+                HaveAnyGenericMethods = true;
         }
 
         private void AddPassiveConversion(CLRTypeSpec ifcTypeSpec)
@@ -203,17 +211,20 @@ namespace AssemblyImporter.CppExport
                 m_passiveIfcConversions.Add(ifcTypeSpec);
         }
 
+        // IMPORTANT: This must match "type declaration order" in the spec.
+        // Clarity doesn't implement TDO itself, it depends on the new interfaces list being in TDO.
         public void AddExplicitInterface(CppBuilder builder, CLRTypeSpec ifcTypeSpec)
         {
             CppClass ifcType = builder.GetCachedClass(ifcTypeSpec);
 
             // CS0695 guarantees that type substitution will never result in multiple interfaces
             // resolving to the same passive conversion, so this strategy should be OK
+            m_explicitInterfaces.Add(ifcTypeSpec);
+
+            // NOTE: This function is called BEFORE inheritance resolution, which may remove some newly implemented
+            // interfaces and convert them to reimplemented.
             foreach (CLRTypeSpec ifc in ifcType.m_newlyImplementedInterfaces)
-            {
                 AddExplicitInterface(builder, ifc);
-                //AddPassiveConversion(ifc);
-            }
 
             // Only add each explicit interface once
             foreach (CLRTypeSpec ifc in m_newlyImplementedInterfaces)
@@ -262,11 +273,13 @@ namespace AssemblyImporter.CppExport
             // interface is implemented.  For example, if a parent class implements an interface method by match,
             // and then a derived class hides that method with a newslot and reimplements the interface, then the
             // interface must link to the newslot method.
+            //
+            // This is further complicated by the II.12.2 dispatch rules, which have errors.
             // 
             // We might be able to optimize this a bit if we can detect that a method reimplementation is the
             // same as the one that already exists.
             //
-            // The other complication is that Roslyn sometimes emits useless but apparently legal .override
+            // The second complication is that Roslyn sometimes emits useless but apparently legal .override
             // directives that "override" a parent class implementation with the same method that already overrides
             // it from reuseslot matching.
 
@@ -277,18 +290,13 @@ namespace AssemblyImporter.CppExport
                 m_allVtableSlots.AddRange(parentClass.m_allVtableSlots);
 
                 List<CppVtableSlot> parentOverrideVisibleSlots = new List<CppVtableSlot>(parentClass.m_overrideVisibleVtableSlots);
-                List<CppVtableSlot> parentImplementationVisibleSlots = new List<CppVtableSlot>(parentClass.m_implementationVisibleVtableSlots);
 
                 foreach (CppMethod method in m_methods)
                 {
                     if (method.Virtual)
                     {
                         if (method.CreatesSlot != null)
-                        {
                             RemoveOverrides(parentOverrideVisibleSlots, method.CreatesSlot);
-                            if (method.MethodDef.MemberAccess == CLRMethodDefRow.MethodMemberAccess.Public)
-                                RemoveOverrides(parentImplementationVisibleSlots, method.CreatesSlot);
-                        }
 
                         if (method.Overrides)
                         {
@@ -300,8 +308,21 @@ namespace AssemblyImporter.CppExport
                     }
                 }
 
+                if (m_newImplementationVisibleVtableSlots.Count != 0)
+                    throw new Exception();
+
+                foreach (CppMethod method in m_methods)
+                {
+                    if (method.Virtual && method.MethodDef.MemberAccess == CLRMethodDefRow.MethodMemberAccess.Public)
+                    {
+                        if (method.Overrides)
+                            m_newImplementationVisibleVtableSlots.Add(method.ReplacesStandardSlot);
+                        else
+                            m_newImplementationVisibleVtableSlots.Add(method.CreatesSlot);
+                    }
+                }
+
                 m_overrideVisibleVtableSlots.AddRange(parentOverrideVisibleSlots);
-                m_implementationVisibleVtableSlots.AddRange(parentImplementationVisibleSlots);
             }
 
             if (parentClass != null)
@@ -389,6 +410,19 @@ namespace AssemblyImporter.CppExport
             if (typeDef.ContainerClass != null)
                 fullName = GenerateFullPath(typeDef.ContainerClass) + "." + fullName;
             return fullName;
+        }
+
+        public void CheckInterfaceLegality(CppBuilder cppBuilder)
+        {
+            if (this.TypeDef.IsSealed)
+                return;
+
+            foreach (CLRTypeSpec ifcType in m_newlyImplementedInterfaces)
+            {
+                CppClass ifcClass = cppBuilder.GetCachedClass(ifcType);
+                if (ifcClass.HaveAnyGenericMethods)
+                    throw new Exception(this.TypeDef.TypeNamespace + "." + this.TypeDef.TypeName + " must be sealed because it implements " + ifcType.ToString() + ", which contains virtual generic methods.");
+            }
         }
     }
 }

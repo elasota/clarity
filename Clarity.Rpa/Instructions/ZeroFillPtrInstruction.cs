@@ -8,6 +8,8 @@ namespace Clarity.Rpa.Instructions
     {
         private HighSsaRegister m_target;
 
+        public HighSsaRegister Target { get { return m_target; } }
+
         public ZeroFillPtrInstruction()
         {
         }

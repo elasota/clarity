@@ -9,5 +9,6 @@ namespace Clarity.RpaCompiler
     public class MethodHandle
     {
         public RloMethod Value { get; set; }
+        public MethodInstantiationPath InstantiationPath { get; set; }
     }
 }

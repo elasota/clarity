@@ -12,13 +12,14 @@ namespace AssemblyImporter.CppExport
         private CppMethod m_method;
         private VReg[] m_args;
         private VReg[] m_locals;
+        private VReg[] m_temporaries;
 
         private MemoryStream m_instructionStream;
         private StreamWriter m_instructionWriter;
         private CppRegisterAllocator m_regAllocator;
         private string m_frameVarName;
 
-        public CppMidCompiler(CppBuilder builder, CppClass cls, CppMethod method, ExceptionHandlingRegion mainRegion, string frameVarName, VReg[] args, VReg[] locals)
+        public CppMidCompiler(CppBuilder builder, CppClass cls, CppMethod method, ExceptionHandlingRegion mainRegion, string frameVarName, VReg[] args, VReg[] locals, VReg[] temporaries)
         {
             m_builder = builder;
             m_cls = cls;
@@ -26,6 +27,7 @@ namespace AssemblyImporter.CppExport
             m_mainRegion = mainRegion;
             m_args = args;
             m_locals = locals;
+            m_temporaries = temporaries;
             m_frameVarName = frameVarName;
 
             m_instructionStream = new MemoryStream();
@@ -63,6 +65,7 @@ namespace AssemblyImporter.CppExport
 
             VRegsToHighLocals(m_args, highArgs, localLookup);
             VRegsToHighLocals(m_locals, highLocals, localLookup);
+            VRegsToHighLocals(m_temporaries, highLocals, localLookup);
 
             CppRegionEmitter emitter = new CppRegionEmitter(m_builder, m_mainRegion, m_regAllocator, localLookup);
             Clarity.Rpa.HighRegion mainRegion = emitter.Emit();

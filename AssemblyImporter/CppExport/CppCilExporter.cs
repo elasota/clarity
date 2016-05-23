@@ -107,13 +107,15 @@ namespace AssemblyImporter.CppExport
             foreach (VReg vReg in args)
                 vReg.Liven();
 
+            List<VReg> temporaries = new List<VReg>();
+
             ExceptionHandlingRegion mainRegion = new ExceptionHandlingRegion(null, builder, method, 0, (uint)method.MethodDef.Method.Instructions.Length - 1, null);
             {
-                CfgBuilder cfgBuilder = new CfgBuilder(mainRegion, builder, cls, method, args.ToArray(), locals.ToArray());
+                CfgBuilder cfgBuilder = new CfgBuilder(mainRegion, builder, cls, method, args.ToArray(), locals.ToArray(), temporaries);
                 mainRegion.RootCfgNode = cfgBuilder.RootNode;
             }
 
-            CppMidCompiler midCompiler = new CppMidCompiler(builder, cls, method, mainRegion, "bTLFrame", args.ToArray(), locals.ToArray());
+            CppMidCompiler midCompiler = new CppMidCompiler(builder, cls, method, mainRegion, "bTLFrame", args.ToArray(), locals.ToArray(), temporaries.ToArray());
 
             midCompiler.EmitAll(fileBuilder, writer);
 

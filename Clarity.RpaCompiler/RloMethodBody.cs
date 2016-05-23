@@ -6,14 +6,24 @@ namespace Clarity.RpaCompiler
 {
     public class RloMethodBody
     {
-        private HighLocal[] m_locals;
-        private HighCfgNodeHandle m_entryNode;
-
-        public HighCfgNodeHandle EntryNode { get { return m_entryNode; } }
+        public HighRegion EntryRegion { get { return m_entryRegion; } }
         public HighLocal[] Locals { get { return m_locals; } }
+        public TypeSpecTag ReturnType { get { return m_returnType; } }
+        public MethodInstantiationPath InstantiationPath { get { return m_instantiationPath; } }
+        public MethodSpecTag MethodSpec { get { return m_methodSpec; } }
 
-        public RloMethodBody(Compiler compiler, HighMethod method, TypeSpecClassTag thisType, bool isStruct, RloInstantiationParameters instParams)
+        private HighLocal[] m_locals;
+        private TypeSpecTag m_returnType;
+        private HighCfgNodeHandle m_entryNode;
+        private HighRegion m_entryRegion;
+        private MethodInstantiationPath m_instantiationPath;
+        private MethodSpecTag m_methodSpec;
+
+        public RloMethodBody(Compiler compiler, HighMethod method, MethodSpecTag methodSpec, TypeSpecClassTag thisType, bool isStruct, RloInstantiationParameters instParams, MethodInstantiationPath methodInstantiationPath)
         {
+            m_instantiationPath = methodInstantiationPath;
+            m_methodSpec = methodSpec;
+
             HighMethodBody methodBody = method.MethodBody;
             TagRepository tagRepo = compiler.TagRepository;
 
@@ -70,11 +80,12 @@ namespace Clarity.RpaCompiler
 
             HighLocal[] locals = mergedLocals.ToArray();
 
-            RloMethodConverter methodConverter = new RloMethodConverter(compiler.TagRepository, instParams, locals);
+            RloMethodConverter methodConverter = new RloMethodConverter(compiler.TagRepository, instParams, method.MethodSignature.RetType, locals);
             RloRegionConverter regionConverter = new RloRegionConverter(methodConverter, methodBody.MainRegion, true);
 
-            m_locals = locals;
-            m_entryNode = regionConverter.EntryNode;
+            m_locals = methodConverter.Locals;
+            m_returnType = methodConverter.ReturnType;
+            m_entryRegion = new HighRegion(regionConverter.EntryNode);
 
             RloFindPredecessorsAndSuccessorsPass psPass = new RloFindPredecessorsAndSuccessorsPass(compiler, this);
             psPass.Run();

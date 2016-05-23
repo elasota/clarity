@@ -8,6 +8,8 @@ namespace Clarity.Rpa.Instructions
     {
         private HighSsaRegister m_value;
 
+        public HighSsaRegister Value { get { return m_value; } }
+
         public ReturnValueInstruction()
         {
         }

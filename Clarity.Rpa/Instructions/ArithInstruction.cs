@@ -15,6 +15,13 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_right;
         private bool m_checkOverflow;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public NumberArithOp ArithOp { get { return m_arithOp; } }
+        public NumberArithType ArithType { get { return m_arithType; } }
+        public HighSsaRegister Left { get { return m_left; } }
+        public HighSsaRegister Right { get { return m_right; } }
+        public bool CheckOverflow { get { return m_checkOverflow; } }
+
         public override Opcodes Opcode { get { return Opcodes.Arith; } }
 
         public ArithInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, NumberArithOp arithOp, NumberArithType arithType, HighSsaRegister left, HighSsaRegister right, bool checkOverflow)

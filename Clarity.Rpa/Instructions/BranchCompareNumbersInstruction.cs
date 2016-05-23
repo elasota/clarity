@@ -13,6 +13,13 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_right;
         private NumberArithType m_numberType;
 
+        public NumberCompareOperation Operation { get { return m_operation; } }
+        public HighCfgEdge TrueNode { get { return m_trueNode; } }
+        public HighCfgEdge FalseNode { get { return m_falseNode; } }
+        public HighSsaRegister Left { get { return m_left; } }
+        public HighSsaRegister Right { get { return m_right; } }
+        public NumberArithType ArithType { get { return m_numberType; } }
+
         public override Opcodes Opcode { get { return Opcodes.BranchCompareNumbers; } }
 
         public override bool TerminatesControlFlow { get { return true; } }

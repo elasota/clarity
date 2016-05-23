@@ -14,9 +14,7 @@ namespace AssemblyImporter.CppExport
             foreach (CLRMethodSignatureInstanceParam p in methodSignature.ParamTypes)
                 paramTags.Add(CreateMethodSignatureParam(p));
 
-            return new MethodSignatureTag(methodSignature.HasThis,
-                methodSignature.ExplicitThis,
-                methodSignature.NumGenericParameters,
+            return new MethodSignatureTag(methodSignature.NumGenericParameters,
                 CreateTypeTag(methodSignature.RetType),
                 paramTags.ToArray());
         }

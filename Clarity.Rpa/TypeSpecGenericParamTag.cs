@@ -11,6 +11,8 @@ namespace Clarity.Rpa
         public TypeSpecGenericParamTypeTag GenericParamType { get { return m_genericParamType; } }
         public uint Index { get { return m_index; } }
 
+        public override SubTypeCode SubType { get { return SubTypeCode.GenericParameter; } }
+
         public TypeSpecGenericParamTag(TypeSpecGenericParamTypeTag genericParamType, uint index)
         {
             m_genericParamType = genericParamType;
@@ -73,6 +75,11 @@ namespace Clarity.Rpa
             else if (m_genericParamType.Value == TypeSpecGenericParamTypeTag.Values.MVar)
                 return methodParams[m_index];
             throw new Exception();
+        }
+
+        public override string ToString()
+        {
+            return m_genericParamType.ToString() + m_index.ToString();
         }
     }
 }

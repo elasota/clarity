@@ -7,7 +7,7 @@
             T PassThrough<T>(T v);
         }
 
-        public class MyClass : ISimpleReturn
+        public sealed class MyClass : ISimpleReturn
         {
             public T PassThrough<T>(T v)
             {

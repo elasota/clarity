@@ -9,6 +9,9 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_ptr;
         private HighSsaRegister m_value;
 
+        public HighSsaRegister Ptr { get { return m_ptr; } }
+        public HighSsaRegister Value { get { return m_value; } }
+
         public StorePtrInstruction()
         {
         }

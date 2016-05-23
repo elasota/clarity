@@ -64,6 +64,39 @@ namespace Clarity.Rpa
             return new MethodSpecTag(slotType, paramTypes, (TypeSpecClassTag)declaringClass, declTag);
         }
 
+        public MethodSpecTag Instantiate(TagRepository tagRepo, TypeSpecTag[] typeParams, TypeSpecTag[] methodParams)
+        {
+            int numGenericParameters = m_genericParameters.Length;
+
+            TypeSpecTag[] genericParameters;
+
+            bool anyChanged = false;
+            if (numGenericParameters == 0)
+                genericParameters = m_genericParameters;
+            else
+            {
+                genericParameters = new TypeSpecTag[numGenericParameters];
+                for (int i = 0; i < numGenericParameters; i++)
+                {
+                    TypeSpecTag param = m_genericParameters[i];
+                    TypeSpecTag newParam = param.Instantiate(tagRepo, typeParams, methodParams);
+                    genericParameters[i] = newParam;
+
+                    if (param != newParam)
+                        anyChanged = true;
+                }
+            }
+
+            TypeSpecClassTag declaringClass = (TypeSpecClassTag)m_declaringClass.Instantiate(tagRepo, typeParams, methodParams);
+            if (declaringClass != m_declaringClass)
+                anyChanged = true;
+
+            if (!anyChanged)
+                return this;
+
+            return tagRepo.InternMethodSpec(new MethodSpecTag(m_methodSlotType, genericParameters, declaringClass, m_methodDeclTag));
+        }
+
         public override bool Equals(object obj)
         {
             MethodSpecTag tOther = obj as MethodSpecTag;
@@ -100,6 +133,24 @@ namespace Clarity.Rpa
             }
 
             return true;
+        }
+
+        public override string ToString()
+        {
+            string result = this.MethodDecl.ToString();
+            int numGenericParams = this.GenericParameters.Length;
+            if (numGenericParams != 0)
+            {
+                result += "<";
+                for (int i = 0; i < numGenericParams; i++)
+                {
+                    if (i != 0)
+                        result += ",";
+                    result += this.GenericParameters[i].ToString();
+                }
+                result += ">";
+            }
+            return result;
         }
     }
 }

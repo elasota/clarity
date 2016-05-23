@@ -12,6 +12,11 @@ namespace Clarity.Rpa.Instructions
         private HighCfgEdge m_equalNode;
         private HighCfgEdge m_notEqualNode;
 
+        public HighSsaRegister SrcA { get { return m_regA; } }
+        public HighSsaRegister SrcB { get { return m_regB; } }
+        public HighCfgEdge EqualEdge { get { return m_equalNode; } }
+        public HighCfgEdge NotEqualEdge { get { return m_notEqualNode; } }
+
         public override Opcodes Opcode { get { return Opcodes.BranchCompareRefs; } }
         public override bool TerminatesControlFlow { get { return true; } }
 

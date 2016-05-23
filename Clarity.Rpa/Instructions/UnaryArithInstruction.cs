@@ -11,6 +11,11 @@ namespace Clarity.Rpa.Instructions
         private NumberArithType m_arithType;
         private HighSsaRegister m_src;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public HighSsaRegister Src { get { return m_src; } }
+        public NumberUnaryArithOp ArithOp { get { return m_arithOp; } }
+        public NumberArithType ArithType { get { return m_arithType; } }
+
         public override Opcodes Opcode { get { return Opcodes.UnaryArith; } }
 
         public UnaryArithInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, NumberUnaryArithOp arithOp, NumberArithType arithType, HighSsaRegister src)

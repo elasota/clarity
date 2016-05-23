@@ -9,6 +9,9 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_dest;
         private HighSsaRegister m_src;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public HighSsaRegister Src { get { return m_src; } }
+
         public ForceDynamicCastInstruction()
         {
         }

@@ -9,6 +9,9 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_dest;
         private MethodSpecTag m_methodSpec;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public MethodSpecTag MethodSpec { get { return m_methodSpec; } }
+
         public BindStaticDelegateInstruction()
         {
         }

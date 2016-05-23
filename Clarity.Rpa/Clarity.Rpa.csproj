@@ -71,6 +71,7 @@
     <Compile Include="HighUnresolvedPhiCollection.cs" />
     <Compile Include="HighValueType.cs" />
     <Compile Include="HighClassVtableSlot.cs" />
+    <Compile Include="HighVariance.cs" />
     <Compile Include="IInternable.cs" />
     <Compile Include="ILocalUsingInstruction.cs" />
     <Compile Include="IMethodReferencingInstruction.cs" />
@@ -116,7 +117,6 @@
     <Compile Include="HighPhiLink.cs" />
     <Compile Include="Instructions\PtrFieldInstruction.cs" />
     <Compile Include="Instructions\RefFieldInstruction.cs" />
-    <Compile Include="Instructions\RefLocalInstruction.cs" />
     <Compile Include="Instructions\LoadLocalInstruction.cs" />
     <Compile Include="Instructions\NumberArithType.cs" />
     <Compile Include="Instructions\NumberCompareOperation.cs" />

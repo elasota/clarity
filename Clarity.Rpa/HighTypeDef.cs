@@ -23,6 +23,7 @@ namespace Clarity.Rpa
         private TypeSemantics m_semantics;
         private TypeNameTag m_typeName;
         private TypeSpecClassTag m_parentClass;
+        private TypeSpecClassTag[] m_parentInterfaces;
         private HighMethod[] m_methods;
         private HighField[] m_instanceFields;
         private HighField[] m_staticFields;
@@ -31,7 +32,9 @@ namespace Clarity.Rpa
         private HighInterfaceImplementation[] m_interfaceImpls;
         private HighEnumLiteral[] m_enumLiterals;
         private uint m_numGenericParameters;
+        private HighVariance[] m_genericParameterVariance;
         private bool m_isSealed;
+        private bool m_isAbstract;
         private EnumUnderlyingType m_underlyingType;
         private MethodSignatureTag m_delegateSignature;
         private bool m_isMulticastDelegate;
@@ -39,6 +42,7 @@ namespace Clarity.Rpa
         public TypeNameTag TypeName { get { return m_typeName; } }
         public TypeSemantics Semantics { get { return m_semantics; } }
         public TypeSpecClassTag ParentClass { get { return m_parentClass; } }
+        public TypeSpecClassTag[] ParentInterfaces { get { return m_parentInterfaces; } }
         public HighMethod[] Methods { get { return m_methods; } }
         public HighField[] InstanceFields { get { return m_instanceFields; } }
         public HighField[] StaticFields { get { return m_staticFields; } }
@@ -47,9 +51,13 @@ namespace Clarity.Rpa
         public HighInterfaceImplementation[] InterfaceImpls { get { return m_interfaceImpls; } }
         public uint NumGenericParameters { get { return m_numGenericParameters; } }
         public bool IsSealed { get { return m_isSealed; } }
+        public bool IsAbstract { get { return m_isAbstract; } }
         public EnumUnderlyingType UnderlyingType { get { return m_underlyingType; } }
         public MethodSignatureTag DelegateSignature { get { return m_delegateSignature; } }
         public bool IsMulticastDelegate { get { return m_isMulticastDelegate; } }
+
+        public HighVariance GenericParameterVariance(int index) { return m_genericParameterVariance[index]; }
+        public HighVariance GenericParameterVariance(uint index) { return m_genericParameterVariance[index]; }
 
         public void Read(TagRepository rpa, CatalogReader catalog, BinaryReader reader)
         {
@@ -63,7 +71,7 @@ namespace Clarity.Rpa
                 case TypeSemantics.Delegate:
                     break;
                 default:
-                    throw new Exception("Invalid type semantics");
+                    throw new RpaLoadException("Invalid type semantics");
             }
 
             m_typeName = catalog.GetTypeName(reader.ReadUInt32());
@@ -145,9 +153,31 @@ namespace Clarity.Rpa
             m_underlyingType = (EnumUnderlyingType)underlyingTypeSymbol;
         }
 
+        private void ReadGenericParameterVariance(BinaryReader reader)
+        {
+            m_genericParameterVariance = new HighVariance[m_numGenericParameters];
+
+            for (uint i = 0; i < m_numGenericParameters; i++)
+            {
+                HighVariance variance = (HighVariance)reader.ReadByte();
+                switch (variance)
+                {
+                    case HighVariance.Contravariant:
+                    case HighVariance.Covariant:
+                    case HighVariance.None:
+                        break;
+                    default:
+                        throw new RpaLoadException("Invalid variance");
+                }
+                m_genericParameterVariance[i] = variance;
+            }
+        }
+
         private void ReadDelegate(TagRepository rpa, CatalogReader catalog, BinaryReader reader)
         {
             m_isMulticastDelegate = reader.ReadBoolean();
+            m_numGenericParameters = reader.ReadUInt32();
+            ReadGenericParameterVariance(reader);
             m_delegateSignature = catalog.GetMethodSignature(reader.ReadUInt32());
             if (m_delegateSignature.NumGenericParameters > 0)
                 throw new Exception("Delegate has generic parameters");
@@ -173,6 +203,7 @@ namespace Clarity.Rpa
             if (m_semantics == TypeSemantics.Class)
             {
                 m_isSealed = reader.ReadBoolean();
+                m_isAbstract = reader.ReadBoolean();
 
                 uint parentClassIndex = reader.ReadUInt32();
                 if (parentClassIndex == 0)
@@ -192,6 +223,34 @@ namespace Clarity.Rpa
                     m_parentClass = clsTag;
                 }
             }
+
+            if (m_semantics == TypeSemantics.Struct || m_semantics == TypeSemantics.Enum)
+            {
+                m_isSealed = true;
+                m_isAbstract = false;
+            }
+
+            if (m_semantics == TypeSemantics.Interface)
+            {
+                m_isSealed = false;
+                m_isAbstract = true;
+
+                ReadGenericParameterVariance(reader);
+            }
+
+            uint numInterfaces = reader.ReadUInt32();
+
+            TypeSpecClassTag[] interfaces = new TypeSpecClassTag[numInterfaces];
+
+            for (uint i = 0; i < numInterfaces; i++)
+            {
+                TypeSpecTag typeSpec = catalog.GetTypeSpec(reader.ReadUInt32());
+                TypeSpecClassTag classTag = typeSpec as TypeSpecClassTag;
+                if (classTag == null)
+                    throw new RpaLoadException("Interface implementation is not a class tag");
+                interfaces[i] = classTag;
+            }
+            m_parentInterfaces = interfaces;
 
             this.ReadVtableThunks(rpa, catalog, reader);
 

@@ -6,9 +6,12 @@ using System.Text;
 
 namespace Clarity.Rpa.Instructions
 {
+    // The only thing that a CatchInstruction does is return the current exception
     public class CatchInstruction : HighInstruction
     {
         private HighSsaRegister m_dest;
+
+        public HighSsaRegister Dest { get { return m_dest; } }
 
         public override Opcodes Opcode { get { return Opcodes.Catch; } }
 

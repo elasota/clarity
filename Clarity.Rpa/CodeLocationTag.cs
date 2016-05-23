@@ -18,5 +18,10 @@ namespace Clarity.Rpa
             m_methodDecl = methodDecl;
             m_offset = offset;
         }
+
+        public override string ToString()
+        {
+            return m_offset.ToString();
+        }
     }
 }

@@ -7,6 +7,9 @@ namespace Clarity.Rpa
         private string m_name;
         private TypeSpecTag m_type;
 
+        public string Name { get { return m_name; } }
+        public TypeSpecTag Type { get { return m_type; } }
+
         public HighField(string name, TypeSpecTag type)
         {
             m_name = name;

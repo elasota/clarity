@@ -5,18 +5,23 @@ namespace Clarity.Rpa
 {
     public abstract class TypeSpecTag : IInternable
     {
-        protected enum SubTypeCode
+        public enum SubTypeCode
         {
             Array,
             Class,
             GenericParameter,
             Void,
+
+            // Internal types
+            StaticDelegate,
         }
 
         public abstract void Write(StreamWriter writer);
         public abstract void Write(HighFileBuilder highFileBuilder, BinaryWriter catalogWriter);
         public abstract override int GetHashCode();
         public abstract override bool Equals(object other);
+        public abstract override string ToString();
+        public abstract SubTypeCode SubType { get; }
         public bool IsInterned { get; set; }
 
         public static TypeSpecTag ReadVariant(CatalogReader rpa, BinaryReader reader)

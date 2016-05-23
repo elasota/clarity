@@ -51,7 +51,7 @@ namespace Clarity.Rpa
                 case HighValueType.ReferenceValue:
                     break;
                 default:
-                    throw new Exception("Invalid SSA destination type");
+                    throw new RpaLoadException("Invalid SSA destination type");
             }
 
             return new HighSsaRegister(vt, type, null);

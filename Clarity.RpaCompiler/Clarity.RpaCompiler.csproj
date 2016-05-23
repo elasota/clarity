@@ -40,11 +40,30 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AssignabilityResolver.cs" />
+    <Compile Include="CliInterfaceImplSlot.cs" />
+    <Compile Include="CliType.cs" />
+    <Compile Include="Instructions\AllocInstanceDelegateInstruction.cs" />
+    <Compile Include="Instructions\RloConvertNumberInstruction.cs" />
+    <Compile Include="Instructions\GetRloFieldInfo.cs" />
+    <Compile Include="Instructions\LoadValueRloFieldInstruction.cs" />
+    <Compile Include="MethodInstantiationPath.cs" />
+    <Compile Include="Instructions\CallRloInterfaceMethodInstruction.cs" />
+    <Compile Include="Instructions\CallRloVirtualMethodInstruction.cs" />
+    <Compile Include="Instructions\CallRloStaticMethodInstruction.cs" />
+    <Compile Include="Instructions\CallRloInstanceMethodInstruction.cs" />
     <Compile Include="CliClass.cs" />
     <Compile Include="CliInterface.cs" />
     <Compile Include="CliInterfaceImpl.cs" />
     <Compile Include="CliMethodIndex.cs" />
     <Compile Include="CliVtableSlot.cs" />
+    <Compile Include="CompilerConfig.cs" />
+    <Compile Include="Instructions\BoxNullableInstruction.cs" />
+    <Compile Include="Instructions\CopyInstruction.cs" />
+    <Compile Include="Instructions\InterfaceToInterfaceInstruction.cs" />
+    <Compile Include="Instructions\InterfaceToObjectInstruction.cs" />
+    <Compile Include="Instructions\ObjectToInterfaceInstruction.cs" />
+    <Compile Include="Instructions\ObjectToObjectInstruction.cs" />
     <Compile Include="ISsaInterchange.cs" />
     <Compile Include="MethodHandle.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -68,10 +87,9 @@
     <Compile Include="RloUseDefCatalog.cs" />
     <Compile Include="RloValueType.cs" />
     <Compile Include="RpaCompileException.cs" />
+    <Compile Include="TypeSpecStaticDelegateTag.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Instructions\" />
-  </ItemGroup>
+  <ItemGroup />
   <ItemGroup>
     <ProjectReference Include="..\Clarity.Rpa\Clarity.Rpa.csproj">
       <Project>{2f2d5d92-7043-49ab-8e8e-2c608d9319f5}</Project>

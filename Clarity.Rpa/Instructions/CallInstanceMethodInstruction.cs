@@ -13,6 +13,11 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_instanceReg;
         private HighSsaRegister[] m_parameters;
 
+        public HighSsaRegister ReturnDest { get { return m_returnDestReg; } }
+        public MethodSpecTag MethodSpec { get { return m_methodSpec; } }
+        public HighSsaRegister InstanceSrc { get { return m_instanceReg; } }
+        public HighSsaRegister[] Parameters { get { return m_parameters; } }
+
         public override Opcodes Opcode { get { return Opcodes.CallInstanceMethod; } }
 
         public CallInstanceMethodInstruction(CodeLocationTag codeLocation, HighSsaRegister returnDestReg, MethodSpecTag methodSpec, HighSsaRegister instanceReg, HighSsaRegister[] parameters)

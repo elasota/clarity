@@ -7,12 +7,12 @@ namespace Clarity.RpaCompiler
     public class CliInterfaceImpl
     {
         private TypeSpecClassTag m_interface;
-        private uint[] m_ifcSlotToClassVtableSlot;
+        private CliInterfaceImplSlot[] m_ifcSlotToClassVtableSlot;
 
         public TypeSpecClassTag Interface { get { return m_interface; } }
-        public uint[] IfcSlotToClassVtableSlot { get { return m_ifcSlotToClassVtableSlot; } }
+        public CliInterfaceImplSlot[] IfcSlotToClassVtableSlot { get { return m_ifcSlotToClassVtableSlot; } }
 
-        public CliInterfaceImpl(TypeSpecClassTag ifc, uint[] ifcSlotToClassVtableSlot)
+        public CliInterfaceImpl(TypeSpecClassTag ifc, CliInterfaceImplSlot[] ifcSlotToClassVtableSlot)
         {
             m_interface = ifc;
             m_ifcSlotToClassVtableSlot = ifcSlotToClassVtableSlot;

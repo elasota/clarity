@@ -1,2 +1,4 @@
 Check vtable validity
 Check interface variance validity
+Check TypeSpecClassTag generic parameter count during load
+Check that non-abstract class has no abstract methods

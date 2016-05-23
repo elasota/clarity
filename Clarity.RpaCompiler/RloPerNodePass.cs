@@ -24,7 +24,7 @@ namespace Clarity.RpaCompiler
 
         public void Run()
         {
-            QueueNode(m_methodBody.EntryNode.Value);
+            QueueNode(m_methodBody.EntryRegion.EntryNode.Value);
 
             HighInstruction.VisitCfgEdgeDelegate edgeVisitor = delegate (ref HighCfgEdge cfgEdge)
             {

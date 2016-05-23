@@ -33,6 +33,7 @@ namespace rpac
 
             compiler.CompileOpenClasses();
 
+            Console.WriteLine("Compiling methods...");
             foreach (Clarity.Rpa.HighTypeDef typeDef in compiler.TypeDefs)
             {
                 if ((typeDef.Semantics == Clarity.Rpa.TypeSemantics.Class || typeDef.Semantics == Clarity.Rpa.TypeSemantics.Struct)
@@ -52,7 +53,7 @@ namespace rpac
                                 method.MethodDeclTag
                                 );
                             methodSpecTag = compiler.TagRepository.InternMethodSpec(methodSpecTag);
-                            compiler.InstantiateMethod(methodSpecTag);
+                            compiler.InstantiateMethod(methodSpecTag, null);
                         }
                     }
                 }

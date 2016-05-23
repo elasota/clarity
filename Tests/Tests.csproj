@@ -43,9 +43,17 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="TestAbstractPartialImplementation.cs" />
+    <Compile Include="TestArrayConstrainedToInterface.cs" />
+    <Compile Include="TestArrayElementCompatibility.cs" />
     <Compile Include="TestArrayGenericCollections.cs" />
+    <Compile Include="TestArrayGenericInterfaceConvergence.cs" />
     <Compile Include="TestBoolean.cs" />
+    <Compile Include="TestGenericInterfaceMethod.cs" />
+    <Compile Include="TestGenericEHRegion.cs" />
     <Compile Include="TestGenericVirtualCall.cs" />
+    <Compile Include="TestInexactInterfaceImplementation.cs" />
+    <Compile Include="TestInheritedConstrainedGenericCall.cs" />
+    <Compile Include="TestInheritedImplementationDeprioritization.cs" />
     <Compile Include="TestMDO.cs" />
     <Compile Include="TestApi.cs" />
     <Compile Include="TestArrayComparisons.cs" />
@@ -67,8 +75,11 @@
     <Compile Include="TestMulticastDelegate.cs" />
     <Compile Include="TestMultidimensionalArray.cs" />
     <Compile Include="TestNewSlotImplementation.cs" />
+    <Compile Include="TestNewStruct.cs" />
     <Compile Include="TestNonPublicImplementation.cs" />
+    <Compile Include="TestNullable.cs" />
     <Compile Include="TestNullableGeneric.cs" />
+    <Compile Include="TestNullArrayLength.cs" />
     <Compile Include="TestSimpleGenerics.cs" />
     <Compile Include="TestSlotDivergence.cs" />
     <Compile Include="TestDelegateContravariance.cs" />
@@ -83,6 +94,7 @@
     <Compile Include="TestStaticFields.cs" />
     <Compile Include="TestStaticInitializers.cs" />
     <Compile Include="TestStructBaseMethods.cs" />
+    <Compile Include="TestStructDelegate.cs" />
     <Compile Include="TestStructInterfaces.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TestArrayCovariance.cs" />
@@ -90,6 +102,7 @@
     <Compile Include="TestUnsignedToFloat.cs" />
     <Compile Include="TestValueTypeCalls.cs" />
     <Compile Include="TestVariance.cs" />
+    <Compile Include="TestVariantConstraint.cs" />
     <Compile Include="TestVirtualDelegate.cs" />
     <Compile Include="TestVirtualStructBoxing.cs" />
     <Compile Include="TestTypeOf.cs" />

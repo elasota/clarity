@@ -22,6 +22,7 @@ namespace AssemblyImporter.CppExport
         public CppMethod CppMethod { get { return m_method; } }
         public VReg[] Args { get { return m_args; } }
         public VReg[] Locals { get { return m_locals; } }
+        public IList<VReg> Temporaries { get { return m_temporaries; } }
         public HLInstruction[] CilInstructions { get { return m_instrs; } }
         public CLRTypeDefRow InClass { get { return m_inClass; } }
         public CLRMethodDefRow InMethod { get { return m_inMethod; } }
@@ -34,6 +35,7 @@ namespace AssemblyImporter.CppExport
         private CppMethod m_method;
         private VReg[] m_args;
         private VReg[] m_locals;
+        private IList<VReg> m_temporaries;
         private HLInstruction[] m_instrs;
         private ExceptionHandlingRegion m_region;
         private IDictionary<uint, ExceptionHandlingCluster> m_ehClusters;
@@ -52,13 +54,14 @@ namespace AssemblyImporter.CppExport
 
         private CfgNode m_rootNode;
 
-        public CfgBuilder(ExceptionHandlingRegion region, CppBuilder builder, CppClass cls, CppMethod method, VReg[] args, VReg[] locals)
+        public CfgBuilder(ExceptionHandlingRegion region, CppBuilder builder, CppClass cls, CppMethod method, VReg[] args, VReg[] locals, IList<VReg> temporaries)
         {
             m_builder = builder;
             m_cls = cls;
             m_method = method;
             m_args = args;
             m_locals = locals;
+            m_temporaries = temporaries;
             m_instrs = method.MethodDef.Method.Instructions;
             m_inClass = cls.TypeDef;
             m_inMethod = method.MethodDef;

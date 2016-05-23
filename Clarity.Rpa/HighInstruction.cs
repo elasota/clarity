@@ -56,7 +56,6 @@ namespace Clarity.Rpa
             UnboxValue,
             Switch,
             Throw,
-            RefLocal,
             StorePtr,
             GetFieldInfo,
             LoadValueField,
@@ -64,6 +63,24 @@ namespace Clarity.Rpa
             BindInstanceDelegate,
             BindVirtualDelegate,
             Catch,
+
+            FirstInternalOpcode,
+
+            Copy = FirstInternalOpcode,
+            BoxNullable,
+            CallRloInstanceMethod,
+            CallRloVirtualMethod,
+            CallRloStaticMethod,
+            CallRloInterfaceMethod,
+
+            InterfaceToObject,
+            InterfaceToInterface,
+            ObjectToObject,
+            ObjectToInterface,
+            GetRloFieldInfo,
+            LoadValueRloField,
+            AllocInstanceDelegate,
+            RloConvertNumber,
         }
 
         public HighInstruction()
@@ -269,9 +286,6 @@ namespace Clarity.Rpa
                     break;
                 case Opcodes.Throw:
                     instr = new Instructions.ThrowInstruction();
-                    break;
-                case Opcodes.RefLocal:
-                    instr = new Instructions.RefLocalInstruction();
                     break;
                 case Opcodes.StorePtr:
                     instr = new Instructions.StorePtrInstruction();

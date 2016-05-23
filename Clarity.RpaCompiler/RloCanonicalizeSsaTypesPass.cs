@@ -27,7 +27,6 @@ namespace Clarity.RpaCompiler
 
         private void ProcessSsa(HighSsaRegister ssaReg)
         {
-
             switch (ssaReg.ValueType)
             {
                 case HighValueType.ConstantValue:
@@ -71,7 +70,28 @@ namespace Clarity.RpaCompiler
                         else if (ssaReg.ValueType == HighValueType.ReferenceValue)
                         {
                             if (isValueType)
+                            {
+                                if (tsTag is TypeSpecClassTag)
+                                {
+                                    TypeSpecClassTag tsClass = (TypeSpecClassTag)tsTag;
+                                    TypeNameTag typeName = tsClass.TypeName;
+                                    if (typeName.ContainerType == null && typeName.AssemblyName == "mscorlib" && typeName.TypeNamespace == "System" && typeName.TypeName == "Nullable`1")
+                                    {
+                                        TypeSpecTag nullableTypeArg = tsClass.ArgTypes[0];
+
+                                        if (!(nullableTypeArg is TypeSpecClassTag))
+                                            throw new RpaCompileException("Boxed nullable type subscript is not a class");
+
+                                        TypeSpecClassTag nullableTypeClass = (TypeSpecClassTag)nullableTypeArg;
+                                        TypeSemantics semantics = this.Compiler.GetTypeDef(nullableTypeClass.TypeName).Semantics;
+                                        if (semantics != TypeSemantics.Enum && semantics != TypeSemantics.Struct)
+                                            throw new RpaCompileException("Boxed nullable type subscript is not a value type");
+
+                                        tsTag = nullableTypeClass;
+                                    }
+                                }
                                 m_ssaReplacements.Add(ssaReg, new HighSsaRegister(HighValueType.BoxedValue, tsTag, ssaReg.ConstantValue));
+                            }
                         }
                         else
                             throw new Exception();

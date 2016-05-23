@@ -9,6 +9,10 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_src;
         private bool m_checkOverflow;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public HighSsaRegister Src { get { return m_src; } }
+        public bool CheckOverflow { get { return m_checkOverflow; } }
+
         public override Opcodes Opcode { get { return Opcodes.NumberConvert; } }
 
         public NumberConvertInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighSsaRegister src, bool checkOverflow)

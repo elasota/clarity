@@ -8,6 +8,8 @@ namespace Clarity.Rpa.Instructions
     {
         private HighSsaRegister m_exception;
 
+        public HighSsaRegister Exception { get { return m_exception; } }
+
         public ThrowInstruction()
         {
         }

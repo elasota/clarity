@@ -10,7 +10,7 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_src;
 
         public HighSsaRegister Dest { get { return m_dest; } }
-        public HighSsaRegister Source { get { return m_src; } }
+        public HighSsaRegister Src { get { return m_src; } }
 
         public PassiveConvertInstruction()
         {

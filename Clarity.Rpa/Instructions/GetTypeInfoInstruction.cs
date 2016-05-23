@@ -11,6 +11,9 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_dest;
         private TypeSpecTag m_type;
 
+        public HighSsaRegister Dest { get { return m_dest; } }
+        public TypeSpecTag Type { get { return m_type; } }
+
         public GetTypeInfoInstruction()
         {
         }

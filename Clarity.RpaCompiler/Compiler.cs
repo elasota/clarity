@@ -19,20 +19,24 @@ namespace Clarity.RpaCompiler
         private UniqueQueue<TypeNameTag, CliClass> m_openClasses = new UniqueQueue<TypeNameTag, CliClass>();
         private Dictionary<TypeSpecClassTag, CliClass> m_closedClasses = new Dictionary<TypeSpecClassTag, CliClass>();
 
-        private Dictionary<TypeNameTag, CliInterface> m_openInterfaces = new Dictionary<TypeNameTag, CliInterface>();
+        private UniqueQueue<TypeNameTag, CliInterface> m_openInterfaces = new UniqueQueue<TypeNameTag, CliInterface>();
         private Dictionary<TypeSpecClassTag, CliInterface> m_closedInterfaces = new Dictionary<TypeSpecClassTag, CliInterface>();
-
         private Dictionary<RloType, RloType> m_internedRloTypes = new Dictionary<RloType, RloType>();
-
         private RloTypedRefType m_internedTypedRefType = new RloTypedRefType();
-
         private TagRepository m_tagRepository = new TagRepository();
+        private CompilerConfig m_compilerConfig = new CompilerConfig();
+        private AssignabilityResolver m_assignabilityResolver;
 
         public TagRepository TagRepository { get { return m_tagRepository; } }
-
         public IEnumerable<HighTypeDef> TypeDefs{ get { return m_typeDefsList; } }
-
         public RloTypedRefType InternedRloTypedRefType { get { return m_internedTypedRefType; } }
+        public CompilerConfig Config { get { return m_compilerConfig; } }
+        public AssignabilityResolver AssignabilityResolver { get { return m_assignabilityResolver; } }
+
+        public Compiler()
+        {
+            m_assignabilityResolver = new AssignabilityResolver(this);
+        }
 
         public void LoadRpa(BinaryReader reader)
         {
@@ -53,10 +57,10 @@ namespace Clarity.RpaCompiler
             typeDef.Read(m_tagRepository, catalog, reader);
 
             if (m_typeDefsDict.ContainsKey(typeDef.TypeName))
-                throw new Exception("Type defined multiple times");
+                throw new RpaLoadException("Type defined multiple times");
 
             if (catalog.AssemblyName != typeDef.TypeName.AssemblyName)
-                throw new Exception("Type declared outside of its assembly");
+                throw new RpaLoadException("Type declared outside of its assembly");
 
             Console.WriteLine(typeDef.TypeName.ToString());
 
@@ -73,7 +77,8 @@ namespace Clarity.RpaCompiler
                 while (m_methodInstances.HaveNext)
                 {
                     KeyValuePair<MethodSpecTag, MethodHandle> methodInstance = m_methodInstances.GetNext();
-                    methodInstance.Value.Value = new RloMethod(this, methodInstance.Key);
+                    MethodHandle handle = methodInstance.Value;
+                    handle.Value = new RloMethod(this, methodInstance.Key, handle.InstantiationPath);
                     anyNew = true;
                 }
             }
@@ -81,6 +86,47 @@ namespace Clarity.RpaCompiler
 
         public void CompileOpenClasses()
         {
+            Queue<CliInterface> requeuedInterfaces = new Queue<CliInterface>();
+            Queue<CliInterface> queuedInterfaces = new Queue<CliInterface>();
+
+            while(true)
+            {
+                while (m_openInterfaces.HaveNext)
+                {
+                    KeyValuePair<TypeNameTag, CliInterface> ifcDef = m_openInterfaces.GetNext();
+
+                    HighTypeDef typeDef;
+                    if (!m_typeDefsDict.TryGetValue(ifcDef.Key, out typeDef))
+                        throw new Exception("Missing interface definition");
+
+                    ifcDef.Value.Initialize(typeDef);
+                    queuedInterfaces.Enqueue(ifcDef.Value);
+                }
+
+                bool triedAny = false;
+                bool completedAny = false;
+                while (queuedInterfaces.Count > 0)
+                {
+                    triedAny = true;
+                    CliInterface cls = queuedInterfaces.Dequeue();
+                    if (cls.Create(this))
+                        completedAny = true;
+                    else
+                        requeuedInterfaces.Enqueue(cls);
+                }
+
+                queuedInterfaces = requeuedInterfaces;
+                requeuedInterfaces = new Queue<CliInterface>();
+
+                if (triedAny)
+                {
+                    if (!completedAny)
+                        throw new Exception("Couldn't instantiate any interfaces, probably due to a cycle.");
+                }
+                else
+                    break;
+            }
+
             Queue<CliClass> requeuedClasses = new Queue<CliClass>();
             Queue<CliClass> queuedClasses = new Queue<CliClass>();
 
@@ -94,20 +140,7 @@ namespace Clarity.RpaCompiler
                     if (!m_typeDefsDict.TryGetValue(classDef.Key, out typeDef))
                         throw new Exception("Missing class definition");
 
-                    uint numParams = typeDef.NumGenericParameters;
-                    TypeSpecTag[] genericParams = new TypeSpecTag[numParams];
-                    TypeSpecGenericParamTypeTag varType = new TypeSpecGenericParamTypeTag(TypeSpecGenericParamTypeTag.Values.Var);
-                    for (uint i = 0; i < numParams; i++)
-                    {
-                        TypeSpecTag genParam = new TypeSpecGenericParamTag(varType, i);
-                        genParam = this.TagRepository.InternTypeSpec(genParam);
-                        genericParams[i] = genParam;
-                    }
-
-                    TypeSpecClassTag clsTag = new TypeSpecClassTag(classDef.Key, genericParams);
-                    clsTag = (TypeSpecClassTag)this.TagRepository.InternTypeSpec(clsTag);
-
-                    classDef.Value.Initialize(clsTag.TypeName);
+                    classDef.Value.Initialize(classDef.Key);
                     queuedClasses.Enqueue(classDef.Value);
                 }
 
@@ -143,32 +176,40 @@ namespace Clarity.RpaCompiler
             return m_openClasses.Lookup(typeName).IsCreated;
         }
 
+        public bool HaveCliOpenInterface(TypeNameTag typeName)
+        {
+            if (m_typeDefsDict[typeName].Semantics != TypeSemantics.Interface)
+                throw new ArgumentException();
+            return m_openInterfaces.Lookup(typeName).IsCreated;
+        }
+
         public CliClass GetClosedClass(TypeSpecClassTag typeSpec)
         {
             CliClass cls;
             if (m_closedClasses.TryGetValue(typeSpec, out cls))
                 return cls;
-            return m_openClasses.Lookup(typeSpec.TypeName).Instantiate(this, typeSpec.ArgTypes);
+            cls = m_openClasses.Lookup(typeSpec.TypeName).Instantiate(this, typeSpec.ArgTypes);
+            m_closedClasses.Add(typeSpec, cls);
+            return cls;
         }
 
         public CliInterface GetClosedInterface(TypeSpecClassTag typeSpec)
         {
-            CliInterface closedIfc;
-            if (m_closedInterfaces.TryGetValue(typeSpec, out closedIfc))
-                return closedIfc;
+            CliInterface ifc;
+            if (m_closedInterfaces.TryGetValue(typeSpec, out ifc))
+                return ifc;
 
-            CliInterface openIfc;
-            if (!m_openInterfaces.TryGetValue(typeSpec.TypeName, out openIfc))
-                throw new Exception("Type spec does not reference interface");
-
-            closedIfc = openIfc.Instantiate(this, typeSpec.ArgTypes);
-            m_closedInterfaces.Add(typeSpec, closedIfc);
-            return closedIfc;
+            ifc = m_openInterfaces.Lookup(typeSpec.TypeName).Instantiate(this, typeSpec.ArgTypes);
+            m_closedInterfaces.Add(typeSpec, ifc);
+            return ifc;
         }
 
-        public void InstantiateMethod(MethodSpecTag methodSpecTag)
+        public MethodHandle InstantiateMethod(MethodSpecTag methodSpecTag, MethodInstantiationPath instantiationPath)
         {
-            m_methodInstances.Lookup(methodSpecTag);
+            MethodHandle handle = m_methodInstances.Lookup(methodSpecTag);
+            if (handle.InstantiationPath == null)
+                handle.InstantiationPath = instantiationPath;
+            return handle;
         }
 
         public void InstantiateOpenClass(TypeNameTag typeName)
@@ -180,10 +221,9 @@ namespace Clarity.RpaCompiler
 
         public void InstantiateInterface(TypeNameTag typeName)
         {
-            if (m_openInterfaces.ContainsKey(typeName))
-                throw new Exception("CLI interface declared multiple times");
-
-            m_openInterfaces.Add(typeName, new CliInterface(this, m_typeDefsDict[typeName]));
+            if (m_typeDefsDict[typeName].Semantics != TypeSemantics.Interface)
+                throw new ArgumentException();
+            m_openInterfaces.Lookup(typeName);
         }
 
         public HighTypeDef GetTypeDef(TypeNameTag typeName)
@@ -206,6 +246,103 @@ namespace Clarity.RpaCompiler
                 return interned;
             m_internedRloTypes.Add(rloType, rloType);
             return rloType;
+        }
+
+        public bool TypeIsInterface(TypeSpecTag type)
+        {
+            if (type is TypeSpecArrayTag)
+                return false;
+            if (type is TypeSpecClassTag)
+            {
+                TypeSpecClassTag tsClass = (TypeSpecClassTag)type;
+                return GetTypeDef(tsClass.TypeName).Semantics == TypeSemantics.Interface;
+            }
+
+            throw new RpaCompileException("Invalid type where a value or reference type is expected");
+        }
+
+        public bool TypeIsValueType(TypeSpecTag type)
+        {
+            if (type is TypeSpecArrayTag)
+                return false;
+            if (type is TypeSpecClassTag)
+            {
+                TypeSpecClassTag tsClass = (TypeSpecClassTag)type;
+                switch (GetTypeDef(tsClass.TypeName).Semantics)
+                {
+                    case TypeSemantics.Class:
+                    case TypeSemantics.Delegate:
+                    case TypeSemantics.Interface:
+                        return false;
+                    case TypeSemantics.Enum:
+                    case TypeSemantics.Struct:
+                        return true;
+                    default:
+                        throw new ArgumentException();
+                }
+            }
+
+            throw new RpaCompileException("Invalid type where a value or reference type is expected");
+        }
+
+        public uint DevirtualizeInterfaceMethod(CliClass cls, TypeSpecClassTag ifcSpec, uint ifcSlotIndex)
+        {
+            if (!cls.IsSealed)
+                throw new ArgumentException("Can't devirtualize a non-sealed class");
+
+            if (GetTypeDef(ifcSpec.TypeName).Semantics != TypeSemantics.Interface)
+                throw new ArgumentException("Can't devirtualize an implementation of a non-interface");
+
+            return RecursiveDevirtualizeInterfaceMethod(cls, ifcSpec, ifcSlotIndex);
+        }
+
+        private uint RecursiveDevirtualizeInterfaceMethod(CliClass cls, TypeSpecClassTag ifcSpec, uint ifcSlotIndex)
+        {
+            // First, look for an exact match, but only on this class level
+            foreach (CliInterfaceImpl impl in cls.InterfaceImpls2)
+            {
+                if (impl.Interface == ifcSpec)
+                {
+                    CliInterfaceImplSlot slot = impl.IfcSlotToClassVtableSlot[ifcSlotIndex];
+                    // Only use the exact match if it has a new implementation.
+                    // This is non-standard, but reflects .NET's behavior.
+                    // See TestInheritedImplementationDeprioritization.
+                    if (slot.HaveNewImpl)
+                        return slot.ClassVTableSlot;
+                    break;
+                }
+            }
+
+            // Otherwise, check all interfaces
+            uint? bestSlotTDO = null;
+            CliInterfaceImplSlot? bestSlot = null;
+            foreach (CliInterfaceImpl impl in cls.InterfaceImpls2)
+            {
+                TypeSpecClassTag implInterface = impl.Interface;
+                    
+                if (m_assignabilityResolver.ResolveGenericVariantAssignableTo(ifcSpec, implInterface) == AssignabilityResolver.ConversionType.InterfaceToInterface)
+                {
+                    CliInterfaceImplSlot slot = impl.IfcSlotToClassVtableSlot[ifcSlotIndex];
+                    if (slot.HaveNewImpl)
+                    {
+                        uint tdo = cls.TypeDeclarationOrder[implInterface];
+                        if (bestSlotTDO.HasValue == false || tdo < bestSlotTDO)
+                        {
+                            bestSlotTDO = tdo;
+                            bestSlot = slot;
+                        }
+                    }
+                }
+            }
+
+            if (bestSlot.HasValue)
+                return bestSlot.Value.ClassVTableSlot;
+
+            CliClass parentClass = cls.ParentClass;
+            if (parentClass == null)
+                throw new Exception("Internal error: Unresolvable interface method");
+
+            return RecursiveDevirtualizeInterfaceMethod(parentClass, ifcSpec, ifcSlotIndex);
         }
     }
 }

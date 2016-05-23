@@ -5,6 +5,8 @@ namespace Clarity.Rpa
 {
     public sealed class TypeSpecVoidTag : TypeSpecTag
     {
+        public override SubTypeCode SubType { get { return SubTypeCode.Void; } }
+
         public override bool Equals(object other)
         {
             return other.GetType() == typeof(TypeSpecVoidTag);
@@ -38,6 +40,11 @@ namespace Clarity.Rpa
         public override TypeSpecTag Instantiate(TagRepository repo, TypeSpecTag[] typeParams, TypeSpecTag[] methodParams)
         {
             return this;
+        }
+
+        public override string ToString()
+        {
+            return "void";
         }
     }
 }

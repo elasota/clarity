@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace Clarity.Rpa.Instructions
 {
@@ -10,6 +8,9 @@ namespace Clarity.Rpa.Instructions
     {
         private HighLocal m_local;
         private HighSsaRegister m_src;
+
+        public HighLocal Local { get { return m_local; } }
+        public HighSsaRegister Src { get { return m_src; } }
 
         public StoreLocalInstruction()
         {

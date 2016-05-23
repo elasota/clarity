@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace Clarity.Rpa
 {
@@ -26,7 +24,7 @@ namespace Clarity.Rpa
 
             for (uint i = 0; i < numMethods; i++)
             {
-                if (reader.ReadBoolean())
+                if (reader.ReadBoolean())   // HACK - FIXME
                 {
                     HighInterfaceMethodImplementation impl = new HighInterfaceMethodImplementation();
                     impl.Read(rpa, catalog, reader);

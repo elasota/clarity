@@ -10,6 +10,10 @@ namespace Clarity.Rpa.Instructions
         private HighSsaRegister m_arrayReg;
         private HighSsaRegister[] m_indexes;
 
+        public HighSsaRegister Dest { get { return m_addrDestReg; } }
+        public HighSsaRegister ArraySrc { get { return m_arrayReg; } }
+        public HighSsaRegister[] Indexes { get { return m_indexes; } }
+
         public GetArrayElementPtrInstruction()
         {
         }

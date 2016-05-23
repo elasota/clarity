@@ -36,7 +36,6 @@ namespace AssemblyImporter.CppExport
             if (from.Equals(to))
                 return true;
 
-
             if (from is CLRTypeSpecClass)
             {
                 CppClass fromClass = m_builder.GetCachedClass(from);
@@ -50,15 +49,16 @@ namespace AssemblyImporter.CppExport
                     if (IsGenericVariantAssignableTo(from, to))
                         return true;
                 }
-                return IsClassBasedOn(fromClass, to);
+                if (IsClassBasedOn(fromClass, to))
+                    return true;
+                if (to.Equals(m_commonTypes.Object))
+                    return true;
+                return false;
             }
             else if (from is CLRTypeSpecComplexArray)
             {
-                if (to.Equals(m_commonTypes.Array) || to.Equals(m_commonTypes.Object))
-                    return true;
-
                 if (!(to is CLRTypeSpecComplexArray))
-                    return false;
+                    return IsRefAssignable(m_commonTypes.Array, to);
 
                 CLRTypeSpecComplexArray cplxFrom = (CLRTypeSpecComplexArray)from;
                 CLRTypeSpecComplexArray cplxTo = (CLRTypeSpecComplexArray)to;
@@ -79,7 +79,7 @@ namespace AssemblyImporter.CppExport
             }
             else if (from is CLRTypeSpecSZArray)
             {
-                if (to.Equals(m_commonTypes.Array) || to.Equals(m_commonTypes.Object))
+                if (IsRefAssignable(m_commonTypes.Array, to))
                     return true;
 
                 if (!(to is CLRTypeSpecSZArray))
