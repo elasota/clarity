@@ -72,6 +72,7 @@
     <Compile Include="HighValueType.cs" />
     <Compile Include="HighClassVtableSlot.cs" />
     <Compile Include="HighVariance.cs" />
+    <Compile Include="IExtractableTypesInstruction.cs" />
     <Compile Include="IInternable.cs" />
     <Compile Include="ILocalUsingInstruction.cs" />
     <Compile Include="IMethodReferencingInstruction.cs" />
@@ -106,6 +107,7 @@
     <Compile Include="IBranchingInstruction.cs" />
     <Compile Include="ISsaEmitter.cs" />
     <Compile Include="ISsaUser.cs" />
+    <Compile Include="IThrowingInstruction.cs" />
     <Compile Include="ITypeReferencingInstruction.cs" />
     <Compile Include="Instructions\LeaveRegionInstruction.cs" />
     <Compile Include="Instructions\LoadPtrInstruction.cs" />

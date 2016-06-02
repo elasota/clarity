@@ -109,6 +109,10 @@ namespace Clarity.RpaCompiler
                 newPhis.Add(new HighPhi(dest, newLinks.ToArray()));
             }
 
+            List<HighCfgNodeHandle> newPredecessors = new List<HighCfgNodeHandle>();
+            foreach (HighCfgNodeHandle pred in srcNode.Predecessors)
+                newPredecessors.Add(GetNode(pred.Value));
+
             List<HighInstruction> newInstructions = new List<HighInstruction>();
             foreach (HighInstruction instr in srcNode.Instructions)
                 ConvertInstruction(instr, newInstructions);
@@ -116,7 +120,7 @@ namespace Clarity.RpaCompiler
             if (newInstructions.Count == 0)
                 throw new Exception("CFG node was empty");
 
-            HighCfgNode newNode = new HighCfgNode(newPhis.ToArray(), newInstructions.ToArray());
+            HighCfgNode newNode = new HighCfgNode(newPredecessors.ToArray(), newPhis.ToArray(), newInstructions.ToArray());
 
             cfgNodeHandle.Value = newNode;
         }

@@ -81,5 +81,32 @@ namespace Clarity.RpaCompiler.Instructions
             writer.Write(m_destPrecision);
             writer.Write(m_sourcePrecision);
         }
+
+        public override bool MayThrow
+        {
+            get
+            {
+                switch (m_conversionType)
+                {
+                    case NumConversionType.ZeroTruncate_Checked:
+                    case NumConversionType.SignTruncate_Checked:
+                    case NumConversionType.FloatToInt_Checked:
+                    case NumConversionType.FloatToUInt_Checked:
+                        return true;
+                    case NumConversionType.ZeroExtend:
+                    case NumConversionType.SignExtend:
+                    case NumConversionType.ZeroTruncate:
+                    case NumConversionType.SignTruncate:
+                    case NumConversionType.FloatToInt:
+                    case NumConversionType.FloatToUInt:
+                    case NumConversionType.FloatToFloat:
+                    case NumConversionType.IntToFloat:
+                    case NumConversionType.UIntToFloat:
+                        return false;
+                    default:
+                        throw new Exception();
+                }
+            }
+        }
     }
 }

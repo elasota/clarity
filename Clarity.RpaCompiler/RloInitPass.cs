@@ -290,6 +290,21 @@ namespace Clarity.RpaCompiler
         {
             bool validationOnly = true;
 
+            {
+                IBranchingInstruction brInstr = instr as IBranchingInstruction;
+                if (brInstr != null)
+                {
+                    brInstr.VisitSuccessors(delegate (ref HighCfgEdge edge)
+                    {
+                        HighCfgNode dest = edge.Dest.Value;
+                        foreach (HighCfgNodeHandle pred in dest.Predecessors)
+                            if (pred.Value == cfgNode)
+                                return;
+                        throw new RpaCompileException("Branching instruction jumps to undeclared predecessor");
+                    });
+                }
+            }
+
             switch (instr.Opcode)
             {
                 case HighInstruction.Opcodes.LoadLocal:
@@ -367,6 +382,8 @@ namespace Clarity.RpaCompiler
                             throw new RpaCompileException("AllocObj created non-class");
                         if (typeDef.IsAbstract)
                             throw new RpaCompileException("AllocObj created class is abstract");
+
+                        this.Compiler.GetRloVTable(destType, GenerateMethodInstantiationPath(tInstr.CodeLocation));
                     }
                     break;
                 case HighInstruction.Opcodes.Box:
@@ -378,8 +395,7 @@ namespace Clarity.RpaCompiler
                         if (dest == null)
                             throw new RpaCompileException("Box has no destination");
 
-
-                        if ((src.ValueType != HighValueType.ConstantValue || src.ValueType != HighValueType.ValueValue) && dest.ValueType == HighValueType.BoxedValue)
+                        if ((src.ValueType == HighValueType.ConstantValue || src.ValueType == HighValueType.ValueValue) && dest.ValueType == HighValueType.BoxedValue)
                         {
                             // Normally don't do anything, leave box as canonical
                             // In the case of Nullable`1 only, convert the box instruction
@@ -389,16 +405,50 @@ namespace Clarity.RpaCompiler
                                     throw new RpaCompileException("Invalid box source type");
                                 TypeSpecClassTag srcClass = (TypeSpecClassTag)src.Type;
                                 TypeNameTag srcClassName = srcClass.TypeName;
-                                if (srcClassName.ContainerType != null || srcClassName.AssemblyName != "mscorlib" || srcClassName.TypeNamespace != "System" || srcClassName.TypeName != "Nullable`1")
+                                if (srcClassName.ContainerType != null || srcClassName.AssemblyName != "mscorlib" || srcClassName.TypeNamespace != "System" || srcClassName.TypeName != "Nullable`1" || srcClass.ArgTypes.Length != 1)
                                     throw new RpaCompileException("Invalid box source type");
                                 TypeSpecTag srcSubType = srcClass.ArgTypes[0];
-
 
                                 if (dest.Type != srcSubType)
                                     throw new RpaCompileException("Nullable box type mixmatch");
 
                                 validationOnly = false;
-                                newInstrs.Add(new Instructions.BoxNullableInstruction(tInstr.CodeLocation, dest, src));
+
+                                TypeNameTag clarityToolsName = new TypeNameTag("mscorlib", "Clarity", "Tools", null);
+                                clarityToolsName = this.Compiler.TagRepository.InternTypeName(clarityToolsName);
+
+                                TypeSpecClassTag clarityToolsClass = new TypeSpecClassTag(clarityToolsName, new TypeSpecTag[0]);
+                                clarityToolsClass = (TypeSpecClassTag)this.Compiler.TagRepository.InternTypeSpec(clarityToolsClass);
+
+                                TypeNameTag nullableName = new TypeNameTag("mscorlib", "System", "Nullable`1", null);
+                                nullableName = this.Compiler.TagRepository.InternTypeName(nullableName);
+
+                                TypeSpecGenericParamTypeTag mArgType = new TypeSpecGenericParamTypeTag(TypeSpecGenericParamTypeTag.Values.MVar);
+                                TypeSpecGenericParamTag m0Type = new TypeSpecGenericParamTag(mArgType, 0);
+                                m0Type = (TypeSpecGenericParamTag)this.Compiler.TagRepository.InternTypeSpec(m0Type);
+
+                                TypeSpecClassTag nullableM0Class = new TypeSpecClassTag(nullableName, new TypeSpecTag[] { m0Type });
+                                nullableM0Class = (TypeSpecClassTag)this.Compiler.TagRepository.InternTypeSpec(nullableM0Class);
+
+                                MethodSignatureParam[] bnDeclParams = new MethodSignatureParam[] { new MethodSignatureParam(nullableM0Class, new MethodSignatureParamTypeOfType(MethodSignatureParamTypeOfType.Values.Value)) };
+                                MethodSignatureTag bnDeclSignature = new MethodSignatureTag(1, m_objectType, bnDeclParams);
+                                bnDeclSignature = this.Compiler.TagRepository.InternMethodSignature(bnDeclSignature);
+
+                                MethodDeclTag boxNullableDecl = new MethodDeclTag("BoxNullable", bnDeclSignature, clarityToolsName);
+                                boxNullableDecl = this.Compiler.TagRepository.InternMethodDeclTag(boxNullableDecl);
+
+                                MethodSpecTag bnMethodSpec = new MethodSpecTag(MethodSlotType.Static, new TypeSpecTag[] { srcSubType }, clarityToolsClass, boxNullableDecl);
+                                bnMethodSpec = this.Compiler.TagRepository.InternMethodSpec(bnMethodSpec);
+
+                                MethodHandle hdl = this.Compiler.InstantiateMethod(bnMethodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+
+                                newInstrs.Add(new Instructions.CallRloStaticMethodInstruction(tInstr.CodeLocation, hdl, dest, new HighSsaRegister[] { src }));
+                            }
+                            else
+                            {
+                                TypeSpecBoxTag boxType = new TypeSpecBoxTag((TypeSpecClassTag)dest.Type);
+                                boxType = (TypeSpecBoxTag)this.Compiler.TagRepository.InternTypeSpec(boxType);
+                                this.Compiler.GetRloVTable(boxType, GenerateMethodInstantiationPath(tInstr.CodeLocation));
                             }
                         }
                         else if (src.ValueType == HighValueType.ReferenceValue && dest.ValueType == HighValueType.ReferenceValue)
@@ -1535,7 +1585,7 @@ namespace Clarity.RpaCompiler
                                 }
                                 break;
                             case HighValueType.ReferenceValue:
-                                newInstrs.Add(new ForceDynamicCastInstruction(tInstr.CodeLocation, tInstr.Dest, tInstr.Src));
+                                newInstrs.Add(new ForceDynamicCastInstruction(tInstr.CodeLocation, tInstr.Dest, tInstr.Src, tInstr.Dest.Type));
                                 break;
                             default:
                                 throw new RpaCompileException("UnboxValue destination is invalid");
@@ -1699,6 +1749,8 @@ namespace Clarity.RpaCompiler
 
                         newInstrs.Add(new AllocObjInstruction(tInstr.CodeLocation, sdInstance, dgTag));
                         newInstrs.Add(new Instructions.ObjectToObjectInstruction(tInstr.CodeLocation, tInstr.Dest, sdInstance));
+
+                        this.Compiler.GetRloVTable(dgTag, GenerateMethodInstantiationPath(tInstr.CodeLocation));
                     }
                     break;
                 case HighInstruction.Opcodes.BindInstanceDelegate:
@@ -1747,6 +1799,8 @@ namespace Clarity.RpaCompiler
 
                         newInstrs.Add(new Instructions.AllocInstanceDelegateInstruction(tInstr.CodeLocation, dgTag, dgInstance, tInstr.Object));
                         newInstrs.Add(new Instructions.ObjectToObjectInstruction(tInstr.CodeLocation, tInstr.Dest, dgInstance));
+
+                        this.Compiler.GetRloVTable(dgTag, GenerateMethodInstantiationPath(tInstr.CodeLocation));
                     }
                     break;
                 case HighInstruction.Opcodes.BindVirtualDelegate:
@@ -1795,6 +1849,8 @@ namespace Clarity.RpaCompiler
 
                         newInstrs.Add(new Instructions.AllocInstanceDelegateInstruction(tInstr.CodeLocation, dgTag, dgInstance, tInstr.Object));
                         newInstrs.Add(new Instructions.ObjectToObjectInstruction(tInstr.CodeLocation, tInstr.Dest, dgInstance));
+
+                        this.Compiler.GetRloVTable(dgTag, GenerateMethodInstantiationPath(tInstr.CodeLocation));
                     }
                     break;
                 case HighInstruction.Opcodes.Catch:

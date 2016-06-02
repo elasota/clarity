@@ -6,13 +6,13 @@ using System.Text;
 
 namespace Clarity.Rpa.Instructions
 {
-    public sealed class AllocObjInstruction : HighInstruction, ITypeReferencingInstruction
+    public sealed class AllocObjInstruction : HighInstruction, IExtractableTypesInstruction
     {
         private TypeSpecTag m_type;
         private HighSsaRegister m_dest;
-
-        public TypeSpecTag Type { get { return m_type; } }
+        
         public HighSsaRegister Dest { get { return m_dest; } }
+        public TypeSpecTag TargetType { get { return m_type; } }
 
         public override Opcodes Opcode { get { return Opcodes.AllocObj; } }
 
@@ -38,12 +38,10 @@ namespace Clarity.Rpa.Instructions
 
         public override void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
         {
-            writer.Write(fileBuilder.IndexTypeSpecTag(m_type));
         }
 
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
-            m_type = catalog.GetTypeSpec(reader.ReadUInt32());
         }
 
         public override HighInstruction Clone()
@@ -54,6 +52,11 @@ namespace Clarity.Rpa.Instructions
         void ITypeReferencingInstruction.VisitTypes(VisitTypeSpecDelegate visitor)
         {
             visitor(ref m_type);
+        }
+
+        void IExtractableTypesInstruction.ExtractSsaTypes()
+        {
+            m_type = m_dest.Type;
         }
     }
 }

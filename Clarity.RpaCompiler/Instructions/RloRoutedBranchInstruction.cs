@@ -3,27 +3,32 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Clarity.Rpa;
 
-namespace Clarity.Rpa.Instructions
+namespace Clarity.RpaCompiler.Instructions
 {
-    public sealed class LeaveRegionInstruction : HighInstruction
+    public class RloRoutedBranchInstruction : HighInstruction, IBranchingInstruction
     {
-        private uint m_routeID;
+        private int m_routeID;
+        private HighCfgEdge m_destination;
 
-        public uint RouteID { get { return m_routeID; } }
+        public override Opcodes Opcode { get { return Opcodes.RloRoutedBranch; } }
 
-        public LeaveRegionInstruction()
+        public RloRoutedBranchInstruction()
         {
         }
 
-        public LeaveRegionInstruction(CodeLocationTag codeLocation, uint routeID)
+        public RloRoutedBranchInstruction(CodeLocationTag codeLocation, int routeID, HighCfgNode destination)
             : base(codeLocation)
         {
             m_routeID = routeID;
+            m_destination = new HighCfgEdge(this, new HighCfgNodeHandle(destination));
         }
 
-        public override Opcodes Opcode { get { return Opcodes.LeaveRegion; } }
-        public override bool TerminatesControlFlow { get { return true; } }
+        void IBranchingInstruction.VisitSuccessors(VisitCfgEdgeDelegate visitor)
+        {
+            visitor(ref m_destination);
+        }
 
         public override void VisitSsaDests(VisitSsaDelegate visitor)
         {
@@ -40,14 +45,15 @@ namespace Clarity.Rpa.Instructions
 
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
-            m_routeID = reader.ReadUInt32();
+            m_routeID = reader.ReadInt32();
         }
 
         public override HighInstruction Clone()
         {
-            return new LeaveRegionInstruction(CodeLocation, m_routeID);
+            return new RloRoutedBranchInstruction(this.CodeLocation, m_routeID, m_destination.Dest.Value);
         }
 
         public override bool MayThrow { get { return false; } }
+        public override bool TerminatesControlFlow { get { return true; } }
     }
 }

@@ -7,14 +7,17 @@ namespace Clarity.Rpa
 {
     public class HighCfgNode
     {
+        private HighCfgNodeHandle[] m_predecessors;
         private HighPhi[] m_phis;
         private HighInstruction[] m_instructions;
 
         public HighPhi[] Phis { get { return m_phis; } }
-        public HighInstruction[] Instructions { get { return m_instructions; } }
+        public HighInstruction[] Instructions { get { return m_instructions; } set { m_instructions = value; } }
+        public HighCfgNodeHandle[] Predecessors { get { return m_predecessors; } set { m_predecessors = value; } }
 
-        public HighCfgNode(HighPhi[] phis, HighInstruction[] instructions)
+        public HighCfgNode(HighCfgNodeHandle[] predecessors, HighPhi[] phis, HighInstruction[] instructions)
         {
+            m_predecessors = predecessors;
             m_phis = phis;
             m_instructions = instructions;
         }
@@ -38,14 +41,18 @@ namespace Clarity.Rpa
             foreach (HighInstruction instr in m_instructions)
                 instr.VisitSsaUses(constVisitor);
 
+            writer.Write((uint)m_predecessors.Length);
             writer.Write((uint)m_phis.Length);
             writer.Write((uint)m_instructions.Length);
             writer.Write((uint)constants.Count);
 
+            foreach (HighCfgNodeHandle pred in m_predecessors)
+                writer.Write(regionBuilder.IndexCfgNode(pred.Value));
+
             foreach (HighPhi phi in m_phis)
             {
                 cfgNodeBuilder.AddSsa(phi.Dest);
-                phi.Write(fileBuilder, regionBuilder, writer);
+                phi.Write(fileBuilder, regionBuilder, m_predecessors, writer);
             }
 
             foreach (HighSsaRegister constant in constants)
@@ -60,20 +67,29 @@ namespace Clarity.Rpa
 
         public static HighCfgNode Read(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
+            uint numPredecessors = reader.ReadUInt32();
             uint numPhis = reader.ReadUInt32();
             uint numInstructions = reader.ReadUInt32();
             uint numConstants = reader.ReadUInt32();
 
             List<HighPhi> phis = new List<HighPhi>();
             List<HighInstruction> instructions = new List<HighInstruction>();
-
             List<HighSsaRegister> ssaRegisters = new List<HighSsaRegister>();
+            List<uint> predecessors = new List<uint>();
+            List<HighCfgNodeHandle> realPreds = new List<HighCfgNodeHandle>();
 
             // WARNING: SSA indexes from phis and constants must match CollectRegsFromNode
+            for (uint i = 0; i < numPredecessors; i++)
+            {
+                uint predIndex = reader.ReadUInt32();
+                predecessors.Add(predIndex);
+                realPreds.Add(cfgNodes[predIndex]);
+            }
 
+            uint[] predecessorsArray = predecessors.ToArray();
             for (uint i = 0; i < numPhis; i++)
             {
-                HighPhi phi = HighPhi.Read(rpa, catalog, methodBody, cfgNodes, reader);
+                HighPhi phi = HighPhi.Read(rpa, catalog, methodBody, cfgNodes, predecessorsArray, reader);
                 phis.Add(phi);
 
                 ssaRegisters.Add(phi.Dest);
@@ -85,13 +101,16 @@ namespace Clarity.Rpa
                 ssaRegisters.Add(constant);
             }
 
+            if (numInstructions == 0)
+                throw new RpaLoadException("Empty CFG node");
+
             for (uint i = 0; i < numInstructions; i++)
             {
                 HighInstruction instr = HighInstruction.Read(rpa, catalog, methodBody, cfgNodes, ssaRegisters, baseLocation, haveDebugInfo, reader);
                 instructions.Add(instr);
             }
 
-            return new HighCfgNode(phis.ToArray(), instructions.ToArray());
+            return new HighCfgNode(realPreds.ToArray(), phis.ToArray(), instructions.ToArray());
         }
 
         public void SetAll(HighPhi[] phis, HighInstruction[] instrs)

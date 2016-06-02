@@ -46,5 +46,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new BranchInstruction(CodeLocation, m_target.Dest);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using AssemblyImporter.CLR;
+using Clarity.Rpa;
 
 namespace AssemblyImporter.CppExport
 {
@@ -39,10 +40,10 @@ namespace AssemblyImporter.CppExport
         private CppBuilder m_builder;
         private ExceptionHandlingRegion m_region;
         private Queue<CfgNode> m_pendingNodes;
-        private Dictionary<CfgNode, Clarity.Rpa.HighCfgNodeHandle> m_nodesToEmittedNodes;
+        private Dictionary<CfgNode, HighCfgNodeHandle> m_nodesToEmittedNodes;
         private Dictionary<CfgNode, CppCfgNodeOutline> m_nodeOutlines;
-        private Dictionary<SsaRegister, Clarity.Rpa.HighSsaRegister> m_ssaToEmittedSsa;
-        private IDictionary<VReg, Clarity.Rpa.HighLocal> m_localLookup;
+        private Dictionary<SsaRegister, HighSsaRegister> m_ssaToEmittedSsa;
+        private IDictionary<VReg, HighLocal> m_localLookup;
         private Dictionary<CfgOutboundEdge, CppTranslatedOutboundEdge> m_translatedOutboundEdges;
 
         public CppRegionEmitter(CppBuilder builder, ExceptionHandlingRegion region, CppRegisterAllocator regAllocator, IDictionary<VReg, Clarity.Rpa.HighLocal> localLookup)
@@ -51,9 +52,9 @@ namespace AssemblyImporter.CppExport
             m_region = region;
             m_builder = builder;
             m_regAllocator = regAllocator;
-            m_nodesToEmittedNodes = new Dictionary<CfgNode, Clarity.Rpa.HighCfgNodeHandle>();
+            m_nodesToEmittedNodes = new Dictionary<CfgNode, HighCfgNodeHandle>();
             m_nodeOutlines = new Dictionary<CfgNode, CppCfgNodeOutline>();
-            m_ssaToEmittedSsa = new Dictionary<SsaRegister, Clarity.Rpa.HighSsaRegister>();
+            m_ssaToEmittedSsa = new Dictionary<SsaRegister, HighSsaRegister>();
             m_translatedOutboundEdges = new Dictionary<CfgOutboundEdge, CppTranslatedOutboundEdge>();
 
             m_pendingNodes = new Queue<CfgNode>();
@@ -114,11 +115,11 @@ namespace AssemblyImporter.CppExport
 
                     if (!targetReg.IsConstant)
                     {
-                        Clarity.Rpa.HighSsaRegister importReg = new Clarity.Rpa.HighSsaRegister(sourceReg.ValueType, sourceReg.Type, sourceReg.ConstantValue);
-                        Clarity.Rpa.HighSsaRegister exportReg = new Clarity.Rpa.HighSsaRegister(targetReg.ValueType, targetReg.Type, targetReg.ConstantValue);
+                        HighSsaRegister importReg = new HighSsaRegister(sourceReg.ValueType, sourceReg.Type, sourceReg.ConstantValue);
+                        HighSsaRegister exportReg = new HighSsaRegister(targetReg.ValueType, targetReg.Type, targetReg.ConstantValue);
 
-                        Clarity.Rpa.HighPhiLink phiLink = new Clarity.Rpa.HighPhiLink(prevNode, sourceReg);
-                        phis.Add(new Clarity.Rpa.HighPhi(importReg, new Clarity.Rpa.HighPhiLink[] { phiLink }));
+                        HighPhiLink phiLink = new HighPhiLink(prevNode, sourceReg);
+                        phis.Add(new HighPhi(importReg, new HighPhiLink[] { phiLink }));
 
                         instrs.Add(new Clarity.Rpa.Instructions.PassiveConvertInstruction(
                             midInstr.CodeLocation,
@@ -133,7 +134,7 @@ namespace AssemblyImporter.CppExport
 
                 instrs.Add(new Clarity.Rpa.Instructions.BranchInstruction(edge.CodeLocation, nextNode));
 
-                Clarity.Rpa.HighCfgNode cfgNode = new Clarity.Rpa.HighCfgNode(phis.ToArray(), instrs.ToArray());
+                Clarity.Rpa.HighCfgNode cfgNode = new HighCfgNode(new Clarity.Rpa.HighCfgNodeHandle[] { prevNode }, phis.ToArray(), instrs.ToArray());
                 Clarity.Rpa.HighCfgNodeHandle cfgNodeHandle = new Clarity.Rpa.HighCfgNodeHandle(cfgNode);
 
                 outboundEdge = new CppTranslatedOutboundEdge(cfgNodeHandle, cfgNodeHandle, regs);
@@ -409,6 +410,27 @@ namespace AssemblyImporter.CppExport
 
         private void EmitCfgNode(CfgNode cfgNode)
         {
+            // Build predecessor list
+            List<CppTranslatedOutboundEdge> predecessorEdges = new List<CppTranslatedOutboundEdge>();
+            foreach (CfgNode pred in cfgNode.Predecessors)
+            {
+                // Find the successor edge
+                CppTranslatedOutboundEdge edge = null;
+                foreach (CfgOutboundEdge outEdge in pred.Successors)
+                {
+                    if (outEdge.SuccessorNode == cfgNode)
+                    {
+                        edge = InternOutboundEdge(pred, outEdge);
+                        break;
+                    }
+                }
+
+                if (edge == null)
+                    throw new Exception("Mismatched CFG edge");
+
+                predecessorEdges.Add(edge);
+            }
+
             List<Clarity.Rpa.HighInstruction> outInstructions = new List<Clarity.Rpa.HighInstruction>();
             List<Clarity.Rpa.HighPhi> outPhis = new List<Clarity.Rpa.HighPhi>();
 
@@ -1022,25 +1044,8 @@ namespace AssemblyImporter.CppExport
                             {
                                 List<Clarity.Rpa.HighPhiLink> phiLinks = new List<Clarity.Rpa.HighPhiLink>();
 
-                                foreach (CfgNode pred in cfgNode.Predecessors)
-                                {
-                                    // Find the successor edge
-                                    CppTranslatedOutboundEdge edge = null;
-                                    foreach (CfgOutboundEdge outEdge in pred.Successors)
-                                    {
-                                        if (outEdge.SuccessorNode == cfgNode)
-                                        {
-                                            edge = InternOutboundEdge(pred, outEdge);
-                                            break;
-                                        }
-                                    }
-
-                                    if (edge == null)
-                                        throw new Exception("Mismatched CFG edge");
-
-                                    phiLinks.Add(new Clarity.Rpa.HighPhiLink(edge.PrevNode, edge.Regs[numContinuedRegs]));
-                                }
-
+                                foreach (CppTranslatedOutboundEdge predEdge in predecessorEdges)
+                                    phiLinks.Add(new Clarity.Rpa.HighPhiLink(predEdge.PrevNode, predEdge.Regs[numContinuedRegs]));
 
                                 outPhis.Add(new Clarity.Rpa.HighPhi(
                                     InternSsaRegister(reg),
@@ -1074,7 +1079,8 @@ namespace AssemblyImporter.CppExport
                             outInstructions.Add(new Clarity.Rpa.Instructions.AllocArrayInstruction(
                                 midInstr.CodeLocation,
                                     InternSsaRegister(midInstr.RegArg),
-                                    new Clarity.Rpa.HighSsaRegister[] { InternSsaRegister(indexReg) }
+                                    new Clarity.Rpa.HighSsaRegister[] { InternSsaRegister(indexReg) },
+                                    RpaTagFactory.CreateTypeTag(midInstr.RegArg2.VType.TypeSpec)
                                 ));
                         }
                         break;
@@ -1120,7 +1126,8 @@ namespace AssemblyImporter.CppExport
                                 midInstr.CodeLocation,
                                 addrReg,
                                 objReg,
-                                midInstr.StrArg
+                                midInstr.StrArg,
+                                RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg)
                                 ));
                             outInstructions.Add(new Clarity.Rpa.Instructions.LoadPtrInstruction(
                                 midInstr.CodeLocation,
@@ -1138,7 +1145,8 @@ namespace AssemblyImporter.CppExport
                                 midInstr.CodeLocation,
                                 destReg,
                                 objReg,
-                                midInstr.StrArg
+                                midInstr.StrArg,
+                                RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg)
                                 ));
                         }
                         break;
@@ -1231,7 +1239,9 @@ namespace AssemblyImporter.CppExport
                                 midInstr.CodeLocation,
                                 addrReg,
                                 objReg,
-                                midInstr.StrArg));
+                                midInstr.StrArg,
+                                RpaTagFactory.CreateTypeTag(midInstr.TypeSpecArg)
+                                ));
                             outInstructions.Add(new Clarity.Rpa.Instructions.StorePtrInstruction(
                                 midInstr.CodeLocation,
                                 addrReg,
@@ -1386,7 +1396,8 @@ namespace AssemblyImporter.CppExport
                             outInstructions.Add(new Clarity.Rpa.Instructions.DynamicCastInstruction(
                                 midInstr.CodeLocation,
                                 InternSsaRegister(midInstr.RegArg2),
-                                InternSsaRegister(midInstr.RegArg)
+                                InternSsaRegister(midInstr.RegArg),
+                                RpaTagFactory.CreateTypeTag(midInstr.RegArg2.VType.TypeSpec)
                                 ));
                         }
                         break;
@@ -1524,7 +1535,8 @@ namespace AssemblyImporter.CppExport
                             outInstructions.Add(new Clarity.Rpa.Instructions.ForceDynamicCastInstruction(
                                 midInstr.CodeLocation,
                                 InternSsaRegister(midInstr.RegArg2),
-                                InternSsaRegister(midInstr.RegArg)
+                                InternSsaRegister(midInstr.RegArg),
+                                RpaTagFactory.CreateTypeTag(midInstr.RegArg2.VType.TypeSpec)
                                 ));
                         }
                         break;
@@ -1640,36 +1652,47 @@ namespace AssemblyImporter.CppExport
                                 tryRegion = tryEmitter.Emit();
                             }
 
-                            List<Clarity.Rpa.HighCatchHandler> catchHandlers = new List<Clarity.Rpa.HighCatchHandler>();
-                            List<Clarity.Rpa.HighRegion> otherRegions = new List<Clarity.Rpa.HighRegion>();
+                            List<HighCatchHandler> catchHandlers = new List<HighCatchHandler>();
+                            List<HighRegion> otherRegions = new List<HighRegion>();
                             foreach (ExceptionHandlingRegion handlerRegion in cluster.ExceptionHandlingRegions)
                             {
                                 CppRegionEmitter hdlEmitter = new CppRegionEmitter(m_builder, handlerRegion, m_regAllocator, m_localLookup);
-                                Clarity.Rpa.HighRegion hdlRegion = hdlEmitter.Emit();
+                                HighRegion hdlRegion = hdlEmitter.Emit();
 
                                 switch (cluster.ClusterType)
                                 {
                                     case ExceptionHandlingCluster.ClusterTypeEnum.TryCatch:
                                         {
-                                            Clarity.Rpa.HighCfgNode entryNode = hdlRegion.EntryNode.Value;
+                                            HighCfgNode entryNode = hdlRegion.EntryNode.Value;
 
+                                            // Inject a catch landing instruction and recreate the phi node.
+                                            // This is safe because III.1.7.5 disallows backward branches with stack,
+                                            // so the only valid way to reach a catch handler is by catching, never via
+                                            // a predecessor.
                                             if (entryNode.Phis.Length != 1 || entryNode.Phis[0].Links.Length != 0)
                                                 throw new Exception("Catch handler should start with an unlinked phi node");
 
-                                            // Inject a catch landing instruction and delete the phi node.
-                                            // This is safe because III.1.7.5 disallows backward branches with stack
-                                            Clarity.Rpa.HighSsaRegister exceptionReg = entryNode.Phis[0].Dest;
+                                            HighSsaRegister exceptionReg = entryNode.Phis[0].Dest;
 
-                                            List<Clarity.Rpa.HighInstruction> instrs = new List<Clarity.Rpa.HighInstruction>();
-                                            instrs.Add(new Clarity.Rpa.Instructions.CatchInstruction(entryNode.Instructions[0].CodeLocation, exceptionReg));
-                                            instrs.AddRange(entryNode.Instructions);
+                                            CodeLocationTag codeLoc = entryNode.Instructions[0].CodeLocation;
 
-                                            Clarity.Rpa.HighCfgNode replacementNode = new Clarity.Rpa.HighCfgNode(new Clarity.Rpa.HighPhi[0], instrs.ToArray());
-                                            hdlRegion = new Clarity.Rpa.HighRegion(new Clarity.Rpa.HighCfgNodeHandle(replacementNode));
+                                            List<HighInstruction> catchLandingInstrs = new List<HighInstruction>();
+                                            HighSsaRegister catchDest = new HighSsaRegister(HighValueType.ReferenceValue, exceptionReg.Type, null);
+                                            catchLandingInstrs.Add(new Clarity.Rpa.Instructions.CatchInstruction(codeLoc, catchDest, exceptionReg.Type));
+                                            catchLandingInstrs.Add(new Clarity.Rpa.Instructions.BranchInstruction(codeLoc, hdlRegion.EntryNode));
 
-                                            catchHandlers.Add(new Clarity.Rpa.HighCatchHandler(
+                                            HighCfgNode landingNode = new HighCfgNode(new HighCfgNodeHandle[0], new HighPhi[0], catchLandingInstrs.ToArray());
+
+                                            HighCfgNodeHandle landingHandle = new HighCfgNodeHandle(landingNode);
+
+                                            entryNode.Predecessors = new HighCfgNodeHandle[] { landingHandle };
+                                            entryNode.Phis[0].Links = new HighPhiLink[] { new HighPhiLink(landingHandle, catchDest) };
+
+                                            HighRegion replacementRegion = new HighRegion(landingHandle);
+
+                                            catchHandlers.Add(new HighCatchHandler(
                                                 RpaTagFactory.CreateTypeTag(handlerRegion.ExceptionType),
-                                                hdlRegion
+                                                replacementRegion
                                                 ));
                                         }
                                         break;
@@ -1787,7 +1810,11 @@ namespace AssemblyImporter.CppExport
                 outInstructions.Add(new Clarity.Rpa.Instructions.BranchInstruction(cfgNode.FallThroughEdge.CodeLocation, outEdge.NextNode));
             }
 
-            highNode.Value = new Clarity.Rpa.HighCfgNode(outPhis.ToArray(), outInstructions.ToArray());
+            List<HighCfgNodeHandle> highPreds = new List<HighCfgNodeHandle>();
+            foreach (CppTranslatedOutboundEdge predEdge in predecessorEdges)
+                highPreds.Add(predEdge.PrevNode);
+
+            highNode.Value = new HighCfgNode(highPreds.ToArray(), outPhis.ToArray(), outInstructions.ToArray());
         }
 
         private SsaRegister EmitPassiveConversion_PermitRefs(Clarity.Rpa.CodeLocationTag codeLocation, SsaRegister sourceReg, CLRTypeSpec destType, CppCfgNodeOutline outline, IList<Clarity.Rpa.HighInstruction> instrs)

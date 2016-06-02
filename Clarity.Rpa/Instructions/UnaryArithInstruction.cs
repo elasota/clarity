@@ -61,5 +61,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new UnaryArithInstruction(CodeLocation, m_dest, m_arithOp, m_arithType, m_src);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

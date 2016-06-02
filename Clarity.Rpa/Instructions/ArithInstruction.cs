@@ -74,5 +74,48 @@ namespace Clarity.Rpa.Instructions
         {
             return new ArithInstruction(CodeLocation, m_dest, m_arithOp, m_arithType, m_left, m_right, m_checkOverflow);
         }
+
+        public override bool MayThrow
+        {
+            get
+            {
+                switch (m_arithType)
+                {
+                    case NumberArithType.Float32:
+                    case NumberArithType.Float64:
+                        return false;
+                    case NumberArithType.Int32:
+                    case NumberArithType.Int64:
+                    case NumberArithType.NativeInt:
+                    case NumberArithType.NativeUInt:
+                    case NumberArithType.UInt32:
+                    case NumberArithType.UInt64:
+                        break;
+                    default:
+                        throw new Exception();
+                }
+
+                if (m_checkOverflow)
+                    return true;
+
+                switch (m_arithOp)
+                {
+                    case NumberArithOp.Divide:
+                    case NumberArithOp.Modulo:
+                        return true;
+                    case NumberArithOp.Add:
+                    case NumberArithOp.BitAnd:
+                    case NumberArithOp.BitOr:
+                    case NumberArithOp.BitXor:
+                    case NumberArithOp.Multiply:
+                    case NumberArithOp.ShiftLeft:
+                    case NumberArithOp.ShiftRight:
+                    case NumberArithOp.Subtract:
+                        return false;
+                    default:
+                        throw new Exception();
+                }
+            }
+        }
     }
 }

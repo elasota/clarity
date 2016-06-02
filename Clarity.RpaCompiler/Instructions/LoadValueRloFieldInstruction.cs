@@ -49,5 +49,7 @@ namespace Clarity.RpaCompiler.Instructions
         {
             writer.Write(m_fieldIndex);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

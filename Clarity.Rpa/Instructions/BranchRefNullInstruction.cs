@@ -56,5 +56,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new BranchRefNullInstruction(CodeLocation, m_value, m_isNullNode.Dest, m_isNotNullNode.Dest);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

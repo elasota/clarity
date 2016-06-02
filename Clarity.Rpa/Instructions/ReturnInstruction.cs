@@ -38,5 +38,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new ReturnInstruction(this.CodeLocation);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

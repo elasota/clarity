@@ -54,6 +54,11 @@ namespace Clarity.RpaCompiler
                             QueueNode(terminator.CfgNode.Value);
                         cluster.ProtectedRegion.VisitCfgNodes(nodeVisitor);
                     }
+
+                    if (instr.ExceptionEdge != null)
+                        QueueNode(instr.ExceptionEdge.Dest.Value);
+                    if (instr.ContinuationEdge != null)
+                        QueueNode(instr.ContinuationEdge.Dest.Value);
                 }
             }
 

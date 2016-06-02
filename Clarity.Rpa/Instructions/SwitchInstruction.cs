@@ -71,5 +71,7 @@ namespace Clarity.Rpa.Instructions
 
             return new SwitchInstruction(CodeLocation, m_value, cases, m_defaultCase.Dest);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

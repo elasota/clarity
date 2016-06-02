@@ -95,6 +95,9 @@ namespace Clarity.RpaCompiler
 
             RloInitPass initPass = new RloInitPass(compiler, this, psPass);
             initPass.Run();
+
+            RloInitExceptionsPass exceptionInitPass = new RloInitExceptionsPass(compiler, this);
+            exceptionInitPass.Run();
         }
     }
 }

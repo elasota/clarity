@@ -47,5 +47,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new StorePtrInstruction(CodeLocation, m_ptr, m_value);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

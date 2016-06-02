@@ -62,5 +62,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new CompareRefsInstruction(CodeLocation, m_dest, m_regA, m_regB, m_equalValue, m_notEqualValue);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

@@ -8,6 +8,9 @@ namespace Clarity.Rpa
     {
         private CodeLocationTag m_codeLocation;
 
+        private HighCfgEdge m_exceptionEdge;
+        private HighCfgEdge m_continuationEdge;
+
         public delegate void VisitSsaDelegate(ref HighSsaRegister highSsaReg);
         public delegate void VisitCfgEdgeDelegate(ref HighCfgEdge highCfgEdge);
         public delegate void VisitCfgNodeDelegate(ref HighCfgNodeHandle highCfgNode);
@@ -81,6 +84,9 @@ namespace Clarity.Rpa
             LoadValueRloField,
             AllocInstanceDelegate,
             RloConvertNumber,
+            RloRoutedBranch,
+            RloTerminateRoutes,
+            CatchOrRoute,
         }
 
         public HighInstruction()
@@ -112,6 +118,10 @@ namespace Clarity.Rpa
         public abstract HighInstruction Clone();
 
         public virtual bool TerminatesControlFlow { get { return false; } }
+        public virtual bool MayThrow { get { return true; } }
+
+        public HighCfgEdge ExceptionEdge { get { return m_exceptionEdge; } set { m_exceptionEdge = value; } }
+        public HighCfgEdge ContinuationEdge { get { return m_continuationEdge; } set { m_continuationEdge = value; } }
 
         public void Write(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
         {
@@ -331,6 +341,10 @@ namespace Clarity.Rpa
                 else
                     dest = null;
             });
+
+            IExtractableTypesInstruction extractableTypes = instr as IExtractableTypesInstruction;
+            if (extractableTypes != null)
+                extractableTypes.ExtractSsaTypes();
 
             ILocalUsingInstruction localUsing = instr as ILocalUsingInstruction;
             if (localUsing != null)

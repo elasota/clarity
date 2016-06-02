@@ -4,23 +4,26 @@ using System.IO;
 
 namespace Clarity.Rpa.Instructions
 {
-    public sealed class DynamicCastInstruction : HighInstruction
+    public sealed class DynamicCastInstruction : HighInstruction, IExtractableTypesInstruction
     {
         private HighSsaRegister m_dest;
         private HighSsaRegister m_src;
+        private TypeSpecTag m_type;
 
         public HighSsaRegister Dest { get { return m_dest; } }
         public HighSsaRegister Src { get { return m_src; } }
+        public TypeSpecTag TargetType { get { return m_type; } }
 
         public DynamicCastInstruction()
         {
         }
 
-        public DynamicCastInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighSsaRegister src)
+        public DynamicCastInstruction(CodeLocationTag codeLocation, HighSsaRegister dest, HighSsaRegister src, TypeSpecTag type)
             : base(codeLocation)
         {
             m_dest = dest;
             m_src = src;
+            m_type = type;
         }
 
         public override Opcodes Opcode { get { return Opcodes.DynamicCast; } }
@@ -45,7 +48,24 @@ namespace Clarity.Rpa.Instructions
 
         public override HighInstruction Clone()
         {
-            return new DynamicCastInstruction(CodeLocation, m_dest, m_src);
+            return new DynamicCastInstruction(CodeLocation, m_dest, m_src, m_type);
         }
+
+        public void VisitTypes(VisitTypeSpecDelegate visitor)
+        {
+            visitor(ref m_type);
+        }
+
+        void IExtractableTypesInstruction.ExtractSsaTypes()
+        {
+            m_type = m_dest.Type;
+        }
+
+        void ITypeReferencingInstruction.VisitTypes(VisitTypeSpecDelegate visitor)
+        {
+            visitor(ref m_type);
+        }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

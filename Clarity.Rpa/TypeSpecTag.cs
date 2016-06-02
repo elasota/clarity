@@ -14,6 +14,7 @@ namespace Clarity.Rpa
 
             // Internal types
             StaticDelegate,
+            Box,
         }
 
         public abstract void Write(StreamWriter writer);

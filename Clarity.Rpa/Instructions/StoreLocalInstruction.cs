@@ -51,5 +51,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new StoreLocalInstruction(CodeLocation, m_local, m_src);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

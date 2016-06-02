@@ -1,0 +1,7 @@
+The RPA compiler converts CLI interfaces into static vtables.
+
+RLO interface have 3 "strength" levels due to variance silliness and the "no match" slot bug.
+
+Strength 0: Dynamic.  Slots of this type may be implemented by different interfaces depending on the type of the interface as invocation.  In these scenarios, it defers to an RloDynamicMethodSlot to handle resolution.
+Strength 1: Weak terminator.  Slots of this type always implement a specific method if called directly, but may be implemented by another method if called from a dynamic search.
+Strength 2: Strong terminator.  Slots of this type always implement a specific method if called directly and terminate dynamic searches.

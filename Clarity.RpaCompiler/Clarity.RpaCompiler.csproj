@@ -44,9 +44,12 @@
     <Compile Include="CliInterfaceImplSlot.cs" />
     <Compile Include="CliType.cs" />
     <Compile Include="Instructions\AllocInstanceDelegateInstruction.cs" />
+    <Compile Include="Instructions\CatchOrRouteInstruction.cs" />
     <Compile Include="Instructions\RloConvertNumberInstruction.cs" />
     <Compile Include="Instructions\GetRloFieldInfo.cs" />
     <Compile Include="Instructions\LoadValueRloFieldInstruction.cs" />
+    <Compile Include="Instructions\RloRoutedBranchInstruction.cs" />
+    <Compile Include="Instructions\RloTerminateRoutesInstruction.cs" />
     <Compile Include="MethodInstantiationPath.cs" />
     <Compile Include="Instructions\CallRloInterfaceMethodInstruction.cs" />
     <Compile Include="Instructions\CallRloVirtualMethodInstruction.cs" />
@@ -64,16 +67,19 @@
     <Compile Include="Instructions\InterfaceToObjectInstruction.cs" />
     <Compile Include="Instructions\ObjectToInterfaceInstruction.cs" />
     <Compile Include="Instructions\ObjectToObjectInstruction.cs" />
-    <Compile Include="ISsaInterchange.cs" />
     <Compile Include="MethodHandle.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="RloBB.cs" />
     <Compile Include="RloCanonicalizeSsaTypesPass.cs" />
+    <Compile Include="RloClass.cs" />
     <Compile Include="RloFindPredecessorsAndSuccessorsPass.cs" />
     <Compile Include="RloFindUseDefsPass.cs" />
+    <Compile Include="RloInitExceptionsPass.cs" />
     <Compile Include="RloInitPass.cs" />
     <Compile Include="RloInstantiationParameters.cs" />
+    <Compile Include="RloInterface.cs" />
+    <Compile Include="RloInterfaceSlot.cs" />
     <Compile Include="RloLocal.cs" />
     <Compile Include="RloMethod.cs" />
     <Compile Include="RloMethodBody.cs" />
@@ -86,7 +92,9 @@
     <Compile Include="RloTypedRefType.cs" />
     <Compile Include="RloUseDefCatalog.cs" />
     <Compile Include="RloValueType.cs" />
+    <Compile Include="RloVTable.cs" />
     <Compile Include="RpaCompileException.cs" />
+    <Compile Include="TypeSpecBoxTag.cs" />
     <Compile Include="TypeSpecStaticDelegateTag.cs" />
   </ItemGroup>
   <ItemGroup />

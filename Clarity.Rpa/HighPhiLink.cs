@@ -11,7 +11,7 @@ namespace Clarity.Rpa
         private HighCfgNodeHandle m_predecessor;
         private HighSsaRegister m_reg;
 
-        public HighCfgNodeHandle Predecessor { get { return m_predecessor; } }
+        public HighCfgNodeHandle Predecessor { get { return m_predecessor; } set { m_predecessor = value; } }
         public HighSsaRegister Reg { get { return m_reg; } }
 
         public HighPhiLink(HighCfgNodeHandle predecessor, HighSsaRegister reg)
@@ -22,8 +22,6 @@ namespace Clarity.Rpa
 
         public void Write(HighFileBuilder fileBuilder, HighRegionBuilder regionBuilder, BinaryWriter writer)
         {
-            writer.Write(regionBuilder.IndexCfgNode(m_predecessor.Value));
-
             if (m_reg.IsConstant)
             {
                 writer.Write(true);

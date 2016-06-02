@@ -76,5 +76,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new BranchCompareNumbersInstruction(CodeLocation, m_operation, m_numberType, m_left, m_right, m_trueNode.Dest, m_falseNode.Dest);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

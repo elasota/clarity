@@ -75,5 +75,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new CompareNumbersInstruction(CodeLocation, m_dest, m_operation, m_numberType, m_left, m_right, m_trueValue, m_falseValue);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

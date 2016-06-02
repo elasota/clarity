@@ -4,6 +4,7 @@ using System.IO;
 
 namespace Clarity.Rpa.Instructions
 {
+    // This isn't dest type sensitive because it isn't canonical
     public sealed class PassiveConvertInstruction : HighInstruction
     {
         private HighSsaRegister m_dest;

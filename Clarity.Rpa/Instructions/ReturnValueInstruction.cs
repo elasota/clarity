@@ -44,5 +44,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new ReturnValueInstruction(CodeLocation, m_value);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

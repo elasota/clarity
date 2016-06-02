@@ -52,5 +52,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new LoadValueFieldInstruction(CodeLocation, m_dest, m_src, m_fieldName);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

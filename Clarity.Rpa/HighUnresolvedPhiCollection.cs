@@ -26,13 +26,10 @@ namespace Clarity.Rpa
                 m_constantReg = constantReg;
                 m_predecessorIndex = predecessorIndex;
                 m_linkIndex = linkIndex;
-
             }
 
-            public static UnresolvedLink Read(TagRepository rpa, CatalogReader catalog, BinaryReader reader)
+            public static UnresolvedLink Read(TagRepository rpa, CatalogReader catalog, uint predecessorIndex, BinaryReader reader)
             {
-                uint predecessorIndex = reader.ReadUInt32();
-
                 bool isConstant = reader.ReadBoolean();
                 HighSsaRegister constantReg;
                 uint linkIndex;
@@ -58,14 +55,14 @@ namespace Clarity.Rpa
             m_links = links;
         }
 
-        public static HighUnresolvedPhiCollection Read(TagRepository rpa, CatalogReader catalog, HighCfgNodeHandle[] cfgNodes, BinaryReader reader)
+        public static HighUnresolvedPhiCollection Read(TagRepository rpa, CatalogReader catalog, HighCfgNodeHandle[] cfgNodes, uint[] predecessors, BinaryReader reader)
         {
-            uint numLinks = reader.ReadUInt32();
+            int numLinks = predecessors.Length;
 
             List<UnresolvedLink> links = new List<UnresolvedLink>();
-            for (uint i = 0; i < numLinks; i++)
+            foreach (uint pred in predecessors)
             {
-                UnresolvedLink link = UnresolvedLink.Read(rpa, catalog, reader);
+                UnresolvedLink link = UnresolvedLink.Read(rpa, catalog, pred, reader);
                 links.Add(link);
             }
 

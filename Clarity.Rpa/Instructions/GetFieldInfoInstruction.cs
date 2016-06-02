@@ -63,5 +63,7 @@ namespace Clarity.Rpa.Instructions
         {
             visitor(ref m_type);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

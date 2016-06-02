@@ -44,5 +44,7 @@ namespace Clarity.RpaCompiler.Instructions
         public override void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
         {
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

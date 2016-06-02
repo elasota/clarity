@@ -25,5 +25,13 @@ namespace Clarity
         {
             return CompareEqual_Resolver<T>(ref a, ref b);
         }
+
+        public static object BoxNullable<T>(Nullable<T> v)
+            where T : struct
+        {
+            if (v.HasValue)
+                return (object)v.Value;
+            return null;
+        }
     }
 }

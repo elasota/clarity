@@ -43,5 +43,7 @@ namespace Clarity.Rpa.Instructions
         {
             return new ZeroFillPtrInstruction(CodeLocation, m_target);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

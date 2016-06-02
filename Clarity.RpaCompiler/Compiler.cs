@@ -21,6 +21,11 @@ namespace Clarity.RpaCompiler
 
         private UniqueQueue<TypeNameTag, CliInterface> m_openInterfaces = new UniqueQueue<TypeNameTag, CliInterface>();
         private Dictionary<TypeSpecClassTag, CliInterface> m_closedInterfaces = new Dictionary<TypeSpecClassTag, CliInterface>();
+
+        private UniqueQueue<TypeSpecTag, RloVTable> m_rloVTables = new UniqueQueue<TypeSpecTag, RloVTable>();
+        private UniqueQueue<TypeSpecTag, RloInterface> m_rloSimpleInterfaces = new UniqueQueue<TypeSpecTag, RloInterface>();
+        private UniqueQueue<TypeSpecArrayTag, RloClass> m_rloArrays = new UniqueQueue<TypeSpecArrayTag, RloClass>();
+
         private Dictionary<RloType, RloType> m_internedRloTypes = new Dictionary<RloType, RloType>();
         private RloTypedRefType m_internedTypedRefType = new RloTypedRefType();
         private TagRepository m_tagRepository = new TagRepository();
@@ -74,11 +79,21 @@ namespace Clarity.RpaCompiler
             while (anyNew)
             {
                 anyNew = false;
+
                 while (m_methodInstances.HaveNext)
                 {
                     KeyValuePair<MethodSpecTag, MethodHandle> methodInstance = m_methodInstances.GetNext();
                     MethodHandle handle = methodInstance.Value;
                     handle.Value = new RloMethod(this, methodInstance.Key, handle.InstantiationPath);
+                    anyNew = true;
+                }
+
+                while (m_rloVTables.HaveNext)
+                {
+                    KeyValuePair<TypeSpecTag, RloVTable> vtablePair = m_rloVTables.GetNext();
+                    TypeSpecTag typeSpec = vtablePair.Key;
+                    RloVTable vtable = vtablePair.Value;
+                    throw new NotImplementedException();
                     anyNew = true;
                 }
             }
@@ -343,6 +358,14 @@ namespace Clarity.RpaCompiler
                 throw new Exception("Internal error: Unresolvable interface method");
 
             return RecursiveDevirtualizeInterfaceMethod(parentClass, ifcSpec, ifcSlotIndex);
+        }
+
+        public RloVTable GetRloVTable(TypeSpecTag typeSpec, MethodInstantiationPath instantiationPath)
+        {
+            RloVTable vtable = m_rloVTables.Lookup(typeSpec);
+            if (vtable.InstantiationPath == null)
+                vtable.InstantiationPath = instantiationPath;
+            return vtable;
         }
     }
 }

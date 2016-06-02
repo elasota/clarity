@@ -11,7 +11,7 @@ namespace Clarity.Rpa
         private HighUnresolvedPhiCollection m_unresolvedCollection;
 
         public HighSsaRegister Dest { get { return m_dest; } }
-        public HighPhiLink[] Links { get { return m_links; } }
+        public HighPhiLink[] Links { get { return m_links; } set { m_links = value; } }
 
         public HighPhi(HighSsaRegister dest, HighPhiLink[] links)
         {
@@ -27,23 +27,30 @@ namespace Clarity.Rpa
             m_unresolvedCollection = unresolvedCollection;
         }
 
-        public void Write(HighFileBuilder fileBuilder, HighRegionBuilder regionBuilder, BinaryWriter writer)
+        public void Write(HighFileBuilder fileBuilder, HighRegionBuilder regionBuilder, HighCfgNodeHandle[] predecessors, BinaryWriter writer)
         {
             m_dest.WriteDestinationDef(fileBuilder, regionBuilder, writer);
 
-            writer.Write((uint)m_links.Length);
+            int numPreds = predecessors.Length;
+            if (m_links.Length != numPreds)
+                throw new ArgumentException("Phi and node have different number of predecessors");
 
-            foreach (HighPhiLink link in m_links)
+            for (int i = 0; i < numPreds; i++)
+            {
+                HighPhiLink link = m_links[i];
+                if (link.Predecessor.Value != predecessors[i].Value)
+                    throw new ArgumentException("Phi has a mismatched predecessor");
                 link.Write(fileBuilder, regionBuilder, writer);
+            }
         }
 
-        public static HighPhi Read(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, BinaryReader reader)
+        public static HighPhi Read(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, uint[] predecessors, BinaryReader reader)
         {
             HighSsaRegister dest = HighSsaRegister.ReadDestinationDef(rpa, catalog, reader);
             if (dest == null)
                 throw new Rpa.RpaLoadException("Phi has no destination");
 
-            HighUnresolvedPhiCollection unresolvedCollection = HighUnresolvedPhiCollection.Read(rpa, catalog, cfgNodes, reader);
+            HighUnresolvedPhiCollection unresolvedCollection = HighUnresolvedPhiCollection.Read(rpa, catalog, cfgNodes, predecessors, reader);
 
             return new HighPhi(dest, unresolvedCollection);
         }
