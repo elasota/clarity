@@ -56,7 +56,7 @@ namespace Clarity.Rpa
         {
             TypeNameTag typeNameTag = rpa.GetTypeName(reader.ReadUInt32());
 
-            uint numArgTypes = reader.ReadUInt32();
+            uint numArgTypes = typeNameTag.NumGenericParameters;
             TypeSpecTag[] argTypes = new TypeSpecTag[numArgTypes];
 
             for (uint i = 0; i < numArgTypes; i++)
@@ -88,7 +88,6 @@ namespace Clarity.Rpa
 
             catalogWriter.Write((byte)SubTypeCode.Class);
             catalogWriter.Write(typeName);
-            catalogWriter.Write((uint)m_argTypes.Length);
 
             foreach (uint argType in argTypes)
                 catalogWriter.Write(argType);

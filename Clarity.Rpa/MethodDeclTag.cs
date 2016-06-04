@@ -12,6 +12,8 @@ namespace Clarity.Rpa
 
         public MethodSignatureTag BaseMethodSignature { get { return m_methodSignature; } }
         public TypeNameTag DeclaredInClass { get { return m_declaredInClass; } }
+        public string Name { get { return m_name; } }
+
         public bool IsInterned { get; set; }
 
         public MethodDeclTag(string name, MethodSignatureTag methodSignature, TypeNameTag declaredInClass)

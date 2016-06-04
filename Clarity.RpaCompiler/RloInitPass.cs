@@ -6,6 +6,9 @@ using Clarity.Rpa.Instructions;
 namespace Clarity.RpaCompiler
 {
     // This pass lowers all high-level RPA instructions to RLO instructions and performs validation.
+    // It enforces that all branches are properly linked to predecessors, but doesn't enforce that predecessors
+    // are valid or not orphans.
+    //
     // Some things that this does not do:
     // - Validate that return instructions are not in protected regions.  This is done by the exception init pass.
     // - Validate LeaveRegion instructions.  This is done by the exception init pass.
@@ -93,7 +96,7 @@ namespace Clarity.RpaCompiler
 
         private TypeSpecClassTag GetBuiltinType(TagRepository repo, string typeNamespace, string typeName)
         {
-            TypeNameTag typeNameTag = repo.InternTypeName(new TypeNameTag("mscorlib", typeNamespace, typeName, null));
+            TypeNameTag typeNameTag = repo.InternTypeName(new TypeNameTag("mscorlib", typeNamespace, typeName));
             TypeSpecTag typeSpecTag = repo.InternTypeSpec(new TypeSpecClassTag(typeNameTag, new TypeSpecTag[0]));
 
             return (TypeSpecClassTag)typeSpecTag;
@@ -414,13 +417,13 @@ namespace Clarity.RpaCompiler
 
                                 validationOnly = false;
 
-                                TypeNameTag clarityToolsName = new TypeNameTag("mscorlib", "Clarity", "Tools", null);
+                                TypeNameTag clarityToolsName = new TypeNameTag("mscorlib", "Clarity", "Tools");
                                 clarityToolsName = this.Compiler.TagRepository.InternTypeName(clarityToolsName);
 
                                 TypeSpecClassTag clarityToolsClass = new TypeSpecClassTag(clarityToolsName, new TypeSpecTag[0]);
                                 clarityToolsClass = (TypeSpecClassTag)this.Compiler.TagRepository.InternTypeSpec(clarityToolsClass);
 
-                                TypeNameTag nullableName = new TypeNameTag("mscorlib", "System", "Nullable`1", null);
+                                TypeNameTag nullableName = new TypeNameTag("mscorlib", "System", "Nullable`1", 1, null);
                                 nullableName = this.Compiler.TagRepository.InternTypeName(nullableName);
 
                                 TypeSpecGenericParamTypeTag mArgType = new TypeSpecGenericParamTypeTag(TypeSpecGenericParamTypeTag.Values.MVar);

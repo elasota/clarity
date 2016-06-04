@@ -47,7 +47,12 @@ namespace AssemblyImporter.CppExport
 
             CLRAssemblyRow assemblyRow = (CLRAssemblyRow)typeDef.Table.MetaData.MetaDataTables.GetTable(CLRMetaDataTables.TableIndex.Assembly).GetRow(0);
 
-            return new TypeNameTag(assemblyRow.Name, typeDef.TypeNamespace, typeDef.TypeName, containerTag);
+            uint numGenericParameters = 0;
+            if (typeDef.GenericParameters != null)
+                numGenericParameters = (uint)typeDef.GenericParameters.Length;
+
+
+            return new TypeNameTag(assemblyRow.Name, typeDef.TypeNamespace, typeDef.TypeName, numGenericParameters, containerTag);
         }
 
         public static TypeSpecTag CreateTypeTag(CLRTypeSpec typeSpec)

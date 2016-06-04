@@ -10,19 +10,31 @@ namespace Clarity.Rpa
         private string m_typeName;
         private string m_assemblyName;
         private TypeNameTag m_containerType;
+        private uint m_numGenericParameters;
 
         public string AssemblyName { get { return m_assemblyName; } }
         public string TypeNamespace { get { return m_typeNamespace; } }
         public string TypeName { get { return m_typeName; } }
+        public uint NumGenericParameters { get { return m_numGenericParameters; } }
         public TypeNameTag ContainerType { get { return m_containerType; } }
         public bool IsInterned { get; set; }
 
-        public TypeNameTag(string assemblyName, string typeNamespace, string typeName, TypeNameTag containerType)
+        public TypeNameTag(string assemblyName, string typeNamespace, string typeName)
+        {
+            m_assemblyName = assemblyName;
+            m_typeName = typeName;
+            m_typeNamespace = typeNamespace;
+            m_containerType = null;
+            m_numGenericParameters = 0;
+        }
+
+        public TypeNameTag(string assemblyName, string typeNamespace, string typeName, uint numGenericParameters, TypeNameTag containerType)
         {
             m_assemblyName = assemblyName;
             m_typeName = typeName;
             m_typeNamespace = typeNamespace;
             m_containerType = containerType;
+            m_numGenericParameters = numGenericParameters;
         }
 
         public bool Equals(TypeNameTag other)
@@ -50,6 +62,9 @@ namespace Clarity.Rpa
                     return false;
             }
 
+            if (m_numGenericParameters != other.m_numGenericParameters)
+                return false;
+
             return true;
         }
 
@@ -63,8 +78,9 @@ namespace Clarity.Rpa
             string assemblyName = rpaCatalogReader.GetString(reader.ReadUInt32());
             string typeNamespace = rpaCatalogReader.GetString(reader.ReadUInt32());
             string typeName = rpaCatalogReader.GetString(reader.ReadUInt32());
+            uint numGenericParameters = reader.ReadUInt32();
 
-            return new TypeNameTag(assemblyName, typeNamespace, typeName, containerType);
+            return new TypeNameTag(assemblyName, typeNamespace, typeName, numGenericParameters, containerType);
         }
 
         public override int GetHashCode()
@@ -89,6 +105,7 @@ namespace Clarity.Rpa
             writer.Write(builder.IndexString(m_assemblyName));
             writer.Write(builder.IndexString(m_typeNamespace));
             writer.Write(builder.IndexString(m_typeName));
+            writer.Write(m_numGenericParameters);
         }
 
         public void Write(StreamWriter writer)
@@ -123,6 +140,8 @@ namespace Clarity.Rpa
             if (m_containerType != null)
                 result += "(" + m_containerType.ToString() + ")/";
             result += m_typeNamespace + ":" + m_typeName;
+            if (m_numGenericParameters > 0)
+                result += "^" + m_numGenericParameters.ToString();
             return result;
         }
     }

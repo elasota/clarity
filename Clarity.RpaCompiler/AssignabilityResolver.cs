@@ -36,19 +36,19 @@ namespace Clarity.RpaCompiler
 
             m_objectType = ResolveSimpleType("System", "Object");
             m_arrayType = ResolveSimpleType("System", "Array");
-            m_refSZArrayName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "Clarity", "RefSZArray", null));
-            m_valueSZArrayName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "Clarity", "ValueSZArray`1", null));
-            m_nullableSZArrayName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "Clarity", "NullableSZArray`1", null));
-            m_nullableName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System", "Nullable`1", null));
+            m_refSZArrayName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "Clarity", "RefSZArray"));
+            m_valueSZArrayName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "Clarity", "ValueSZArray`1", 1, null));
+            m_nullableSZArrayName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "Clarity", "NullableSZArray`1", 1, null));
+            m_nullableName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System", "Nullable`1", 1, null));
 
-            m_ilistName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System.Collections.Generic", "IList`1", null));
-            m_icollectionName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System.Collections.Generic", "ICollection`1", null));
-            m_ienumerableName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System.Collections.Generic", "IEnumerable`1", null));
+            m_ilistName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System.Collections.Generic", "IList`1", 1, null));
+            m_icollectionName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System.Collections.Generic", "ICollection`1", 1, null));
+            m_ienumerableName = compiler.TagRepository.InternTypeName(new TypeNameTag("mscorlib", "System.Collections.Generic", "IEnumerable`1", 1, null));
         }
 
         private TypeSpecClassTag ResolveSimpleType(string typeNamespace, string typeName)
         {
-            TypeNameTag typeNameTag = new TypeNameTag("mscorlib", typeNamespace, typeName, null);
+            TypeNameTag typeNameTag = new TypeNameTag("mscorlib", typeNamespace, typeName, 0, null);
             typeNameTag = m_compiler.TagRepository.InternTypeName(typeNameTag);
 
 

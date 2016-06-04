@@ -180,7 +180,7 @@ namespace Clarity.RpaCompiler
                 if (typeDef.Semantics == TypeSemantics.Struct)
                 {
                     m_isStruct = true;
-                    TypeNameTag valueTypeName = new TypeNameTag("mscorlib", "System", "ValueType", null);
+                    TypeNameTag valueTypeName = new TypeNameTag("mscorlib", "System", "ValueType", 0, null);
                     valueTypeName = compiler.TagRepository.InternTypeName(valueTypeName);
                     TypeSpecClassTag vtClassTag = new TypeSpecClassTag(valueTypeName, new TypeSpecTag[0]);
                     vtClassTag = (TypeSpecClassTag)compiler.TagRepository.InternTypeSpec(vtClassTag);
@@ -254,7 +254,7 @@ namespace Clarity.RpaCompiler
             {
                 m_isStruct = false;
 
-                TypeNameTag dgTypeName = new TypeNameTag("mscorlib", "System", typeDef.IsMulticastDelegate ? "MulticastDelegate" : "Delegate", null);
+                TypeNameTag dgTypeName = new TypeNameTag("mscorlib", "System", typeDef.IsMulticastDelegate ? "MulticastDelegate" : "Delegate", 0, null);
                 dgTypeName = compiler.TagRepository.InternTypeName(dgTypeName);
                 TypeSpecClassTag dgClassTag = new TypeSpecClassTag(dgTypeName, new TypeSpecTag[0]);
                 dgClassTag = (TypeSpecClassTag)compiler.TagRepository.InternTypeSpec(dgClassTag);
@@ -283,7 +283,7 @@ namespace Clarity.RpaCompiler
             {
                 m_isStruct = false;
 
-                TypeNameTag dgTypeName = new TypeNameTag("mscorlib", "System", "Enum", null);
+                TypeNameTag dgTypeName = new TypeNameTag("mscorlib", "System", "Enum", 0, null);
                 dgTypeName = compiler.TagRepository.InternTypeName(dgTypeName);
                 TypeSpecClassTag dgClassTag = new TypeSpecClassTag(dgTypeName, new TypeSpecTag[0]);
                 dgClassTag = (TypeSpecClassTag)compiler.TagRepository.InternTypeSpec(dgClassTag);
@@ -321,7 +321,7 @@ namespace Clarity.RpaCompiler
                         throw new Exception();
                 }
 
-                TypeNameTag underlyingTypeNameTag = new TypeNameTag("mscorlib", "System", underlyingTypeName, null);
+                TypeNameTag underlyingTypeNameTag = new TypeNameTag("mscorlib", "System", underlyingTypeName);
                 underlyingTypeNameTag = compiler.TagRepository.InternTypeName(underlyingTypeNameTag);
 
                 TypeSpecClassTag underlyingTypeSpec = new TypeSpecClassTag(underlyingTypeNameTag, new TypeSpecTag[0]);

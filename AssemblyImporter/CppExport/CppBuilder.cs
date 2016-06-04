@@ -807,7 +807,6 @@ namespace AssemblyImporter.CppExport
         private void ExportDelegate(Clarity.Rpa.HighFileBuilder fileBuilder, BinaryWriter writer, CppClass cls)
         {
             writer.Write(cls.IsMulticastDelegate);
-            writer.Write(cls.NumGenericParameters);
 
             ExportGenericVariance(cls, writer);
 
@@ -852,8 +851,6 @@ namespace AssemblyImporter.CppExport
         {
             if (cls.IsDelegate || cls.IsEnum)
                 throw new ArgumentException();
-
-            writer.Write((uint)cls.NumGenericParameters);
 
             if (cls.TypeDef.Semantics == CLRTypeDefRow.TypeSemantics.Interface)
                 ExportGenericVariance(cls, writer);

@@ -17,6 +17,7 @@ namespace Clarity.RpaCompiler
         private UniqueQueue<MethodSpecTag, MethodHandle> m_methodInstances = new UniqueQueue<MethodSpecTag, MethodHandle>();
 
         private UniqueQueue<TypeNameTag, CliClass> m_openClasses = new UniqueQueue<TypeNameTag, CliClass>();
+
         private Dictionary<TypeSpecClassTag, CliClass> m_closedClasses = new Dictionary<TypeSpecClassTag, CliClass>();
 
         private UniqueQueue<TypeNameTag, CliInterface> m_openInterfaces = new UniqueQueue<TypeNameTag, CliInterface>();

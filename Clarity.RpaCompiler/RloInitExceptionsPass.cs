@@ -24,7 +24,7 @@ namespace Clarity.RpaCompiler
         {
             if (typeSpecTag == null)
             {
-                TypeNameTag nameTag = new TypeNameTag("mscorlib", "System", typeName, null);
+                TypeNameTag nameTag = new TypeNameTag("mscorlib", "System", typeName);
                 nameTag = m_compiler.TagRepository.InternTypeName(nameTag);
                 TypeSpecTag typeSpec = new TypeSpecClassTag(nameTag, new TypeSpecTag[0]);
                 typeSpecTag = m_compiler.TagRepository.InternTypeSpec(typeSpec);

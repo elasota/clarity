@@ -22,18 +22,20 @@ namespace Clarity.Rpa
             m_genericParameters = genericParameters;
             m_declaringClass = declaringClass;
             m_methodDeclTag = methodDefTag;
+
+            if ((uint)genericParameters.Length != m_methodDeclTag.BaseMethodSignature.NumGenericParameters)
+                throw new ArgumentException("Incorrect number of generic paramters");
         }
 
         public void Write(HighFileBuilder fileBuilder, BinaryWriter writer)
         {
             writer.Write((byte)m_methodSlotType);
+            writer.Write(fileBuilder.IndexMethodDeclTag(m_methodDeclTag));
 
-            writer.Write((uint)m_genericParameters.Length);
             foreach (TypeSpecTag paramType in m_genericParameters)
                 writer.Write(fileBuilder.IndexTypeSpecTag(paramType));
 
             writer.Write(fileBuilder.IndexTypeSpecTag(m_declaringClass));
-            writer.Write(fileBuilder.IndexMethodDeclTag(m_methodDeclTag));
         }
 
         public override int GetHashCode()
@@ -48,7 +50,9 @@ namespace Clarity.Rpa
             if (slotType != MethodSlotType.Instance && slotType != MethodSlotType.Static && slotType != MethodSlotType.Virtual)
                 throw new Exception("Invalid method slot type");
 
-            uint numGenericParameters = reader.ReadUInt32();
+            MethodDeclTag declTag = rpa.GetMethodDecl(reader.ReadUInt32());
+
+            uint numGenericParameters = declTag.BaseMethodSignature.NumGenericParameters;
 
             TypeSpecTag[] paramTypes = null;
             paramTypes = new TypeSpecTag[numGenericParameters];
@@ -58,8 +62,6 @@ namespace Clarity.Rpa
             TypeSpecTag declaringClass = rpa.GetTypeSpec(reader.ReadUInt32());
             if (declaringClass.GetType() != typeof(TypeSpecClassTag))
                 throw new Exception("Method spec declaring type is not a class");
-
-            MethodDeclTag declTag = rpa.GetMethodDecl(reader.ReadUInt32());
 
             return new MethodSpecTag(slotType, paramTypes, (TypeSpecClassTag)declaringClass, declTag);
         }

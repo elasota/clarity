@@ -79,6 +79,8 @@ namespace Clarity.Rpa
             if (m_typeName.AssemblyName != catalog.AssemblyName)
                 throw new Exception("Type definition outside of assembly");
 
+            m_numGenericParameters = m_typeName.NumGenericParameters;
+
             m_underlyingType = EnumUnderlyingType.NotEnum;
             if (m_semantics == TypeSemantics.Delegate)
             {
@@ -176,7 +178,6 @@ namespace Clarity.Rpa
         private void ReadDelegate(TagRepository rpa, CatalogReader catalog, BinaryReader reader)
         {
             m_isMulticastDelegate = reader.ReadBoolean();
-            m_numGenericParameters = reader.ReadUInt32();
             ReadGenericParameterVariance(reader);
             m_delegateSignature = catalog.GetMethodSignature(reader.ReadUInt32());
             if (m_delegateSignature.NumGenericParameters > 0)
@@ -197,8 +198,6 @@ namespace Clarity.Rpa
 
         private void ReadClassDefinitions(TagRepository rpa, CatalogReader catalog, BinaryReader reader)
         {
-            m_numGenericParameters = reader.ReadUInt32();
-
             m_parentClass = null;
             if (m_semantics == TypeSemantics.Class)
             {
