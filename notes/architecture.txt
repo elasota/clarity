@@ -1,0 +1,22 @@
+Clarity sends .NET code through several conversion steps before it becomes executable.
+
+The first important step is converting .NET code to High.  High is essentially .NET with several things preresolved and several things removed:
+- VTable overrides and interface mappings are preresolved.
+- Visibility modifiers are removed.
+- Generic constraints are removed.
+- All implicit conversions in the .NET IL are changed to explicit conversions.
+
+In addition, High contains several structural limitations that make it easier to validate.  In particular, instructions in a High basic block can only reference SSA registers created within the same basic block, including phi nodes, and phi nodes can only reference SSA registers created within the predecessor.  This requires all pass-through SSA registers to be explicitly carried via single-predecessor phi nodes.
+
+
+AssemblyImporter:
+- Loads .NET bytecode, converts it to Mid, which is simply an SSA version of CIL and has explicit value lifetimes.  Mid instructions that aren't register lifetime instructions are almost always 1:1 with .NET instructions and Mid SSA registers are 1:1 with .NET stack values within a BB, which also means that implicit conversions are preserved.
+- Converts Mid to High.  When converting to High, all implicit conversions are changed to explicit conversions.
+- Writes High to RPA file.
+
+rpac:
+- Loads RPA, expands all generics, performs several canonicalizations:
+	- All constrained calls are resolved.
+	- All PassiveConvert instructions are converted to copies, numeric expansions, or reference conversions.
+	- Call instructions are converted to Rlo equivalents.
+	- All exception handlers are flattened, handler code is generated, and any instruction that can throw splits the BB with a continuation edge and possibly an exception handler edge.

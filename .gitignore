@@ -17,6 +17,7 @@
 *.cmake
 *.ilk
 *.opendb
+*.rasm
 CMakeCache.txt
 CMakeFiles/*
 Makefile

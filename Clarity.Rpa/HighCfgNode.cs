@@ -22,6 +22,14 @@ namespace Clarity.Rpa
             m_instructions = instructions;
         }
 
+        // Constructor for single-predecessor node
+        public HighCfgNode(HighInstruction[] instructions)
+        {
+            m_predecessors = new HighCfgNodeHandle[0];
+            m_phis = new HighPhi[0];
+            m_instructions = instructions;
+        }
+
         public void Write(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, bool haveDebugInfo, BinaryWriter writer)
         {
             HighCfgNodeBuilder cfgNodeBuilder = new HighCfgNodeBuilder();
@@ -63,6 +71,23 @@ namespace Clarity.Rpa
 
             foreach (HighInstruction instr in m_instructions)
                 instr.Write(fileBuilder, methodBuilder, regionBuilder, cfgNodeBuilder, haveDebugInfo, writer);
+        }
+
+        public void WriteDisassembly(CfgWriter cw, DisassemblyWriter dw)
+        {
+            if (m_phis.Length > 0)
+            {
+                dw.WriteLine("phis {");
+                dw.PushIndent();
+
+                foreach (HighPhi phi in m_phis)
+                    phi.WriteDisassembly(cw, dw);
+                dw.PopIndent();
+                dw.WriteLine("}");
+            }
+
+            foreach (HighInstruction instr in m_instructions)
+                instr.WriteDisassembly(cw, dw);
         }
 
         public static HighCfgNode Read(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)

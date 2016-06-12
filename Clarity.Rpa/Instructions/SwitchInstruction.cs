@@ -48,6 +48,11 @@ namespace Clarity.Rpa.Instructions
             writer.Write((uint)m_cases.Length);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_cases.Length.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_cases = new HighCfgEdge[reader.ReadUInt32()];
@@ -62,7 +67,7 @@ namespace Clarity.Rpa.Instructions
             visitor(ref m_defaultCase);
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             int numCases = m_cases.Length;
             HighCfgNodeHandle[] cases = new HighCfgNodeHandle[numCases];

@@ -33,5 +33,13 @@ namespace Clarity
                 return (object)v.Value;
             return null;
         }
+
+        public static bool FieldsEqual<T>(ref T a, ref T b)
+        {
+            return a.Equals(b);
+        }
+
+        [MethodImplAttribute(MethodImplOptions.InternalCall)]
+        public extern static int HashBytes<T>(ref T a);
     }
 }

@@ -43,12 +43,17 @@ namespace Clarity.Rpa.Instructions
             writer.Write(fileBuilder.IndexMethodSpecTag(m_methodSpec));
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            m_methodSpec.WriteDisassembly(dw);
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_methodSpec = catalog.GetMethodSpec(reader.ReadUInt32());
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new BindInstanceDelegateInstruction(CodeLocation, m_dest, m_object, m_methodSpec);
         }
@@ -57,5 +62,7 @@ namespace Clarity.Rpa.Instructions
         {
             visitor(ref m_methodSpec);
         }
+
+        public override bool MayThrow { get { return true; } }
     }
 }

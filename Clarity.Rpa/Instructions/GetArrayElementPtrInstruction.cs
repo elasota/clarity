@@ -47,15 +47,22 @@ namespace Clarity.Rpa.Instructions
             writer.Write((uint)m_indexes.Length);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_indexes.Length.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_indexes = new HighSsaRegister[reader.ReadUInt32()];
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             HighSsaRegister[] indexes = ArrayCloner.Clone<HighSsaRegister>(m_indexes);
             return new GetArrayElementPtrInstruction(CodeLocation, m_addrDestReg, m_arrayReg, indexes);
         }
+
+        public override bool MayThrow { get { return true; } }
     }
 }

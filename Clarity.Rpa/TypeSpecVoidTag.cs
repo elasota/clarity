@@ -46,5 +46,10 @@ namespace Clarity.Rpa
         {
             return "void";
         }
+
+        public override void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("void");
+        }
     }
 }

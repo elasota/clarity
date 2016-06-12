@@ -14,7 +14,7 @@ namespace Clarity.RpaCompiler
         private Dictionary<TypeNameTag, HighTypeDef> m_typeDefsDict = new Dictionary<TypeNameTag, HighTypeDef>();
         private List<HighTypeDef> m_typeDefsList = new List<HighTypeDef>();
 
-        private UniqueQueue<MethodSpecTag, MethodHandle> m_methodInstances = new UniqueQueue<MethodSpecTag, MethodHandle>();
+        private UniqueQueue<MethodKey, MethodHandle> m_methodInstances = new UniqueQueue<MethodKey, MethodHandle>();
 
         private UniqueQueue<TypeNameTag, CliClass> m_openClasses = new UniqueQueue<TypeNameTag, CliClass>();
 
@@ -24,8 +24,11 @@ namespace Clarity.RpaCompiler
         private Dictionary<TypeSpecClassTag, CliInterface> m_closedInterfaces = new Dictionary<TypeSpecClassTag, CliInterface>();
 
         private UniqueQueue<TypeSpecTag, RloVTable> m_rloVTables = new UniqueQueue<TypeSpecTag, RloVTable>();
+
         private UniqueQueue<TypeSpecTag, RloInterface> m_rloSimpleInterfaces = new UniqueQueue<TypeSpecTag, RloInterface>();
         private UniqueQueue<TypeSpecArrayTag, RloClass> m_rloArrays = new UniqueQueue<TypeSpecArrayTag, RloClass>();
+
+        private VTableGenerationCache m_vtCache = new VTableGenerationCache();
 
         private Dictionary<RloType, RloType> m_internedRloTypes = new Dictionary<RloType, RloType>();
         private RloTypedRefType m_internedTypedRefType = new RloTypedRefType();
@@ -57,6 +60,26 @@ namespace Clarity.RpaCompiler
                 LoadTypeDef(catalog, reader);
         }
 
+        public void WriteMethodDisassembly(StreamWriter writer)
+        {
+            Dictionary<object, IDisassemblyWritable> mhReverse = new Dictionary<object, IDisassemblyWritable>();
+
+            foreach (KeyValuePair<MethodKey, MethodHandle> kvp in m_methodInstances.AllInstances)
+                mhReverse.Add(kvp.Value, kvp.Key);
+
+            DisassemblyWriter dw = new DisassemblyWriter(writer, mhReverse);
+
+            foreach (KeyValuePair<MethodKey, MethodHandle> methodInstance in m_methodInstances.AllInstances)
+            {
+                writer.Write("methodInstance ( ");
+                methodInstance.Key.WriteDisassembly(dw);
+                writer.WriteLine(" )");
+                writer.WriteLine("{");
+                methodInstance.Value.Value.WriteDisassembly(dw);
+                writer.WriteLine("}");
+            }
+        }
+
         private void LoadTypeDef(CatalogReader catalog, BinaryReader reader)
         {
             HighTypeDef typeDef = new HighTypeDef();
@@ -83,9 +106,9 @@ namespace Clarity.RpaCompiler
 
                 while (m_methodInstances.HaveNext)
                 {
-                    KeyValuePair<MethodSpecTag, MethodHandle> methodInstance = m_methodInstances.GetNext();
+                    KeyValuePair<MethodKey, MethodHandle> methodInstance = m_methodInstances.GetNext();
                     MethodHandle handle = methodInstance.Value;
-                    handle.Value = new RloMethod(this, methodInstance.Key, handle.InstantiationPath);
+                    handle.Value = methodInstance.Key.GenerateMethod(this, handle.InstantiationPath);
                     anyNew = true;
                 }
 
@@ -94,7 +117,9 @@ namespace Clarity.RpaCompiler
                     KeyValuePair<TypeSpecTag, RloVTable> vtablePair = m_rloVTables.GetNext();
                     TypeSpecTag typeSpec = vtablePair.Key;
                     RloVTable vtable = vtablePair.Value;
-                    throw new NotImplementedException();
+
+                    vtablePair.Value.GenerateFromTypeSpec(this, vtablePair.Key, m_vtCache);
+
                     anyNew = true;
                 }
             }
@@ -220,9 +245,9 @@ namespace Clarity.RpaCompiler
             return ifc;
         }
 
-        public MethodHandle InstantiateMethod(MethodSpecTag methodSpecTag, MethodInstantiationPath instantiationPath)
+        public MethodHandle InstantiateMethod(MethodKey methodKey, MethodInstantiationPath instantiationPath)
         {
-            MethodHandle handle = m_methodInstances.Lookup(methodSpecTag);
+            MethodHandle handle = m_methodInstances.Lookup(methodKey);
             if (handle.InstantiationPath == null)
                 handle.InstantiationPath = instantiationPath;
             return handle;
@@ -315,7 +340,7 @@ namespace Clarity.RpaCompiler
         private uint RecursiveDevirtualizeInterfaceMethod(CliClass cls, TypeSpecClassTag ifcSpec, uint ifcSlotIndex)
         {
             // First, look for an exact match, but only on this class level
-            foreach (CliInterfaceImpl impl in cls.InterfaceImpls2)
+            foreach (CliInterfaceImpl impl in cls.InterfaceImpls)
             {
                 if (impl.Interface == ifcSpec)
                 {
@@ -332,7 +357,7 @@ namespace Clarity.RpaCompiler
             // Otherwise, check all interfaces
             uint? bestSlotTDO = null;
             CliInterfaceImplSlot? bestSlot = null;
-            foreach (CliInterfaceImpl impl in cls.InterfaceImpls2)
+            foreach (CliInterfaceImpl impl in cls.InterfaceImpls)
             {
                 TypeSpecClassTag implInterface = impl.Interface;
                     

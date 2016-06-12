@@ -41,7 +41,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ArrayCloner.cs" />
+    <Compile Include="CfgWriter.cs" />
     <Compile Include="CodeLocationTag.cs" />
+    <Compile Include="DisassemblyWriter.cs" />
     <Compile Include="HighCfgEdge.cs" />
     <Compile Include="HighCfgNodeHandle.cs" />
     <Compile Include="HighEnumLiteral.cs" />
@@ -72,6 +74,7 @@
     <Compile Include="HighValueType.cs" />
     <Compile Include="HighClassVtableSlot.cs" />
     <Compile Include="HighVariance.cs" />
+    <Compile Include="IDisassemblyWritable.cs" />
     <Compile Include="IExtractableTypesInstruction.cs" />
     <Compile Include="IInternable.cs" />
     <Compile Include="ILocalUsingInstruction.cs" />

@@ -87,6 +87,11 @@ namespace Clarity.Rpa
             RloRoutedBranch,
             RloTerminateRoutes,
             CatchOrRoute,
+            BranchComparePod,
+            ConvertDelegateToMulticast,
+            LoadDelegateTarget,
+            LoadMulticastDelegateElement,
+            GetMulticastDelegateInvocationCount,
         }
 
         public HighInstruction()
@@ -98,10 +103,74 @@ namespace Clarity.Rpa
             m_codeLocation = codeLocation;
         }
 
+        public HighInstruction(CodeLocationTag codeLocation, HighCfgNodeHandle exceptionDest, HighCfgNodeHandle continuationDest)
+        {
+            m_codeLocation = codeLocation;
+            m_exceptionEdge = new HighCfgEdge(this, exceptionDest);
+            m_continuationEdge = new HighCfgEdge(this, continuationDest);
+        }
+
         public void VisitAllSsa(VisitSsaDelegate visitor)
         {
             this.VisitSsaDests(visitor);
             this.VisitSsaUses(visitor);
+        }
+
+        public void WriteDisassembly(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(this.Opcode.ToString());
+            dw.Write(" ");
+            this.WriteDisassemblyImpl(cw, dw);
+
+            this.VisitSsaDests(delegate (ref HighSsaRegister dest)
+            {
+                dw.Write(" ");
+                cw.WriteDefSsa(dw, dest);
+            });
+            this.VisitSsaUses(delegate (ref HighSsaRegister use)
+            {
+                dw.Write(" ");
+                cw.WriteUseSsa(dw, use);
+            });
+
+            ILocalUsingInstruction localUsing = this as ILocalUsingInstruction;
+            if (localUsing != null)
+            {
+                localUsing.VisitLocalRefs(delegate (ref HighLocal local)
+                {
+                    dw.Write(" ");
+                    cw.WriteLocal(dw, local);
+                });
+            }
+
+            IBranchingInstruction branching = this as IBranchingInstruction;
+            if (branching != null)
+            {
+                branching.VisitSuccessors(delegate (ref HighCfgEdge cfgEdge)
+                {
+                    dw.Write(" ");
+                    cw.WriteEdge(dw, cfgEdge);
+                });
+            }
+
+            if (this.MayThrow)
+            {
+                dw.PushIndent();
+                if (this.ContinuationEdge != null)
+                {
+                    dw.WriteLine("");
+                    dw.Write("continueTo ");
+                    cw.WriteEdge(dw, this.ContinuationEdge);
+                }
+                if (this.ExceptionEdge != null)
+                {
+                    dw.WriteLine("");
+                    dw.Write("throwTo ");
+                    cw.WriteEdge(dw, this.ExceptionEdge);
+                }
+                dw.PopIndent();
+            }
+            dw.WriteLine("");
         }
 
         public CodeLocationTag CodeLocation
@@ -115,10 +184,12 @@ namespace Clarity.Rpa
         public abstract void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer);
         public abstract void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader);
         public abstract Opcodes Opcode { get; }
-        public abstract HighInstruction Clone();
+
+        protected abstract void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw);
+        protected abstract HighInstruction CloneImpl();
 
         public virtual bool TerminatesControlFlow { get { return false; } }
-        public virtual bool MayThrow { get { return true; } }
+        public abstract bool MayThrow { get; }
 
         public HighCfgEdge ExceptionEdge { get { return m_exceptionEdge; } set { m_exceptionEdge = value; } }
         public HighCfgEdge ContinuationEdge { get { return m_continuationEdge; } set { m_continuationEdge = value; } }
@@ -367,6 +438,16 @@ namespace Clarity.Rpa
             instr.CodeLocation = codeLocation;
 
             return instr;
+        }
+
+        public HighInstruction Clone()
+        {
+            HighInstruction clone = this.CloneImpl();
+            if (m_continuationEdge != null)
+                clone.m_continuationEdge = new HighCfgEdge(clone, m_continuationEdge.Dest);
+            if (m_exceptionEdge != null)
+                clone.m_exceptionEdge = new HighCfgEdge(clone, m_exceptionEdge.Dest);
+            return clone;
         }
     }
 }

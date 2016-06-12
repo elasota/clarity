@@ -55,6 +55,13 @@ namespace Clarity.Rpa.Instructions
             writer.Write((byte)m_numberType);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_operation.ToString());
+            dw.Write(" ");
+            dw.Write(m_numberType.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_operation = (NumberCompareOperation)reader.ReadByte();
@@ -72,7 +79,7 @@ namespace Clarity.Rpa.Instructions
             visitor(ref m_falseNode);
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new BranchCompareNumbersInstruction(CodeLocation, m_operation, m_numberType, m_left, m_right, m_trueNode.Dest, m_falseNode.Dest);
         }

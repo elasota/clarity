@@ -28,7 +28,7 @@ namespace Clarity.Rpa.Instructions
 
         public override Opcodes Opcode { get { return Opcodes.AllocArray; } }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new AllocArrayInstruction(CodeLocation, m_dest, ArrayCloner.Clone<HighSsaRegister>(m_sizes), m_type);
         }
@@ -56,6 +56,11 @@ namespace Clarity.Rpa.Instructions
             writer.Write((uint)m_sizes.Length);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_sizes.Length.ToString());
+        }
+
         void ITypeReferencingInstruction.VisitTypes(VisitTypeSpecDelegate visitor)
         {
             visitor(ref m_type);
@@ -65,5 +70,7 @@ namespace Clarity.Rpa.Instructions
         {
             m_type = m_dest.Type;
         }
+
+        public override bool MayThrow { get { return true; } }
     }
 }

@@ -14,10 +14,17 @@ namespace Clarity.RpaCompiler
 
         private HighLocal[] m_locals;
         private TypeSpecTag m_returnType;
-        private HighCfgNodeHandle m_entryNode;
         private HighRegion m_entryRegion;
         private MethodInstantiationPath m_instantiationPath;
         private MethodSpecTag m_methodSpec;
+
+        public RloMethodBody(HighLocal[] locals, TypeSpecTag returnType, HighRegion entryRegion, MethodInstantiationPath instPath)
+        {
+            m_locals = locals;
+            m_returnType = returnType;
+            m_entryRegion = entryRegion;
+            m_instantiationPath = instPath;
+        }
 
         public RloMethodBody(Compiler compiler, HighMethod method, MethodSpecTag methodSpec, TypeSpecClassTag thisType, bool isStruct, RloInstantiationParameters instParams, MethodInstantiationPath methodInstantiationPath)
         {
@@ -98,6 +105,24 @@ namespace Clarity.RpaCompiler
 
             RloInitExceptionsPass exceptionInitPass = new RloInitExceptionsPass(compiler, this);
             exceptionInitPass.Run();
+        }
+
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.WriteLine("locals {");
+            dw.PushIndent();
+            foreach (HighLocal local in m_locals)
+                local.WriteDisassembly(dw);
+            dw.PopIndent();
+            dw.WriteLine("}");
+            dw.Write("returns ");
+            m_returnType.WriteDisassembly(dw);
+            dw.WriteLine("");
+
+            CfgWriter cfgWriter = new CfgWriter(dw, m_locals);
+
+            cfgWriter.GetCfgNodeIndex(m_entryRegion.EntryNode.Value);
+            cfgWriter.WriteGraph();
         }
     }
 }

@@ -174,11 +174,15 @@ namespace Clarity.RpaCompiler
 
                         // Relink edges to their new sources
                         edge = new HighCfgEdge(lastInstr, edge.Dest);
+
+                        QueueNode(edge.Dest.Value);
                     });
                 }
 
                 List<HighInstruction> newInstructions = new List<HighInstruction>();
-                foreach (HighInstruction instr in cfgNode.Instructions)
+
+                HighInstruction[] originalInstructions = cfgNode.Instructions;
+                foreach (HighInstruction instr in originalInstructions)
                 {
                     if (instr is Rpa.Instructions.ReturnValueInstruction)
                     {
@@ -194,8 +198,12 @@ namespace Clarity.RpaCompiler
                                 throw new RpaCompileException("ReturnInstruction in a protected region doesn't exit a finally");
                             newInstructions.Add(new Rpa.Instructions.BranchInstruction(instr.CodeLocation, new HighCfgNodeHandle(m_finallyCleanupNode)));
                         }
-                        else if (!m_canReturnNothing)
-                            throw new RpaCompileException("ReturnInstruction in a function that returns a value");
+                        else
+                        {
+                            if (!m_canReturnNothing)
+                                throw new RpaCompileException("ReturnInstruction in a function that returns a value");
+                            newInstructions.Add(instr);
+                        }
                     }
                     else if (instr is Rpa.Instructions.LeaveRegionInstruction)
                     {
@@ -309,11 +317,16 @@ namespace Clarity.RpaCompiler
                             HighCfgNodeHandle destHandle = new HighCfgNodeHandle(newNode);
 
                             instr.ContinuationEdge = new HighCfgEdge(instr, destHandle);
+                            if (m_exceptionNode != null)
+                                instr.ExceptionEdge = new HighCfgEdge(instr, new HighCfgNodeHandle(m_exceptionNode));
                             cfgNode = newNode;
                             newInstructions.Clear();
                         }
                     }
                 }
+
+                if (newInstructions.Count == 0)
+                    throw new Exception();
 
                 cfgNode.Instructions = newInstructions.ToArray();
 

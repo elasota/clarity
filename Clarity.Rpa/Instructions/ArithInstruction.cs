@@ -57,6 +57,15 @@ namespace Clarity.Rpa.Instructions
             writer.Write(m_checkOverflow);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_arithOp.ToString());
+            dw.Write(" ");
+            dw.Write(m_arithType.ToString());
+            dw.Write(" ");
+            dw.Write(m_checkOverflow.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_arithOp = (NumberArithOp)reader.ReadByte();
@@ -70,7 +79,7 @@ namespace Clarity.Rpa.Instructions
             m_checkOverflow = reader.ReadBoolean();
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new ArithInstruction(CodeLocation, m_dest, m_arithOp, m_arithType, m_left, m_right, m_checkOverflow);
         }

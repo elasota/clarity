@@ -68,6 +68,7 @@ namespace Clarity.RpaCompiler.Instructions
             EdgedRouteTermination[] routeTerminations = m_routeTerminations;
             for (int i = 0; i < routeTerminations.Length; i++)
                 routeTerminations[i].VisitSuccessors(visitor);
+            visitor(ref m_nextFinally);
         }
 
         public override void VisitSsaDests(VisitSsaDelegate visitor)
@@ -83,12 +84,23 @@ namespace Clarity.RpaCompiler.Instructions
             throw new NotImplementedException();
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_routeTerminations.Length.ToString());
+
+            foreach (EdgedRouteTermination term in m_routeTerminations)
+            {
+                dw.Write(" ");
+                dw.Write(term.RouteID.ToString());
+            }
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             throw new NotImplementedException();
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             List<RouteTermination> terminations = new List<RouteTermination>();
             foreach (EdgedRouteTermination termination in m_routeTerminations)

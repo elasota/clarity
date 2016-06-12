@@ -43,6 +43,18 @@
     <Compile Include="AssignabilityResolver.cs" />
     <Compile Include="CliInterfaceImplSlot.cs" />
     <Compile Include="CliType.cs" />
+    <Compile Include="GeneratedMethods\GMBoxedValueTypeGetHashCode.cs" />
+    <Compile Include="GeneratedMethods\GMBoxedValueTypeEquals.cs" />
+    <Compile Include="GeneratedMethods\GMDelegateConvertToMulticast.cs" />
+    <Compile Include="GeneratedMethods\GMDelegateInvoke.cs" />
+    <Compile Include="GeneratedMethods\GMMulticastDelegateInvoke.cs" />
+    <Compile Include="Instructions\BranchComparePodInstruction.cs" />
+    <Compile Include="Instructions\ConvertDelegateToMulticastInstruction.cs" />
+    <Compile Include="Instructions\GetMulticastDelegateInvocationCountInstruction.cs" />
+    <Compile Include="Instructions\LoadDelegateTargetInstruction.cs" />
+    <Compile Include="Instructions\LoadMulticastDelegateElementInstruction.cs" />
+    <Compile Include="MethodKey.cs" />
+    <Compile Include="GeneratedMethods\GMBoxThunk.cs" />
     <Compile Include="Instructions\AllocInstanceDelegateInstruction.cs" />
     <Compile Include="Instructions\CatchOrRouteInstruction.cs" />
     <Compile Include="Instructions\RloConvertNumberInstruction.cs" />
@@ -68,6 +80,7 @@
     <Compile Include="Instructions\ObjectToInterfaceInstruction.cs" />
     <Compile Include="Instructions\ObjectToObjectInstruction.cs" />
     <Compile Include="MethodHandle.cs" />
+    <Compile Include="MethodSpecMethodKey.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="RloBB.cs" />
@@ -95,7 +108,9 @@
     <Compile Include="RloVTable.cs" />
     <Compile Include="RpaCompileException.cs" />
     <Compile Include="TypeSpecBoxTag.cs" />
-    <Compile Include="TypeSpecStaticDelegateTag.cs" />
+    <Compile Include="TypeSpecMulticastDelegateTag.cs" />
+    <Compile Include="TypeSpecDelegateTag.cs" />
+    <Compile Include="VTableGenerationCache.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

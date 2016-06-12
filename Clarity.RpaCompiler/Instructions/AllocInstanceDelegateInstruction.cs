@@ -25,7 +25,7 @@ namespace Clarity.RpaCompiler.Instructions
             m_object = obj;
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new AllocInstanceDelegateInstruction(this.CodeLocation, m_type, m_dest, m_object);
         }
@@ -48,9 +48,15 @@ namespace Clarity.RpaCompiler.Instructions
         {
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+        }
+
         void ITypeReferencingInstruction.VisitTypes(VisitTypeSpecDelegate visitor)
         {
             visitor(ref m_type);
         }
+
+        public override bool MayThrow { get { return true; } }
     }
 }

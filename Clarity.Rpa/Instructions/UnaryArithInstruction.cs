@@ -47,6 +47,13 @@ namespace Clarity.Rpa.Instructions
             writer.Write((byte)m_arithType);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_arithOp.ToString());
+            dw.Write(" ");
+            dw.Write(m_arithType.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_arithOp = (NumberUnaryArithOp)reader.ReadByte();
@@ -57,7 +64,7 @@ namespace Clarity.Rpa.Instructions
                 throw new Exception("Invalid arith type");
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new UnaryArithInstruction(CodeLocation, m_dest, m_arithOp, m_arithType, m_src);
         }

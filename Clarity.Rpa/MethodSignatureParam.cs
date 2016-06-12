@@ -107,5 +107,25 @@ namespace Clarity.Rpa
 
             return new MethodSignatureParam(newType, m_typeOfType);
         }
+
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            switch (m_typeOfType.Value)
+            {
+                case MethodSignatureParamTypeOfType.Values.ByRef:
+                    dw.Write("r ");
+                    m_type.WriteDisassembly(dw);
+                    break;
+                case MethodSignatureParamTypeOfType.Values.Value:
+                    dw.Write("v ");
+                    m_type.WriteDisassembly(dw);
+                    break;
+                case MethodSignatureParamTypeOfType.Values.TypedByRef:
+                    dw.Write("t");
+                    break;
+                default:
+                    throw new ArgumentException();
+            }
+        }
     }
 }

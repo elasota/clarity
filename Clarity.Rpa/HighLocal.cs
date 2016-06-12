@@ -68,5 +68,27 @@ namespace Clarity.Rpa
                     throw new Exception("Unrecognized type of type");
             }
         }
+
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("local ");
+            switch (m_typeOfType)
+            {
+                case ETypeOfType.ByRef:
+                    dw.Write("byref ");
+                    m_type.WriteDisassembly(dw);
+                    break;
+                case ETypeOfType.TypedByRef:
+                    dw.Write("typedbyref");
+                    break;
+                case ETypeOfType.Value:
+                    dw.Write("value ");
+                    m_type.WriteDisassembly(dw);
+                    break;
+                default:
+                    throw new Exception();
+            }
+            dw.WriteLine("");
+        }
     }
 }

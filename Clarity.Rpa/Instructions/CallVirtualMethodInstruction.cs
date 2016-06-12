@@ -51,13 +51,20 @@ namespace Clarity.Rpa.Instructions
             writer.Write((uint)m_parameters.Length);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            m_methodSpec.WriteDisassembly(dw);
+            dw.Write(" ");
+            dw.Write(m_parameters.Length.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_methodSpec = catalog.GetMethodSpec(reader.ReadUInt32());
             m_parameters = new HighSsaRegister[reader.ReadUInt32()];
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             HighSsaRegister[] parameters = ArrayCloner.Clone<HighSsaRegister>(m_parameters);
             return new CallVirtualMethodInstruction(CodeLocation, m_returnDestReg, m_methodSpec, m_instanceReg, parameters);
@@ -67,5 +74,7 @@ namespace Clarity.Rpa.Instructions
         {
             visitor(ref m_methodSpec);
         }
+
+        public override bool MayThrow { get { return true; } }
     }
 }

@@ -363,6 +363,8 @@ namespace Clarity.RpaCompiler
                             if (sz.Type != m_nativeIntType)
                                 throw new RpaCompileException("AllocArray index is invalid");
                         }
+
+                        this.Compiler.GetRloVTable(dest.Type, GenerateMethodInstantiationPath(tInstr.CodeLocation));
                     }
                     break;
                 case HighInstruction.Opcodes.AllocObj:
@@ -443,7 +445,7 @@ namespace Clarity.RpaCompiler
                                 MethodSpecTag bnMethodSpec = new MethodSpecTag(MethodSlotType.Static, new TypeSpecTag[] { srcSubType }, clarityToolsClass, boxNullableDecl);
                                 bnMethodSpec = this.Compiler.TagRepository.InternMethodSpec(bnMethodSpec);
 
-                                MethodHandle hdl = this.Compiler.InstantiateMethod(bnMethodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                                MethodHandle hdl = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(bnMethodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
 
                                 newInstrs.Add(new Instructions.CallRloStaticMethodInstruction(tInstr.CodeLocation, hdl, dest, new HighSsaRegister[] { src }));
                             }
@@ -806,7 +808,7 @@ namespace Clarity.RpaCompiler
 
                         CheckMethodCall(methodSpec, dest, parameters, method.MethodSignature);
 
-                        MethodHandle methodHandle = this.Compiler.InstantiateMethod(methodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                        MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(methodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
 
                         validationOnly = false;
                         newInstrs.Add(new Instructions.CallRloInstanceMethodInstruction(tInstr.CodeLocation, methodHandle, tInstr.ReturnDest, tInstr.InstanceSrc, tInstr.Parameters));
@@ -849,7 +851,7 @@ namespace Clarity.RpaCompiler
 
                         CheckMethodCall(methodSpec, dest, parameters, method.MethodSignature);
 
-                        MethodHandle methodHandle = this.Compiler.InstantiateMethod(methodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                        MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(methodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
 
                         validationOnly = false;
                         newInstrs.Add(new Instructions.CallRloStaticMethodInstruction(tInstr.CodeLocation, methodHandle, tInstr.ReturnDest, tInstr.Parameters));
@@ -1094,7 +1096,7 @@ namespace Clarity.RpaCompiler
                                 MethodSpecTag generatedMethodSpec = new MethodSpecTag(MethodSlotType.Instance, methodSpec.GenericParameters, cls.TypeSpec, resolvedMethod.MethodDeclTag);
                                 generatedMethodSpec = this.Compiler.TagRepository.InternMethodSpec(generatedMethodSpec);
 
-                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(generatedMethodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(generatedMethodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
 
                                 CheckMethodCall(generatedMethodSpec, tempReturn, tempParameters, resolvedMethod.MethodSignature);
 
@@ -1124,7 +1126,7 @@ namespace Clarity.RpaCompiler
                                 MethodSpecTag generatedMethodSpec = new MethodSpecTag(MethodSlotType.Instance, methodSpec.GenericParameters, resolvedClass.TypeSpec, resolvedMethod.MethodDeclTag);
                                 generatedMethodSpec = this.Compiler.TagRepository.InternMethodSpec(generatedMethodSpec);
 
-                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(generatedMethodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(generatedMethodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
 
                                 CheckMethodCall(generatedMethodSpec, dest, parameters, resolvedMethod.MethodSignature);
 
@@ -1308,7 +1310,7 @@ namespace Clarity.RpaCompiler
                                 MethodSpecTag generatedMethodSpec = new MethodSpecTag(MethodSlotType.Instance, methodSpec.GenericParameters, instanceConversionTargetClass.TypeSpec, resolvedMethod.MethodDeclTag);
                                 generatedMethodSpec = this.Compiler.TagRepository.InternMethodSpec(generatedMethodSpec);
 
-                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(generatedMethodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(generatedMethodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
 
                                 CheckMethodCall(generatedMethodSpec, unconvertedReturnDest, parameters, resolvedMethod.MethodSignature);
 
@@ -2035,7 +2037,7 @@ namespace Clarity.RpaCompiler
                             MethodSpecTag generatedMethodSpec = new MethodSpecTag(MethodSlotType.Instance, methodSpec.GenericParameters, resolvedClass.TypeSpec, resolvedMethod.MethodDeclTag);
                             generatedMethodSpec = this.Compiler.TagRepository.InternMethodSpec(generatedMethodSpec);
 
-                            MethodHandle methodHandle = this.Compiler.InstantiateMethod(generatedMethodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                            MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(generatedMethodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
 
                             CheckMethodCall(generatedMethodSpec, dest, parameters, resolvedMethod.MethodSignature);
 
@@ -2070,7 +2072,7 @@ namespace Clarity.RpaCompiler
 
                                 CheckMethodCall(methodSpec, dest, parameters, methodSignature);
 
-                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(methodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                                MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(methodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
                                 newInstrs.Add(new Instructions.CallRloInstanceMethodInstruction(tInstr.CodeLocation, methodHandle, dest, instance, parameters));
                             }
                             else
@@ -2097,7 +2099,7 @@ namespace Clarity.RpaCompiler
                                         HighMethod resolvedMethod = cliClass.Methods[methodIndex];
                                         MethodSignatureTag methodSignature = resolvedMethod.MethodSignature;
 
-                                        MethodHandle methodHandle = this.Compiler.InstantiateMethod(methodSpec, GenerateMethodInstantiationPath(tInstr.CodeLocation));
+                                        MethodHandle methodHandle = this.Compiler.InstantiateMethod(new MethodSpecMethodKey(methodSpec), GenerateMethodInstantiationPath(tInstr.CodeLocation));
                                         CheckMethodCall(methodSpec, dest, parameters, methodSignature);
 
                                         newInstrs.Add(new Instructions.CallRloInstanceMethodInstruction(tInstr.CodeLocation, methodHandle, dest, convertedInstance, parameters));

@@ -100,5 +100,20 @@ namespace Clarity.Rpa
             result += "]";
             return result;
         }
+
+        public override void WriteDisassembly(DisassemblyWriter dw)
+        {
+            m_typeSpecTag.WriteDisassembly(dw);
+            dw.Write("[");
+            for(uint i = 0; i < m_rank; i++)
+            {
+                if (i != 0)
+                    dw.Write(",");
+                int lowBound = m_lowBounds[i];
+                if (lowBound != 0)
+                    dw.Write(lowBound.ToString());
+            }
+            dw.Write("]");
+        }
     }
 }

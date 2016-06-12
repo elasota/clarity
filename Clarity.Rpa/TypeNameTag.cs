@@ -37,6 +37,15 @@ namespace Clarity.Rpa
             m_numGenericParameters = numGenericParameters;
         }
 
+        public bool FastIs(string assemblyName, string typeNamespace, string typeName, uint numGenericParameters, TypeNameTag containerType)
+        {
+            return m_assemblyName == assemblyName &&
+                m_typeNamespace == typeNamespace &&
+                m_typeName == typeName &&
+                m_numGenericParameters == numGenericParameters &&
+                m_containerType == containerType;
+        }
+
         public bool Equals(TypeNameTag other)
         {
             if (this.IsInterned && other.IsInterned)
@@ -122,6 +131,27 @@ namespace Clarity.Rpa
             writer.Write(NameEscaper.EscapeName(m_typeNamespace));
             writer.Write(".");
             writer.Write(NameEscaper.EscapeName(m_typeName));
+        }
+
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            if (m_containerType != null)
+                m_containerType.WriteDisassembly(dw);
+            else
+            {
+                dw.Write(".");
+                dw.WriteToken(m_assemblyName);
+            }
+            dw.Write(".");
+            dw.WriteToken(m_typeNamespace);
+            dw.Write(".");
+            dw.WriteToken(m_typeName);
+
+            if (m_numGenericParameters > 0)
+            {
+                dw.Write("^");
+                dw.Write(m_numGenericParameters.ToString());
+            }
         }
 
         public override bool Equals(object other)

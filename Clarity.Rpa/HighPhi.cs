@@ -75,5 +75,19 @@ namespace Clarity.Rpa
             foreach (HighPhiLink phiLink in m_links)
                 phiLink.VisitSsaUses(visitor);
         }
+
+        public void WriteDisassembly(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write("phi ");
+            cw.WriteDefSsa(dw, m_dest);
+            dw.WriteLine(" {");
+            dw.PushIndent();
+
+            foreach (HighPhiLink phiLink in m_links)
+                phiLink.WriteDisassembly(cw, dw);
+
+            dw.PopIndent();
+            dw.WriteLine("}");
+        }
     }
 }

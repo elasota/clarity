@@ -8,8 +8,9 @@ namespace rpac
         static void Main(string[] args)
         {
             Clarity.RpaCompiler.Compiler compiler = new Clarity.RpaCompiler.Compiler();
-            foreach (string str in args)
+            for (int i = 1; i < args.Length; i++)
             {
+                string str = args[i];
                 Console.WriteLine("Loading " + str + "...");
 
                 using (FileStream fs = new FileStream(str, FileMode.Open, FileAccess.Read))
@@ -53,13 +54,18 @@ namespace rpac
                                 method.MethodDeclTag
                                 );
                             methodSpecTag = compiler.TagRepository.InternMethodSpec(methodSpecTag);
-                            compiler.InstantiateMethod(methodSpecTag, null);
+                            compiler.InstantiateMethod(new Clarity.RpaCompiler.MethodSpecMethodKey(methodSpecTag), null);
                         }
                     }
                 }
             }
 
             compiler.CompileAllMethods();
+
+            using (StreamWriter writer = new StreamWriter(args[0], false))
+            {
+                compiler.WriteMethodDisassembly(writer);
+            }
         }
     }
 }

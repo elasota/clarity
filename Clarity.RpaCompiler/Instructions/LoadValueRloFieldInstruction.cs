@@ -25,7 +25,7 @@ namespace Clarity.RpaCompiler.Instructions
             m_fieldIndex = fieldIndex;
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new LoadValueRloFieldInstruction(this.CodeLocation, m_dest, m_src, m_fieldIndex);
         }
@@ -48,6 +48,11 @@ namespace Clarity.RpaCompiler.Instructions
         public override void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
         {
             writer.Write(m_fieldIndex);
+        }
+
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_fieldIndex.ToString());
         }
 
         public override bool MayThrow { get { return false; } }

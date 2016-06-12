@@ -101,6 +101,20 @@ namespace Clarity.Rpa
             writer.Write(") ) ");
         }
 
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("msig(");
+            m_retType.WriteDisassembly(dw);
+            dw.Write(",(");
+            for (int i = 0; i < m_paramTypes.Length; i++)
+            {
+                if (i != 0)
+                    dw.Write(",");
+                m_paramTypes[i].WriteDisassembly(dw);
+            }
+            dw.Write("))");
+        }
+
         public override bool Equals(object other)
         {
             MethodSignatureTag tOther = other as MethodSignatureTag;

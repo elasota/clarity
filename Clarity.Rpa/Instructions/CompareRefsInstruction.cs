@@ -52,13 +52,20 @@ namespace Clarity.Rpa.Instructions
             writer.Write(m_notEqualValue);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_equalValue.ToString());
+            dw.Write(" ");
+            dw.Write(m_notEqualValue.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_equalValue = reader.ReadInt32();
             m_notEqualValue = reader.ReadInt32();
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new CompareRefsInstruction(CodeLocation, m_dest, m_regA, m_regB, m_equalValue, m_notEqualValue);
         }

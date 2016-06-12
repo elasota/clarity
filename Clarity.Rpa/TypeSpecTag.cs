@@ -13,7 +13,8 @@ namespace Clarity.Rpa
             Void,
 
             // Internal types
-            StaticDelegate,
+            Delegate,
+            MulticastDelegate,
             Box,
         }
 
@@ -53,5 +54,6 @@ namespace Clarity.Rpa
 
         public abstract TypeSpecTag Instantiate(TagRepository repo, TypeSpecTag[] typeParams, TypeSpecTag[] methodParams);
         public abstract TypeSpecTag Instantiate(TagRepository repo, TypeSpecTag[] argTypes);
+        public abstract void WriteDisassembly(DisassemblyWriter dw);
     }
 }

@@ -47,6 +47,15 @@ namespace Clarity.Rpa.Instructions
             writer.Write(m_isStatic);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            m_type.WriteDisassembly(dw);
+            dw.Write(" ");
+            dw.WriteToken(m_fieldName);
+            dw.Write(" ");
+            dw.Write(m_isStatic.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_type = catalog.GetTypeSpec(reader.ReadUInt32());
@@ -54,7 +63,7 @@ namespace Clarity.Rpa.Instructions
             m_isStatic = reader.ReadBoolean();
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new GetFieldInfoInstruction(CodeLocation, m_dest, m_type, m_fieldName, m_isStatic);
         }

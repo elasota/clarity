@@ -81,5 +81,23 @@ namespace Clarity.Rpa
         {
             return m_genericParamType.ToString() + m_index.ToString();
         }
+
+        public override void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("gen(");
+            switch (m_genericParamType.Value)
+            {
+                case TypeSpecGenericParamTypeTag.Values.MVar:
+                    dw.Write("M");
+                    break;
+                case TypeSpecGenericParamTypeTag.Values.Var:
+                    dw.Write("T");
+                    break;
+                default:
+                    throw new Exception();
+            }
+            dw.Write(m_index.ToString());
+            dw.Write(")");
+        }
     }
 }

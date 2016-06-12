@@ -105,5 +105,39 @@ namespace Clarity
         {
             return new SZArrayEnumerator<T?>(ThisAsArray);
         }
+
+        private static bool NullablesEqual(ref T? a, ref T? b)
+        {
+            // Avoid boxing the right side if left is null
+            if (a.HasValue)
+                return a.Equals(b);
+            return !b.HasValue;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj == this)
+                return true;
+
+            if (obj == null)
+                return false;
+
+            if (obj.GetType() != this.GetType())
+                return false;
+
+            T?[] otherArray = (T?[])obj;
+            T?[] thisArray = (T?[])(object)this;
+
+            int len = thisArray.Length;
+            if (otherArray.Length != this.Length)
+                return false;
+
+            for (int i = 0; i < len; i++)
+            {
+                if (NullablesEqual(ref thisArray[i], ref otherArray[i]))
+                    return false;
+            }
+            return true;
+        }
     }
 }

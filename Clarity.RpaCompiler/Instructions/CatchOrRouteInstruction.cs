@@ -38,17 +38,21 @@ namespace Clarity.RpaCompiler.Instructions
 
         public override void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
         {
-            throw new NotImplementedException();
+        }
+
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
         }
 
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
-            throw new NotImplementedException();
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new CatchOrRouteInstruction(this.CodeLocation, m_routeDest, m_exceptionDest);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

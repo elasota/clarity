@@ -26,7 +26,7 @@ namespace Clarity.RpaCompiler.Instructions
             m_isStatic = isStatic;
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new GetRloFieldInfoInstruction(this.CodeLocation, m_dest, m_type, m_fieldIndex, m_isStatic);
         }
@@ -50,6 +50,13 @@ namespace Clarity.RpaCompiler.Instructions
         {
             writer.Write(m_fieldIndex);
             writer.Write(m_isStatic);
+        }
+
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_fieldIndex.ToString());
+            dw.Write(" ");
+            dw.Write(m_isStatic.ToString());
         }
 
         void ITypeReferencingInstruction.VisitTypes(VisitTypeSpecDelegate visitor)

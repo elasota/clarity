@@ -43,12 +43,17 @@ namespace Clarity.Rpa.Instructions
             writer.Write(fileBuilder.IndexString(m_field));
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.WriteToken(m_field);
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_field = catalog.GetString(reader.ReadUInt32());
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new PtrFieldInstruction(CodeLocation, m_dest, m_src, m_field);
         }

@@ -74,8 +74,7 @@ namespace Clarity.RpaCompiler
                                 if (tsTag is TypeSpecClassTag)
                                 {
                                     TypeSpecClassTag tsClass = (TypeSpecClassTag)tsTag;
-                                    TypeNameTag typeName = tsClass.TypeName;
-                                    if (typeName.ContainerType == null && typeName.AssemblyName == "mscorlib" && typeName.TypeNamespace == "System" && typeName.TypeName == "Nullable`1")
+                                    if (tsClass.TypeName.FastIs("mscorlib", "System", "Nullable`1", 1, null))
                                     {
                                         TypeSpecTag nullableTypeArg = tsClass.ArgTypes[0];
 

@@ -9,6 +9,8 @@ namespace Clarity.Rpa
         private List<KeyValuePair<TKey, TValue>> m_list = new List<KeyValuePair<TKey, TValue>>();
         private int m_numDigested = 0;
 
+        public IEnumerable<KeyValuePair<TKey, TValue>> AllInstances { get { return m_list; } }
+
         public TValue Lookup(TKey key)
         {
             TValue v;

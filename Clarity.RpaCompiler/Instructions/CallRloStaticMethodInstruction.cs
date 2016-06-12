@@ -21,7 +21,7 @@ namespace Clarity.RpaCompiler.Instructions
 
         public override Opcodes Opcode { get { return Opcodes.CallRloStaticMethod; } }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new CallRloStaticMethodInstruction(this.CodeLocation, m_methodHandle, m_returnDest, m_parameters);
         }
@@ -47,5 +47,14 @@ namespace Clarity.RpaCompiler.Instructions
         {
             throw new NotImplementedException();
         }
+
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.WriteMethodHandleKey(m_methodHandle);
+            dw.Write(" ");
+            dw.Write(m_parameters.Length.ToString());
+        }
+
+        public override bool MayThrow { get { return true; } }
     }
 }

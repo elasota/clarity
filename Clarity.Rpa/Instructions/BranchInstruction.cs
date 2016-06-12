@@ -33,6 +33,10 @@ namespace Clarity.Rpa.Instructions
         {
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
         }
@@ -42,7 +46,7 @@ namespace Clarity.Rpa.Instructions
             visitor(ref m_target);
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new BranchInstruction(CodeLocation, m_target.Dest);
         }

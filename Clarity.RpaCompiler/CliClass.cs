@@ -61,7 +61,7 @@ namespace Clarity.RpaCompiler
         public HighField[] InstanceFields { get { return m_instanceFields; } }
 
         public CliVtableSlot[] VTable { get { return m_vtable; } }
-        public CliInterfaceImpl[] InterfaceImpls2 { get { return m_interfaceImpls; } }
+        public CliInterfaceImpl[] InterfaceImpls { get { return m_interfaceImpls; } }
         public IDictionary<TypeSpecClassTag, uint> TypeDeclarationOrder { get { return m_typeDeclarationOrder; } }
 
         public IDictionary<MethodDeclTag, uint> DeclTagToMethod { get { return m_declTagToMethod; } }
@@ -138,7 +138,7 @@ namespace Clarity.RpaCompiler
 
         private static RestrictedExtensionType GetRestrictedExtensionType(TypeNameTag typeName)
         {
-            if (typeName.ContainerType == null && typeName.AssemblyName == "mscorlib" && typeName.TypeNamespace == "System")
+            if (typeName.ContainerType == null && typeName.AssemblyName == "mscorlib" && typeName.TypeNamespace == "System" && typeName.NumGenericParameters == 0)
             {
                 if (typeName.TypeName == "Enum")
                     return RestrictedExtensionType.Enum;
@@ -155,11 +155,11 @@ namespace Clarity.RpaCompiler
             }
             if (typeName.ContainerType == null && typeName.AssemblyName == "mscorlib" && typeName.TypeNamespace == "Clarity")
             {
-                if (typeName.TypeName == "RefSZArray")
+                if (typeName.TypeName == "RefSZArray" && typeName.NumGenericParameters == 0)
                     return RestrictedExtensionType.RefSZArray;
-                if (typeName.TypeName == "NullableSZArray`1")
+                if (typeName.TypeName == "NullableSZArray`1" && typeName.NumGenericParameters == 1)
                     return RestrictedExtensionType.NullableSZArray;
-                if (typeName.TypeName == "ValueSZArray`1")
+                if (typeName.TypeName == "ValueSZArray`1" && typeName.NumGenericParameters == 1)
                     return RestrictedExtensionType.ValueSZArray;
             }
 
@@ -506,7 +506,7 @@ namespace Clarity.RpaCompiler
             if (cls.ParentClass != null)
                 ResolveTDOForClass(cls.ParentClass);
 
-            foreach (CliInterfaceImpl impl in cls.InterfaceImpls2)
+            foreach (CliInterfaceImpl impl in cls.InterfaceImpls)
             {
                 TypeSpecClassTag ifcSpec = impl.Interface;
                 if (!m_typeDeclarationOrder.ContainsKey(ifcSpec))

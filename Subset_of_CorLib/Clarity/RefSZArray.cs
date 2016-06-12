@@ -62,6 +62,32 @@ namespace Clarity
             return -1;
         }
 
+        public override bool Equals(object obj)
+        {
+            if (obj == this)
+                return true;
+
+            if (obj == null)
+                return false;
+
+            if (obj.GetType() != this.GetType())
+                return false;
+
+            object[] otherArray = (object[])obj;
+            object[] thisArray = (object[])(object)this;
+
+            int len = thisArray.Length;
+            if (otherArray.Length != this.Length)
+                return false;
+
+            for (int i = 0; i < len; i++)
+            {
+                if (!thisArray[i].Equals(otherArray[i]))
+                    return false;
+            }
+            return true;
+        }
+
         void IList<object>.Insert(int index, object item)
         {
             throw new NotSupportedException();

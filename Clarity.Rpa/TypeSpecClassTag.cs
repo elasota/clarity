@@ -138,5 +138,21 @@ namespace Clarity.Rpa
 
             return result;
         }
+
+        public override void WriteDisassembly(DisassemblyWriter dw)
+        {
+            m_typeNameTag.WriteDisassembly(dw);
+            if (m_argTypes.Length > 0)
+            {
+                dw.Write("<");
+                for (int i = 0; i < m_argTypes.Length; i++)
+                {
+                    if (i != 0)
+                        dw.Write(",");
+                    m_argTypes[i].WriteDisassembly(dw);
+                }
+                dw.Write(">");
+            }
+        }
     }
 }

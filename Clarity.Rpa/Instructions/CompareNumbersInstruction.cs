@@ -59,6 +59,17 @@ namespace Clarity.Rpa.Instructions
             writer.Write(m_falseValue);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_operation.ToString());
+            dw.Write(" ");
+            dw.Write(m_numberType.ToString());
+            dw.Write(" ");
+            dw.Write(m_trueValue.ToString());
+            dw.Write(" ");
+            dw.Write(m_falseValue.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_operation = (NumberCompareOperation)reader.ReadByte();
@@ -71,7 +82,7 @@ namespace Clarity.Rpa.Instructions
             m_falseValue = reader.ReadInt32();
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new CompareNumbersInstruction(CodeLocation, m_dest, m_operation, m_numberType, m_left, m_right, m_trueValue, m_falseValue);
         }

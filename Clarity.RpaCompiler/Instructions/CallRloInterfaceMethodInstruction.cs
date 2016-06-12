@@ -41,14 +41,23 @@ namespace Clarity.RpaCompiler.Instructions
             throw new NotImplementedException();
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_vtableSlotIndex.ToString());
+            dw.Write(" ");
+            dw.Write(m_parameters.Length.ToString());
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             throw new NotImplementedException();
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new CallRloVirtualMethodInstruction(this.CodeLocation, m_vtableSlotIndex, m_returnDest, m_instanceSrc, m_parameters);
         }
+
+        public override bool MayThrow { get { return true; } }
     }
 }

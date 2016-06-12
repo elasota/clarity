@@ -96,5 +96,31 @@ namespace Clarity
         {
             return new SZArrayEnumerator<T>(ThisAsArray);
         }
+
+        public override bool Equals(object obj)
+        {
+            if (obj == this)
+                return true;
+
+            if (obj == null)
+                return false;
+
+            if (obj.GetType() != this.GetType())
+                return false;
+
+            T[] otherArray = (T[])obj;
+            T[] thisArray = (T[])(object)this;
+
+            int len = thisArray.Length;
+            if (otherArray.Length != this.Length)
+                return false;
+
+            for (int i = 0; i < len; i++)
+            {
+                if (!thisArray[i].Equals(otherArray[i]))
+                    return false;
+            }
+            return true;
+        }
     }
 }

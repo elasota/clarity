@@ -148,15 +148,8 @@ namespace System.Collections
 
         public virtual Object[] ToArray()
         {
-            return (Object[])ToArray(typeof(object));
-        }
-
-        public virtual Array ToArray(Type type)
-        {
-            Array array = Array.CreateInstance(type, _size);
-
+            object[] array = new object[_size];
             Array.Copy(_items, 0, array, 0, _size);
-
             return array;
         }
     }

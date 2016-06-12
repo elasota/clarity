@@ -9,7 +9,10 @@ namespace Clarity.RpaCompiler
         private TypeSpecClassTag m_delegateType;
         private MethodSpecTag m_methodSpec;
 
-        public override SubTypeCode SubType { get { return SubTypeCode.StaticDelegate; } }
+        public TypeSpecClassTag DelegateType { get { return m_delegateType; } }
+        public MethodSpecTag MethodSpec { get { return m_methodSpec; } }
+
+        public override SubTypeCode SubType { get { return SubTypeCode.Delegate; } }
 
         public TypeSpecDelegateTag(TypeSpecClassTag delegateType, MethodSpecTag methodSpec)
         {
@@ -60,6 +63,15 @@ namespace Clarity.RpaCompiler
         public override void Write(HighFileBuilder highFileBuilder, BinaryWriter catalogWriter)
         {
             throw new NotSupportedException();
+        }
+
+        public override void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("delegate(");
+            m_delegateType.WriteDisassembly(dw);
+            dw.Write(",");
+            m_methodSpec.WriteDisassembly(dw);
+            dw.Write(")");
         }
     }
 }

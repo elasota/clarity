@@ -106,6 +106,17 @@ namespace Clarity.Rpa
                 writer.Write(1 + fileBuilder.IndexTypeNameTag(m_declaredInClass));
         }
 
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("mdecl(");
+            m_declaredInClass.WriteDisassembly(dw);
+            dw.Write(",");
+            dw.WriteToken(m_name);
+            dw.Write(",");
+            m_methodSignature.WriteDisassembly(dw);
+            dw.Write(")");
+        }
+
         public override bool Equals(object other)
         {
             MethodDeclTag tOther = other as MethodDeclTag;

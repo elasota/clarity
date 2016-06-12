@@ -295,7 +295,7 @@ namespace Clarity.RpaCompiler
         {
             HighTypeDef typeDef = m_compiler.GetTypeDef(cls.TypeSpec.TypeName);
 
-            foreach (CliInterfaceImpl newIfc in cls.InterfaceImpls2)
+            foreach (CliInterfaceImpl newIfc in cls.InterfaceImpls)
             {
                 if (ResolveGenericVariantAssignableTo(newIfc.Interface, to) != ConversionType.NotConvertible)
                     return ConversionType.ClassToInterface;

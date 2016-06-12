@@ -53,7 +53,7 @@ namespace Clarity.RpaCompiler.Instructions
             m_sourcePrecision = sourcePrecision;
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new RloConvertNumberInstruction(this.CodeLocation, m_dest, m_src, m_conversionType, m_destPrecision, m_sourcePrecision);
         }
@@ -80,6 +80,15 @@ namespace Clarity.RpaCompiler.Instructions
             writer.Write((byte)m_conversionType);
             writer.Write(m_destPrecision);
             writer.Write(m_sourcePrecision);
+        }
+
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write(m_conversionType.ToString());
+            dw.Write(" ");
+            dw.Write(m_destPrecision.ToString());
+            dw.Write(" ");
+            dw.Write(m_sourcePrecision.ToString());
         }
 
         public override bool MayThrow

@@ -148,7 +148,9 @@ namespace System.Globalization
                 }
             }
 
-            return (CultureInfo[])listCultures.ToArray(typeof(CultureInfo));
+            CultureInfo[] result = new CultureInfo[listCultures.Count];
+            listCultures.CopyTo(result);
+            return result;
         }
 
         public virtual String Name

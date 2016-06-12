@@ -12,6 +12,11 @@ namespace Clarity.RpaCompiler
         private bool m_isInternal;
         private RloMethodBody m_methodBody;
 
+        public RloMethod(RloMethodBody methodBody)
+        {
+            m_methodBody = methodBody;
+        }
+
         public RloMethod(Compiler compiler, MethodSpecTag methodSpec, MethodInstantiationPath instantiationPath)
         {
             CliClass cls = compiler.GetClosedClass(methodSpec.DeclaringClass);
@@ -37,6 +42,19 @@ namespace Clarity.RpaCompiler
 
             RloInstantiationParameters instParams = new RloInstantiationParameters(typeParams, methodParams);
             m_methodBody = new RloMethodBody(compiler, method, methodSpec, methodSpec.DeclaringClass, cls.IsStruct, instParams, instantiationPath);
+        }
+
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.PushIndent();
+            if (m_isInternal)
+                dw.WriteLine("internal");
+            else
+            {
+                dw.WriteLine("rlo");
+                m_methodBody.WriteDisassembly(dw);
+            }
+            dw.PopIndent();
         }
     }
 }

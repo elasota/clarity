@@ -56,5 +56,12 @@ namespace Clarity.RpaCompiler
         {
             throw new NotImplementedException();
         }
+
+        public override void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("box(");
+            m_containedType.WriteDisassembly(dw);
+            dw.Write(")");
+        }
     }
 }

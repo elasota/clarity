@@ -36,14 +36,21 @@ namespace Clarity.Rpa.Instructions
             m_cluster.Write(fileBuilder, methodBuilder, regionBuilder, haveDebugInfo, writer);
         }
 
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
+        {
+            dw.Write("ENTERPROTECTEDBLOCK");
+        }
+
         public override void ReadHeader(TagRepository rpa, CatalogReader catalog, HighMethodBodyParseContext methodBody, HighCfgNodeHandle[] cfgNodes, List<HighSsaRegister> ssaRegisters, CodeLocationTag baseLocation, bool haveDebugInfo, BinaryReader reader)
         {
             m_cluster = HighEHCluster.Read(rpa, catalog, methodBody, cfgNodes, baseLocation, haveDebugInfo, reader);
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new EnterProtectedBlockInstruction(CodeLocation, m_cluster);
         }
+
+        public override bool MayThrow { get { return false; } }
     }
 }

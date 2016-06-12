@@ -38,5 +38,13 @@ namespace Clarity.Rpa
         {
             visitor(ref m_reg);
         }
+
+        public void WriteDisassembly(CfgWriter cw, DisassemblyWriter dw)
+        {
+            cw.WriteCfgNode(dw, m_predecessor.Value);
+            dw.Write(" ");
+            cw.WriteUseSsa(dw, m_reg);
+            dw.WriteLine("");
+        }
     }
 }

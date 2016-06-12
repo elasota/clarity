@@ -24,7 +24,7 @@ namespace Clarity.Rpa
             m_methodDeclTag = methodDefTag;
 
             if ((uint)genericParameters.Length != m_methodDeclTag.BaseMethodSignature.NumGenericParameters)
-                throw new ArgumentException("Incorrect number of generic paramters");
+                throw new ArgumentException("Incorrect number of generic parameters");
         }
 
         public void Write(HighFileBuilder fileBuilder, BinaryWriter writer)
@@ -64,6 +64,29 @@ namespace Clarity.Rpa
                 throw new Exception("Method spec declaring type is not a class");
 
             return new MethodSpecTag(slotType, paramTypes, (TypeSpecClassTag)declaringClass, declTag);
+        }
+
+        public void WriteDisassembly(DisassemblyWriter dw)
+        {
+            dw.Write("methodSpec(");
+            m_declaringClass.WriteDisassembly(dw);
+            dw.Write(",");
+            dw.Write(m_methodSlotType.ToString());
+            dw.Write(",");
+            m_methodDeclTag.WriteDisassembly(dw);
+            
+            if (m_genericParameters.Length > 0)
+            {
+                dw.Write(",<");
+                for (int i = 0; i < m_genericParameters.Length; i++)
+                {
+                    if (i != 0)
+                        dw.Write(",");
+                    m_genericParameters[i].WriteDisassembly(dw);
+                }
+                dw.Write(">");
+            }
+            dw.Write(")");
         }
 
         public MethodSpecTag Instantiate(TagRepository tagRepo, TypeSpecTag[] typeParams, TypeSpecTag[] methodParams)

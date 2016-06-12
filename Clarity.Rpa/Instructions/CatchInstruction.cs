@@ -28,7 +28,7 @@ namespace Clarity.Rpa.Instructions
             m_type = type;
         }
 
-        public override HighInstruction Clone()
+        protected override HighInstruction CloneImpl()
         {
             return new CatchInstruction(CodeLocation, m_dest, m_type);
         }
@@ -47,6 +47,10 @@ namespace Clarity.Rpa.Instructions
         }
 
         public override void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
+        {
+        }
+
+        protected override void WriteDisassemblyImpl(CfgWriter cw, DisassemblyWriter dw)
         {
         }
 
