@@ -120,7 +120,7 @@ namespace Clarity.RpaCompiler
                 }
 
                 List<HighInstruction> instrs = new List<HighInstruction>();
-                Instructions.RloTerminateRoutesInstruction trInstr = new Instructions.RloTerminateRoutesInstruction(null, terminations.ToArray());
+                Instructions.RloTerminateRoutesInstruction trInstr = new Instructions.RloTerminateRoutesInstruction(null, catchInstr.ExceptionDest, catchInstr.RouteDest, terminations.ToArray());
 
                 if (m_regionStack.Next != null)
                     trInstr.ExceptionEdge = new HighCfgEdge(trInstr, new HighCfgNodeHandle(m_regionStack.Next.ExceptionHandler));
@@ -355,6 +355,8 @@ namespace Clarity.RpaCompiler
                         throw new RpaCompileException("Duplicate exception escape route");
 
                     pass.m_routeCompactionDict.Add(terminator.EscapePath, pass.m_routeCompactionDict.Count);
+
+                    QueueNode(terminator.CfgNode.Value);
                 }
             }
 

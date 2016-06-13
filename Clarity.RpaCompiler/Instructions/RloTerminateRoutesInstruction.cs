@@ -44,6 +44,8 @@ namespace Clarity.RpaCompiler.Instructions
 
         private EdgedRouteTermination[] m_routeTerminations;
         private HighCfgEdge m_nextFinally;  // Optional: Route to follow with next finally
+        private HighSsaRegister m_exception;
+        private HighSsaRegister m_route;
 
         public EdgedRouteTermination[] RouteTerminations { get { return m_routeTerminations; } }
         public HighCfgEdge NextFinally { get { return m_nextFinally; } }
@@ -52,13 +54,15 @@ namespace Clarity.RpaCompiler.Instructions
         {
         }
 
-        public RloTerminateRoutesInstruction(CodeLocationTag codeLocation, RouteTermination[] routeTerminations)
+        public RloTerminateRoutesInstruction(CodeLocationTag codeLocation, HighSsaRegister exceptionSrc, HighSsaRegister routeSrc, RouteTermination[] routeTerminations)
             : base(codeLocation)
         {
             List<EdgedRouteTermination> terminations = new List<EdgedRouteTermination>();
             foreach (RouteTermination termination in routeTerminations)
                 terminations.Add(new EdgedRouteTermination(termination.RouteID, new HighCfgEdge(this, new HighCfgNodeHandle(termination.Successor))));
             m_routeTerminations = terminations.ToArray();
+            m_exception = exceptionSrc;
+            m_route = routeSrc;
         }
 
         public override Opcodes Opcode { get { return Opcodes.RloTerminateRoutes; } }
@@ -77,6 +81,8 @@ namespace Clarity.RpaCompiler.Instructions
 
         public override void VisitSsaUses(VisitSsaDelegate visitor)
         {
+            visitor(ref m_exception);
+            visitor(ref m_route);
         }
 
         public override void WriteHeader(HighFileBuilder fileBuilder, HighMethodBuilder methodBuilder, HighRegionBuilder regionBuilder, HighCfgNodeBuilder cfgNodeBuilder, bool haveDebugInfo, BinaryWriter writer)
@@ -105,10 +111,10 @@ namespace Clarity.RpaCompiler.Instructions
             List<RouteTermination> terminations = new List<RouteTermination>();
             foreach (EdgedRouteTermination termination in m_routeTerminations)
                 terminations.Add(new RouteTermination(termination.RouteID, termination.Successor.Dest.Value));
-            return new RloTerminateRoutesInstruction(this.CodeLocation, terminations.ToArray());
+            return new RloTerminateRoutesInstruction(this.CodeLocation, m_exception, m_route, terminations.ToArray());
         }
 
-        public override bool MayThrow { get { return false; } }
+        public override bool MayThrow { get { return true; } }
         public override bool TerminatesControlFlow { get { return true; } }
     }
 }
