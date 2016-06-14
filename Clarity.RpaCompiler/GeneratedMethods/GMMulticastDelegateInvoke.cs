@@ -48,12 +48,11 @@ namespace Clarity.RpaCompiler.GeneratedMethods
             TypeSpecMulticastDelegateTag mdType = new TypeSpecMulticastDelegateTag(m_dt);
             mdType = (TypeSpecMulticastDelegateTag)compiler.TagRepository.InternTypeSpec(mdType);
 
-            List<HighLocal> locals = new List<HighLocal>();
             List<HighSsaRegister> loadedParams = new List<HighSsaRegister>();
 
             HighLocal thisLocal = new HighLocal(mdType, HighLocal.ETypeOfType.Value);
-            locals.Add(thisLocal);
 
+            List<HighLocal> args = new List<HighLocal>();
             HighSsaRegister thisReg = new HighSsaRegister(HighValueType.ReferenceValue, mdType, null);
 
             List<HighInstruction> entryInstrs = new List<HighInstruction>();
@@ -67,7 +66,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
                         {
                             HighSsaRegister paramSsa = new HighSsaRegister(HighValueType.ManagedPtr, param.Type, null);
                             HighLocal local = new HighLocal(param.Type, HighLocal.ETypeOfType.ByRef);
-                            locals.Add(local);
+                            args.Add(local);
                             entryInstrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, paramSsa, local));
                             loadedParams.Add(paramSsa);
                         }
@@ -77,7 +76,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
                             bool isValueType = compiler.TypeIsValueType(param.Type);
                             HighSsaRegister paramSsa = new HighSsaRegister(isValueType ? HighValueType.ValueValue : HighValueType.ReferenceValue, param.Type, null);
                             HighLocal local = new HighLocal(param.Type, HighLocal.ETypeOfType.Value);
-                            locals.Add(local);
+                            args.Add(local);
                             entryInstrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, paramSsa, local));
                             loadedParams.Add(paramSsa);
                         }
@@ -157,7 +156,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
             }
 
             HighRegion region = new HighRegion(entryHdl);
-            RloMethodBody methodBody = new RloMethodBody(locals.ToArray(), delegateMethodSignature.RetType, region, instantiationPath);
+            RloMethodBody methodBody = new RloMethodBody(thisLocal, args.ToArray(), new HighLocal[0], delegateMethodSignature.RetType, region, delegateMethodSignature, instantiationPath);
             return new RloMethod(methodBody);
         }
 

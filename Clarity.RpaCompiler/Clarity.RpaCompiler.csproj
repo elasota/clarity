@@ -81,6 +81,7 @@
     <Compile Include="Instructions\ObjectToObjectInstruction.cs" />
     <Compile Include="MethodHandle.cs" />
     <Compile Include="MethodSpecMethodKey.cs" />
+    <Compile Include="Passes\InitLocalsPass.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="RloBB.cs" />

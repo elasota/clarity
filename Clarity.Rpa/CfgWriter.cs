@@ -8,15 +8,20 @@ namespace Clarity.Rpa
     {
         private DisassemblyWriter m_dw;
         private UniqueQueue<HighCfgNode, object> m_cfgNodes = new UniqueQueue<HighCfgNode, object>();
-        private Dictionary<HighLocal, uint> m_localIndexes = new Dictionary<HighLocal, uint>();
+        private Dictionary<HighLocal, string> m_localNames = new Dictionary<HighLocal, string>();
         private Dictionary<HighSsaRegister, uint> m_ssaIndexes = new Dictionary<HighSsaRegister, uint>();
         private Dictionary<HighCfgNode, uint> m_cfgNodeIndexes = new Dictionary<HighCfgNode, uint>();
 
-        public CfgWriter(DisassemblyWriter dw, HighLocal[] locals)
+        public CfgWriter(DisassemblyWriter dw, HighLocal instanceLocal, HighLocal[] args, HighLocal[] locals)
         {
             m_dw = dw;
+
+            if (instanceLocal != null)
+                m_localNames.Add(instanceLocal, "this");
+            for (int i = 0; i < args.Length; i++)
+                m_localNames.Add(args[i], "arg" + i.ToString());
             for (int i = 0; i < locals.Length; i++)
-                m_localIndexes.Add(locals[i], (uint)i);
+                m_localNames.Add(locals[i], "local" + i.ToString());
         }
 
         private static T[] Flatten<T>(Dictionary<T, uint> dict)
@@ -44,9 +49,9 @@ namespace Clarity.Rpa
             return FindIndexed<HighCfgNode>(m_cfgNodeIndexes, node);
         }
 
-        public uint GetLocalIndex(HighLocal local)
+        public string GetLocalName(HighLocal local)
         {
-            return m_localIndexes[local];
+            return m_localNames[local];
         }
 
         public uint GetSsaIndex(HighSsaRegister ssa)
@@ -139,8 +144,7 @@ namespace Clarity.Rpa
 
         public void WriteLocal(DisassemblyWriter dw, HighLocal local)
         {
-            dw.Write("local");
-            dw.Write(GetLocalIndex(local).ToString());
+            dw.Write(GetLocalName(local));
         }
     }
 }

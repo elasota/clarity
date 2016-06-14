@@ -9,18 +9,21 @@ namespace Clarity.Rpa
     public class HighMethodBody
     {
         private HighRegion m_region;
+        private HighLocal m_instanceLocal;
         private HighLocal[] m_args;
         private HighLocal[] m_locals;
         private bool m_haveDebugInfo;
 
         public HighRegion MainRegion { get { return m_region; } }
+        public HighLocal InstanceLocal { get { return m_instanceLocal; } }
         public HighLocal[] Args { get { return m_args; } }
         public HighLocal[] Locals { get { return m_locals; } }
         public bool HaveDebugInfo { get { return m_haveDebugInfo; } }
 
-        public HighMethodBody(HighRegion region, HighLocal[] args, HighLocal[] locals, bool haveDebugInfo)
+        public HighMethodBody(HighRegion region, HighLocal instanceLocal, HighLocal[] args, HighLocal[] locals, bool haveDebugInfo)
         {
             m_region = region;
+            m_instanceLocal = instanceLocal;
             m_args = args;
             m_locals = locals;
             m_haveDebugInfo = haveDebugInfo;
@@ -28,11 +31,14 @@ namespace Clarity.Rpa
 
         public void Write(HighFileBuilder fileBuilder, BinaryWriter writer)
         {
+            writer.Write(m_instanceLocal != null);
             writer.Write((uint)m_args.Length);
             writer.Write((uint)m_locals.Length);
             writer.Write(m_haveDebugInfo);
 
             List<HighLocal> allLocals = new List<HighLocal>();
+            if (m_instanceLocal != null)
+                allLocals.Add(m_instanceLocal);
             allLocals.AddRange(m_args);
             allLocals.AddRange(m_locals);
 
@@ -46,9 +52,20 @@ namespace Clarity.Rpa
 
         public static HighMethodBody Read(TagRepository rpa, CatalogReader catalog, MethodDeclTag methodDecl, BinaryReader reader)
         {
+            bool haveInstanceLocal = reader.ReadBoolean();
             uint numArgs = reader.ReadUInt32();
             uint numLocals = reader.ReadUInt32();
             bool haveDebugInfo = reader.ReadBoolean();
+
+            HighLocal instanceLocal;
+
+            if (haveInstanceLocal)
+            {
+                instanceLocal = new HighLocal();
+                instanceLocal.Read(rpa, catalog, reader);
+            }
+            else
+                instanceLocal = null;
 
             HighLocal[] args = new HighLocal[numArgs];
             HighLocal[] locals = new HighLocal[numLocals];
@@ -67,13 +84,13 @@ namespace Clarity.Rpa
                 locals[i] = local;
             }
 
-            HighMethodBodyParseContext parseContext = new HighMethodBodyParseContext(args, locals);
+            HighMethodBodyParseContext parseContext = new HighMethodBodyParseContext(instanceLocal, args, locals);
 
             CodeLocationTag baseLocation = new CodeLocationTag(methodDecl, 0);
 
             HighRegion region = HighRegion.Read(rpa, catalog, parseContext, baseLocation, haveDebugInfo, reader);
 
-            return new HighMethodBody(region, args, locals, haveDebugInfo);
+            return new HighMethodBody(region, instanceLocal, args, locals, haveDebugInfo);
         }
     }
 }

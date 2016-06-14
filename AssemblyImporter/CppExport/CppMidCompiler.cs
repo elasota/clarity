@@ -67,6 +67,15 @@ namespace AssemblyImporter.CppExport
             VRegsToHighLocals(m_locals, highLocals, localLookup);
             VRegsToHighLocals(m_temporaries, highLocals, localLookup);
 
+            Clarity.Rpa.HighLocal instanceLocal;
+            if (m_method.Static)
+                instanceLocal = null;
+            else
+            {
+                instanceLocal = highArgs[0];
+                highArgs.RemoveAt(0);
+            }
+
             CppRegionEmitter emitter = new CppRegionEmitter(m_builder, m_mainRegion, m_regAllocator, localLookup);
             Clarity.Rpa.HighRegion mainRegion = emitter.Emit();
 
@@ -77,7 +86,7 @@ namespace AssemblyImporter.CppExport
             if (debugInfo != null)
                 debugFunction = debugInfo.GetFunction(m_method.MethodDef.MetadataToken);
 
-            Clarity.Rpa.HighMethodBody methodBody = new Clarity.Rpa.HighMethodBody(mainRegion, highArgs.ToArray(), highLocals.ToArray(), debugFunction != null);
+            Clarity.Rpa.HighMethodBody methodBody = new Clarity.Rpa.HighMethodBody(mainRegion, instanceLocal, highArgs.ToArray(), highLocals.ToArray(), debugFunction != null);
 
             methodBody.Write(builder, writer);
         }

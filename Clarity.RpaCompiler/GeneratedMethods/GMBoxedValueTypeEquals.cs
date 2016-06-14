@@ -41,9 +41,9 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
             CliClass cls = compiler.GetClosedClass(m_bt.ContainedType);
 
-            HighLocal[] locals = new HighLocal[2];
-            locals[0] = new HighLocal(m_bt, HighLocal.ETypeOfType.Value);
-            locals[1] = new HighLocal(vtCache.GetSystemObjectType(compiler), HighLocal.ETypeOfType.Value);
+            HighLocal instanceLocal = new HighLocal(m_bt, HighLocal.ETypeOfType.Value);
+            HighLocal[] args = new HighLocal[] { new HighLocal(vtCache.GetSystemObjectType(compiler), HighLocal.ETypeOfType.Value) };
+            HighLocal[] locals = new HighLocal[0];
 
             HighCfgNodeHandle returnFalseHdl = new HighCfgNodeHandle();
 
@@ -66,8 +66,8 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
             {
                 List<HighInstruction> instrs = new List<HighInstruction>();
-                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, thisRef, locals[0]));
-                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, otherRef, locals[1]));
+                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, thisRef, instanceLocal));
+                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, otherRef, args[0]));
                 instrs.Add(new Rpa.Instructions.BranchRefNullInstruction(null, otherRef, returnFalseHdl, getOtherTypeHdl));
                 entryHdl.Value = new HighCfgNode(new HighCfgNodeHandle[0], new HighPhi[0], instrs.ToArray());
             }
@@ -177,8 +177,14 @@ namespace Clarity.RpaCompiler.GeneratedMethods
                 }
             }
 
+            MethodSignatureTag methodSignature = new MethodSignatureTag(0, m_vtCache.GetSystemBoolType(compiler),
+                new MethodSignatureParam[] {
+                    new MethodSignatureParam(m_vtCache.GetSystemObjectType(compiler), new MethodSignatureParamTypeOfType(MethodSignatureParamTypeOfType.Values.Value))
+                });
+            methodSignature = compiler.TagRepository.InternMethodSignature(methodSignature);
+
             HighRegion region = new HighRegion(entryHdl);
-            RloMethodBody body = new RloMethodBody(locals, boolType, region, instantiationPath);
+            RloMethodBody body = new RloMethodBody(instanceLocal, args, locals, boolType, region, methodSignature, instantiationPath);
             return new RloMethod(body);
         }
 

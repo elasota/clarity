@@ -71,12 +71,12 @@ namespace Clarity.RpaCompiler
 
             foreach (KeyValuePair<MethodKey, MethodHandle> methodInstance in m_methodInstances.AllInstances)
             {
-                writer.Write("methodInstance ( ");
+                dw.Write("methodInstance ( ");
                 methodInstance.Key.WriteDisassembly(dw);
-                writer.WriteLine(" )");
-                writer.WriteLine("{");
+                dw.WriteLine(" )");
+                dw.WriteLine("{");
                 methodInstance.Value.Value.WriteDisassembly(dw);
-                writer.WriteLine("}");
+                dw.WriteLine("}");
             }
         }
 

@@ -26,25 +26,30 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
         public override RloMethod GenerateMethod(Compiler compiler, MethodInstantiationPath instantiationPath)
         {
-            HighLocal[] locals = new HighLocal[1];
-
-            locals[0] = new HighLocal(m_dt, HighLocal.ETypeOfType.Value);
+            HighLocal[] args = new HighLocal[0];
+            HighLocal[] locals = new HighLocal[0];
+            HighLocal instanceLocal = new HighLocal(m_dt, HighLocal.ETypeOfType.Value);
 
             TypeSpecClassTag delegateClass = m_dt.DelegateType;
 
             TypeSpecMulticastDelegateTag mdgSpec = new TypeSpecMulticastDelegateTag(delegateClass);
             mdgSpec = (TypeSpecMulticastDelegateTag)compiler.TagRepository.InternTypeSpec(mdgSpec);
 
+            TypeSpecTag delegateType = m_vtCache.GetSystemDelegateType(compiler);
+
             HighSsaRegister thisRef = new HighSsaRegister(HighValueType.ReferenceValue, m_dt, null);
             HighSsaRegister result = new HighSsaRegister(HighValueType.ReferenceValue, mdgSpec, null);
-            HighSsaRegister convertedResult = new HighSsaRegister(HighValueType.ReferenceValue, m_vtCache.GetSystemDelegateType(compiler), null);
+            HighSsaRegister convertedResult = new HighSsaRegister(HighValueType.ReferenceValue, delegateType, null);
+
+            MethodSignatureTag methodSignature = new MethodSignatureTag(0, delegateType, new MethodSignatureParam[0]);
+            methodSignature = compiler.TagRepository.InternMethodSignature(methodSignature);
 
             HighCfgNodeHandle entryHdl = new HighCfgNodeHandle();
             HighCfgNodeHandle returnResultHdl = new HighCfgNodeHandle();
 
             {
                 List<HighInstruction> instrs = new List<HighInstruction>();
-                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, thisRef, locals[0]));
+                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, thisRef, instanceLocal));
                 Instructions.ConvertDelegateToMulticastInstruction convertInstr = new Instructions.ConvertDelegateToMulticastInstruction(null, result, thisRef, mdgSpec);
                 convertInstr.ContinuationEdge = new HighCfgEdge(convertInstr, returnResultHdl);
                 instrs.Add(convertInstr);
@@ -63,7 +68,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
             compiler.GetRloVTable(mdgSpec, instantiationPath);
 
             HighRegion region = new HighRegion(entryHdl);
-            RloMethodBody methodBody = new RloMethodBody(locals, m_vtCache.GetSystemDelegateType(compiler), region, instantiationPath);
+            RloMethodBody methodBody = new RloMethodBody(instanceLocal, args, locals, m_vtCache.GetSystemDelegateType(compiler), region, methodSignature, instantiationPath);
             return new RloMethod(methodBody);
         }
 

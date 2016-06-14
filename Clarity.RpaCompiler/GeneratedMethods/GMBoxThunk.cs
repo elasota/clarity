@@ -45,19 +45,19 @@ namespace Clarity.RpaCompiler.GeneratedMethods
             if (method.IsStatic)
                 throw new RpaCompileException("Box-thunked method is static");
 
-            List<HighLocal> locals = new List<HighLocal>();
+            List<HighLocal> args = new List<HighLocal>();
             foreach (MethodSignatureParam param in method.MethodSignature.ParamTypes)
             {
                 switch (param.TypeOfType.Value)
                 {
                     case MethodSignatureParamTypeOfType.Values.ByRef:
-                        locals.Add(new HighLocal(param.Type, HighLocal.ETypeOfType.ByRef));
+                        args.Add(new HighLocal(param.Type, HighLocal.ETypeOfType.ByRef));
                         break;
                     case MethodSignatureParamTypeOfType.Values.TypedByRef:
-                        locals.Add(new HighLocal(param.Type, HighLocal.ETypeOfType.TypedByRef));
+                        args.Add(new HighLocal(param.Type, HighLocal.ETypeOfType.TypedByRef));
                         break;
                     case MethodSignatureParamTypeOfType.Values.Value:
-                        locals.Add(new HighLocal(param.Type, HighLocal.ETypeOfType.Value));
+                        args.Add(new HighLocal(param.Type, HighLocal.ETypeOfType.Value));
                         break;
                     default:
                         throw new Exception();
@@ -82,27 +82,28 @@ namespace Clarity.RpaCompiler.GeneratedMethods
             HighSsaRegister thisRef = new HighSsaRegister(HighValueType.BoxedValue, valueClass, null);
             HighSsaRegister thisManagedPtr = new HighSsaRegister(HighValueType.ManagedPtr, valueClass, null);
 
-            instrs.Add(new Clarity.Rpa.Instructions.UnboxPtrInstruction(null, thisManagedPtr, thisRef));
+            instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, thisRef, thisLocal));
+            instrs.Add(new Rpa.Instructions.UnboxPtrInstruction(null, thisManagedPtr, thisRef));
 
             List<HighSsaRegister> paramSSAs = new List<HighSsaRegister>();
-            foreach (HighLocal local in locals)
+            foreach (HighLocal arg in args)
             {
                 HighSsaRegister paramSSA;
-                switch (local.TypeOfType)
+                switch (arg.TypeOfType)
                 {
                     case HighLocal.ETypeOfType.ByRef:
-                        paramSSA = new HighSsaRegister(HighValueType.ManagedPtr, local.Type, null);
+                        paramSSA = new HighSsaRegister(HighValueType.ManagedPtr, arg.Type, null);
                         break;
                     case HighLocal.ETypeOfType.TypedByRef:
                         throw new NotImplementedException();
                     case HighLocal.ETypeOfType.Value:
-                        paramSSA = new HighSsaRegister(compiler.TypeIsValueType(local.Type) ? HighValueType.ValueValue : HighValueType.ReferenceValue, retType, null);
+                        paramSSA = new HighSsaRegister(compiler.TypeIsValueType(arg.Type) ? HighValueType.ValueValue : HighValueType.ReferenceValue, retType, null);
                         break;
                     default:
                         throw new RpaCompileException("Unknown type of type");
                 }
                 paramSSAs.Add(paramSSA);
-                instrs.Add(new Clarity.Rpa.Instructions.LoadLocalInstruction(null, paramSSA, local));
+                instrs.Add(new Clarity.Rpa.Instructions.LoadLocalInstruction(null, paramSSA, arg));
             }
 
             MethodHandle methodHandle = compiler.InstantiateMethod(new MethodSpecMethodKey(m_methodSpec), instantiationPath);
@@ -115,7 +116,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
             HighRegion entryRegion = new HighRegion(new HighCfgNodeHandle(entryNode));
 
-            RloMethodBody methodBody = new RloMethodBody(locals.ToArray(), retType, entryRegion, instantiationPath);
+            RloMethodBody methodBody = new RloMethodBody(thisLocal, args.ToArray(), new HighLocal[0], retType, entryRegion, method.MethodSignature, instantiationPath);
             return new RloMethod(methodBody);
         }
 

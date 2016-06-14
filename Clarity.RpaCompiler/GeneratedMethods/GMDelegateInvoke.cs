@@ -108,9 +108,9 @@ namespace Clarity.RpaCompiler.GeneratedMethods
             List<HighInstruction> instrs = new List<HighInstruction>();
 
             HighLocal thisLocal = new HighLocal(m_dt, HighLocal.ETypeOfType.Value);
+            HighLocal[] locals = new HighLocal[0];
 
-            List<HighLocal> locals = new List<HighLocal>();
-            locals.Add(thisLocal);
+            List<HighLocal> args = new List<HighLocal>();
 
             int numParams = delegateMethodSignature.ParamTypes.Length;
             if (numParams != targetMethodSignature.ParamTypes.Length)
@@ -136,10 +136,10 @@ namespace Clarity.RpaCompiler.GeneratedMethods
                                 throw new RpaCompileException("Delegate parameter type mismatch");
 
                             HighSsaRegister ssa = new HighSsaRegister(HighValueType.ManagedPtr, delegateSigType, null);
-                            HighLocal local = new HighLocal(delegateSigParam.Type, HighLocal.ETypeOfType.ByRef);
+                            HighLocal arg = new HighLocal(delegateSigParam.Type, HighLocal.ETypeOfType.ByRef);
 
-                            locals.Add(local);
-                            instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, ssa, local));
+                            args.Add(arg);
+                            instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, ssa, arg));
                             convertedParameters.Add(ssa);
                         }
                         break;
@@ -148,9 +148,9 @@ namespace Clarity.RpaCompiler.GeneratedMethods
                             if (delegateSigType == targetSigType)
                             {
                                 HighSsaRegister ssa = new HighSsaRegister(HighValueType.ValueValue, delegateSigParam.Type, null);
-                                HighLocal local = new HighLocal(delegateSigParam.Type, HighLocal.ETypeOfType.Value);
-                                locals.Add(local);
-                                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, ssa, local));
+                                HighLocal arg = new HighLocal(delegateSigParam.Type, HighLocal.ETypeOfType.Value);
+                                args.Add(arg);
+                                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, ssa, arg));
                                 convertedParameters.Add(ssa);
                             }
                             else
@@ -159,9 +159,9 @@ namespace Clarity.RpaCompiler.GeneratedMethods
                                     throw new RpaCompileException("Delegate parameter type mismatch");
 
                                 HighSsaRegister delegateParamSsa = new HighSsaRegister(HighValueType.ReferenceValue, delegateSigType, null);
-                                HighLocal local = new HighLocal(delegateSigParam.Type, HighLocal.ETypeOfType.Value);
-                                locals.Add(local);
-                                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, delegateParamSsa, local));
+                                HighLocal arg = new HighLocal(delegateSigParam.Type, HighLocal.ETypeOfType.Value);
+                                args.Add(arg);
+                                instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, delegateParamSsa, arg));
 
 
                                 HighSsaRegister targetParamSsa = GenerateConvertReference(compiler, delegateParamSsa, targetSigType, instrs);
@@ -290,7 +290,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
             HighCfgNode entryNode = new HighCfgNode(instrs.ToArray());
             HighRegion region = new HighRegion(new HighCfgNodeHandle(entryNode));
-            RloMethodBody methodBody = new RloMethodBody(locals.ToArray(), delegateMethodSignature.RetType, region, instantiationPath);
+            RloMethodBody methodBody = new RloMethodBody(thisLocal, args.ToArray(), locals, delegateMethodSignature.RetType, region, delegateMethodSignature, instantiationPath);
 
             return new RloMethod(methodBody);
         }

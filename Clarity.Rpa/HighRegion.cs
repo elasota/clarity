@@ -60,6 +60,9 @@ namespace Clarity.Rpa
 
             HighCfgNodeHandle entryNode = cfgNodes[0];
 
+            if (entryNode.Value.Phis.Length != 0)
+                throw new RpaLoadException("Region entry node has phis");
+
             return new HighRegion(entryNode);
         }
 

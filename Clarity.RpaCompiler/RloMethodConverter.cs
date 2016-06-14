@@ -9,7 +9,9 @@ namespace Clarity.RpaCompiler
 {
     public class RloMethodConverter
     {
-        public HighLocal[] Locals { get { return m_locals; } }
+        public HighLocal InstanceLocal { get { return m_instanceLocal; } }
+        public HighLocal[] Locals2 { get { return m_locals; } }
+        public HighLocal[] Args { get { return m_args; } }
         public TypeSpecTag ReturnType { get { return m_returnType; } }
 
         private Dictionary<HighSsaRegister, HighSsaRegister> m_translatedSsaRegs = new Dictionary<HighSsaRegister, HighSsaRegister>();
@@ -17,23 +19,42 @@ namespace Clarity.RpaCompiler
 
         private TagRepository m_tagRepo;
         private RloInstantiationParameters m_instParams;
+        private HighLocal m_instanceLocal;
         private HighLocal[] m_locals;
+        private HighLocal[] m_args;
         private TypeSpecTag m_returnType;
 
-        public RloMethodConverter(TagRepository tagRepo, RloInstantiationParameters instParams, TypeSpecTag returnType, HighLocal[] locals)
+        public RloMethodConverter(TagRepository tagRepo, RloInstantiationParameters instParams, TypeSpecTag returnType, HighLocal instanceLocal, HighLocal[] args, HighLocal[] locals)
         {
             m_tagRepo = tagRepo;
             m_instParams = instParams;
 
             m_returnType = InstantiateType(returnType);
 
-            List<HighLocal> newLocals = new List<HighLocal>();
-            foreach (HighLocal local in locals)
+            List<HighLocal> mergedLocals = new List<HighLocal>();
+            if (instanceLocal != null)
+                mergedLocals.Add(instanceLocal);
+            mergedLocals.AddRange(args);
+            mergedLocals.AddRange(locals);
+
+            foreach (HighLocal local in mergedLocals)
             {
                 HighLocal newLocal = new HighLocal(this.InstantiateType(local.Type), local.TypeOfType);
                 m_translatedLocals.Add(local, newLocal);
-                newLocals.Add(newLocal);
             }
+
+            if (instanceLocal != null)
+                m_instanceLocal = m_translatedLocals[instanceLocal];
+
+            List<HighLocal> newArgs = new List<HighLocal>();
+            foreach (HighLocal arg in args)
+                newArgs.Add(m_translatedLocals[arg]);
+
+            List<HighLocal> newLocals = new List<HighLocal>();
+            foreach (HighLocal local in locals)
+                newLocals.Add(m_translatedLocals[local]);
+
+            m_args = newArgs.ToArray();
             m_locals = newLocals.ToArray();
         }
 

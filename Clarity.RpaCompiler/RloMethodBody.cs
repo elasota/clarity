@@ -11,19 +11,26 @@ namespace Clarity.RpaCompiler
         public TypeSpecTag ReturnType { get { return m_returnType; } }
         public MethodInstantiationPath InstantiationPath { get { return m_instantiationPath; } }
         public MethodSpecTag MethodSpec { get { return m_methodSpec; } }
+        public MethodSignatureTag MethodSignature { get { return m_methodSignature; } }
 
+        private HighLocal m_instanceLocal;
+        private HighLocal[] m_args;
         private HighLocal[] m_locals;
         private TypeSpecTag m_returnType;
         private HighRegion m_entryRegion;
         private MethodInstantiationPath m_instantiationPath;
         private MethodSpecTag m_methodSpec;
+        private MethodSignatureTag m_methodSignature;
 
-        public RloMethodBody(HighLocal[] locals, TypeSpecTag returnType, HighRegion entryRegion, MethodInstantiationPath instPath)
+        public RloMethodBody(HighLocal instanceLocal, HighLocal[] args, HighLocal[] locals, TypeSpecTag returnType, HighRegion entryRegion, MethodSignatureTag methodSignature, MethodInstantiationPath instPath)
         {
+            m_instanceLocal = instanceLocal;
+            m_args = args;
             m_locals = locals;
             m_returnType = returnType;
             m_entryRegion = entryRegion;
             m_instantiationPath = instPath;
+            m_methodSignature = methodSignature;
         }
 
         public RloMethodBody(Compiler compiler, HighMethod method, MethodSpecTag methodSpec, TypeSpecClassTag thisType, bool isStruct, RloInstantiationParameters instParams, MethodInstantiationPath methodInstantiationPath)
@@ -36,28 +43,29 @@ namespace Clarity.RpaCompiler
 
             // Validate locals
             uint numParamArgs = (uint)method.MethodSignature.ParamTypes.Length;
-            uint firstSigArg;
 
             if (method.IsStatic)
-                firstSigArg = 0;
+            {
+                if (methodBody.InstanceLocal != null)
+                    throw new Exception("Instance local in static method");
+            }
             else
             {
-                if (methodBody.Args.Length == 0)
-                    throw new Exception("Empty args list in instance method");
-                HighLocal thisLocal = methodBody.Args[0];
+                HighLocal thisLocal = methodBody.InstanceLocal;
+                if (thisLocal == null)
+                    throw new Exception("Missing instance local in instance method");
 
                 HighLocal.ETypeOfType expectedTypeOfType = isStruct ? HighLocal.ETypeOfType.ByRef : HighLocal.ETypeOfType.Value;
                 if (thisLocal.TypeOfType != expectedTypeOfType || thisLocal.Type.Instantiate(tagRepo, instParams.TypeParams, instParams.MethodParams) != thisType)
                     throw new Exception("Invalid this type for method");
-                firstSigArg = 1;
             }
 
-            if (numParamArgs != (uint)methodBody.Args.Length - firstSigArg)
+            if (numParamArgs != (uint)methodBody.Args.Length)
                 throw new Exception("Mismatched argument count in method body and signature");
 
             for (uint i = 0; i < numParamArgs; i++)
             {
-                HighLocal bodyArg = methodBody.Args[firstSigArg + i];
+                HighLocal bodyArg = methodBody.Args[i];
                 MethodSignatureParam methodSigParam = method.MethodSignature.ParamTypes[i];
                 MethodSignatureParamTypeOfType tot = methodSigParam.TypeOfType;
 
@@ -81,18 +89,17 @@ namespace Clarity.RpaCompiler
                     throw new Exception("Method body arg doesn't match signature");
             }
 
-            List<HighLocal> mergedLocals = new List<HighLocal>();
-            mergedLocals.AddRange(methodBody.Args);
-            mergedLocals.AddRange(methodBody.Locals);
+            HighLocal instanceLocal = methodBody.InstanceLocal;
 
-            HighLocal[] locals = mergedLocals.ToArray();
-
-            RloMethodConverter methodConverter = new RloMethodConverter(compiler.TagRepository, instParams, method.MethodSignature.RetType, locals);
+            RloMethodConverter methodConverter = new RloMethodConverter(compiler.TagRepository, instParams, method.MethodSignature.RetType, instanceLocal, methodBody.Args, methodBody.Locals);
             RloRegionConverter regionConverter = new RloRegionConverter(methodConverter, methodBody.MainRegion, true);
 
-            m_locals = methodConverter.Locals;
+            m_locals = methodConverter.Locals2;
+            m_args = methodConverter.Args;
+            m_instanceLocal = methodConverter.InstanceLocal;
             m_returnType = methodConverter.ReturnType;
             m_entryRegion = new HighRegion(regionConverter.EntryNode);
+            m_methodSignature = method.MethodSignature;
 
             RloFindPredecessorsAndSuccessorsPass psPass = new RloFindPredecessorsAndSuccessorsPass(compiler, this);
             psPass.Run();
@@ -109,6 +116,19 @@ namespace Clarity.RpaCompiler
 
         public void WriteDisassembly(DisassemblyWriter dw)
         {
+            if (m_instanceLocal == null)
+                dw.WriteLine("static");
+            else
+            {
+                dw.Write("instance ");
+                m_instanceLocal.WriteDisassembly(dw);
+            }
+            dw.WriteLine("args {");
+            dw.PushIndent();
+            foreach (HighLocal local in m_args)
+                local.WriteDisassembly(dw);
+            dw.PopIndent();
+            dw.WriteLine("}");
             dw.WriteLine("locals {");
             dw.PushIndent();
             foreach (HighLocal local in m_locals)
@@ -119,7 +139,7 @@ namespace Clarity.RpaCompiler
             m_returnType.WriteDisassembly(dw);
             dw.WriteLine("");
 
-            CfgWriter cfgWriter = new CfgWriter(dw, m_locals);
+            CfgWriter cfgWriter = new CfgWriter(dw, m_instanceLocal, m_args, m_locals);
 
             cfgWriter.GetCfgNodeIndex(m_entryRegion.EntryNode.Value);
             cfgWriter.WriteGraph();

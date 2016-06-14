@@ -74,13 +74,17 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
         public override RloMethod GenerateMethod(Compiler compiler, MethodInstantiationPath instantiationPath)
         {
-            HighLocal[] locals = new HighLocal[1];
-            locals[0] = new HighLocal(m_bt, HighLocal.ETypeOfType.Value);
+            HighLocal[] locals = new HighLocal[0];
+            HighLocal[] args = new HighLocal[0];
+            HighLocal instanceLocal = new HighLocal(m_bt, HighLocal.ETypeOfType.Value);
 
             Stack<HighField> fieldStack = new Stack<HighField>();
 
             uint getHashCodeSlot = m_vtCache.GetGetHashCodeVTableSlot(compiler);
             HighSsaRegister result = new HighSsaRegister(HighValueType.ValueValue, m_vtCache.GetSystemInt32Type(compiler), null);
+
+            MethodSignatureTag methodSignature = new MethodSignatureTag(0, m_vtCache.GetSystemInt32Type(compiler), new MethodSignatureParam[0]);
+            methodSignature = compiler.TagRepository.InternMethodSignature(methodSignature);
 
             if (RecursiveFindHashableField(compiler, m_bt.ContainedType, fieldStack))
             {
@@ -97,6 +101,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
                 {
                     List<HighInstruction> instrs = new List<HighInstruction>();
+                    instrs.Add(new Rpa.Instructions.LoadLocalInstruction(null, thisRef, instanceLocal));
                     Rpa.Instructions.UnboxPtrInstruction unboxInstr = new Rpa.Instructions.UnboxPtrInstruction(null, thisPtr, thisRef);
                     unboxInstr.ContinuationEdge = new HighCfgEdge(unboxInstr, locateAndHashFieldHdl);
                     instrs.Add(unboxInstr);
@@ -191,7 +196,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
 
                 HighCfgNodeHandle entryHdl = new HighCfgNodeHandle(new HighCfgNode(lahInstrs.ToArray()));
                 HighRegion region = new HighRegion(entryHdl);
-                RloMethodBody methodBody = new RloMethodBody(locals, m_vtCache.GetSystemInt32Type(compiler), region, instantiationPath);
+                RloMethodBody methodBody = new RloMethodBody(instanceLocal, args, locals, m_vtCache.GetSystemInt32Type(compiler), region, methodSignature, instantiationPath);
 
                 return new RloMethod(methodBody);
             }
@@ -219,7 +224,7 @@ namespace Clarity.RpaCompiler.GeneratedMethods
                 }
 
                 HighRegion region = new HighRegion(entryHdl);
-                RloMethodBody methodBody = new RloMethodBody(locals, m_vtCache.GetSystemInt32Type(compiler), region, instantiationPath);
+                RloMethodBody methodBody = new RloMethodBody(instanceLocal, args, locals, m_vtCache.GetSystemInt32Type(compiler), region, methodSignature, instantiationPath);
                 return new RloMethod(methodBody);
             }
         }

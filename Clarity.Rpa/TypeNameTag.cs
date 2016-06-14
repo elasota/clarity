@@ -141,8 +141,8 @@ namespace Clarity.Rpa
             {
                 dw.Write(".");
                 dw.WriteToken(m_assemblyName);
+                dw.Write(".");
             }
-            dw.Write(".");
             dw.WriteToken(m_typeNamespace);
             dw.Write(".");
             dw.WriteToken(m_typeName);
